@@ -36,7 +36,7 @@ export default function SearchBar() {
         >
           {activeFavoriteCollectionId ? <ChevronLeftIcon className="w-5 h-5" /> : <FavoriteIcon filled={filterFavorite} className="w-5 h-5" />}
         </button>
-        {filterFavorite && (
+        {inCollectionOverview && (
           <button
             onClick={openManageCollectionsModal}
             className="p-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition-all"
