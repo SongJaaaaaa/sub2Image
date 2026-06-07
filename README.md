@@ -27,6 +27,20 @@
 
 ---
 
+## ❤️ 赞助商
+
+<table>
+<tr>
+<td width="180" align="center" valign="middle">
+  <!-- 在这里粘贴 5cookie code 图片链接 -->
+  <img src="" alt="5cookie code" width="150">
+</td>
+<td valign="middle"><b>5cookie code</b>是一家稳定高速的 API 中继服务提供商，为 Image-2、Claude Code、Codex 等平台或模型提供 API 中继服务。面向个人、团队和企业用户提供 AI 编码服务和 AI 生图服务。</td>
+</tr>
+</table>
+
+---
+
 ## 📸 界面预览
 
 <details>
