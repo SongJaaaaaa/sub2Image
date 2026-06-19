@@ -783,6 +783,7 @@ export default function InputBar() {
   const sizeHint = useHintTooltip({ enabled: () => isFalTextToImage })
   const qualityHint = useHintTooltip({ enabled: () => activeProfile.codexCli || isFalProvider })
   const nLimitHint = useHintTooltip({ autoHideMs: 2000 })
+  const streamConcurrentHint = useHintTooltip({ enabled: () => streamConcurrentByN })
   const maskTargetImage = maskDraft
     ? inputImages.find((img) => img.id === maskDraft.targetImageId) ?? null
     : null
@@ -1919,6 +1920,7 @@ export default function InputBar() {
       nLimitHint={nLimitHint}
       nLimitHintText={nLimitHintText}
       streamConcurrentByN={streamConcurrentByN}
+      streamConcurrentHint={streamConcurrentHint}
       sizeHint={sizeHint}
       qualityHint={qualityHint}
       onOpenSizePicker={() => setShowSizePicker(true)}

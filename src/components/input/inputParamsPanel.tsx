@@ -47,6 +47,7 @@ export default function InputParamsPanel({
   nLimitHint,
   nLimitHintText,
   streamConcurrentByN,
+  streamConcurrentHint,
   sizeHint,
   qualityHint,
   onOpenSizePicker,
@@ -86,6 +87,7 @@ export default function InputParamsPanel({
   nLimitHint: HintTooltipState
   nLimitHintText: string
   streamConcurrentByN: boolean
+  streamConcurrentHint: HintTooltipState
   sizeHint: HintTooltipState
   qualityHint: HintTooltipState
   onOpenSizePicker: () => void
@@ -251,15 +253,16 @@ export default function InputParamsPanel({
       </label>
       <label
         className="relative flex flex-col gap-0.5"
-        onMouseEnter={showAgentNHint}
-        onMouseLeave={hideNLimitHint}
-        onTouchStart={startAgentNHintTouch}
-        onTouchEnd={clearAgentNHintTouchTimer}
+        onMouseEnter={() => { showAgentNHint(); streamConcurrentHint.show() }}
+        onMouseLeave={() => { hideNLimitHint(); streamConcurrentHint.hide() }}
+        onTouchStart={() => { startAgentNHintTouch(); streamConcurrentHint.startTouch() }}
+        onTouchEnd={() => { clearAgentNHintTouchTimer(); streamConcurrentHint.clearTimer() }}
         onTouchCancel={() => {
           clearAgentNHintTouchTimer()
           hideNLimitHint()
+          streamConcurrentHint.hide()
         }}
-        onClick={showAgentNHint}
+        onClick={() => { showAgentNHint(); streamConcurrentHint.show() }}
       >
         <span className="text-gray-400 dark:text-gray-500 ml-1">数量</span>
         <input
@@ -291,7 +294,7 @@ export default function InputParamsPanel({
           }`}
         />
         <ButtonTooltip visible={nLimitHint.visible} text={nLimitHintText} />
-        <ButtonTooltip visible={streamConcurrentByN && !nLimitHint.visible} text="数量大于 1 时会将多图生成拆分为并发单图" />
+        <ButtonTooltip visible={streamConcurrentByN && streamConcurrentHint.visible && !nLimitHint.visible} text="数量大于 1 时会将多图生成拆分为并发单图" />
       </label>
     </div>
   )
