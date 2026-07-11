@@ -200,6 +200,15 @@ export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function PromptLibraryIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5.5A2.5 2.5 0 016.5 3H11a2 2 0 012 2v16a2 2 0 00-2-2H6.5A2.5 2.5 0 014 16.5v-11z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 5.5A2.5 2.5 0 0017.5 3H15a2 2 0 00-2 2v16a2 2 0 012-2h2.5a2.5 2.5 0 002.5-2.5v-11z" />
+    </svg>
+  )
+}
+
 export function CollectionManageIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>

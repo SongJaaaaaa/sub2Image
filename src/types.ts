@@ -84,6 +84,19 @@ export interface ApiProfile {
   providerDrafts?: Partial<Record<ApiProvider, Partial<Pick<ApiProfile, 'baseUrl' | 'model' | 'apiMode' | 'codexCli' | 'apiProxy' | 'responseFormatB64Json' | 'streamImages' | 'streamPartialImages'>>>>
 }
 
+export interface Sub2Config {
+  id: string
+  name: string
+  kind: 'text' | 'image'
+  keyId: number
+  keyName: string
+  groupId: number
+  groupName: string
+  platform: string
+  model: string
+  profileId: string
+}
+
 export interface AppSettings {
   /** 旧版单配置字段：保留用于导入/查询参数兼容，实际请求以 active profile 为准 */
   baseUrl: string
@@ -113,6 +126,8 @@ export interface AppSettings {
   agentApiConfigMode: AgentApiConfigMode
   agentTextProfileId?: string | null
   agentImageProfileId?: string | null
+  sub2OnlyVersion: number
+  sub2Configs: Sub2Config[]
   profiles: ApiProfile[]
   activeProfileId: string
 }
@@ -151,6 +166,26 @@ export interface InputImage {
 export interface MaskDraft {
   targetImageId: string
   maskDataUrl: string
+  updatedAt: number
+}
+
+// ===== 远程提示词库 =====
+
+export interface RemotePrompt {
+  id: string
+  title: string
+  prompt: string
+  coverUrl: string
+  tags: string[]
+  model: string
+  source: string
+  sourceUrl: string
+  license: string
+}
+
+export interface PromptCache {
+  id: string
+  items: RemotePrompt[]
   updatedAt: number
 }
 

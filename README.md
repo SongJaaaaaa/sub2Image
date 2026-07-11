@@ -168,6 +168,8 @@
 
 ## 🚀 部署与使用
 
+> 使用新服务器接入新的 Sub2API，请查看：[Sub2API 部署指南](docs/sub2api-deployment.md)。
+
 支持多种部署与开发方式。无论使用哪种方式，你都可以预设默认的 API 节点。
 
 <details>

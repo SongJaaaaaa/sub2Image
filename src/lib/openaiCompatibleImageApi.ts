@@ -489,7 +489,7 @@ export async function callOpenAICompatibleImageApi(opts: CallApiOptions, profile
 
 async function callImagesApi(opts: CallApiOptions, profile: ApiProfile): Promise<CallApiResult> {
   const n = opts.params.n > 0 ? opts.params.n : 1
-  if ((profile.codexCli || (profile.streamImages && n > 1)) && n > 1) {
+  if (profile.provider === 'openai' && n > 1) {
     return callImagesApiConcurrent(opts, profile, n)
   }
 
@@ -550,8 +550,15 @@ async function callImagesApiConcurrent(opts: CallApiOptions, profile: ApiProfile
   }
 }
 
+function isSub2GrokProfile(opts: CallApiOptions, profile: ApiProfile) {
+  const config = opts.settings.sub2Configs.find((item) => item.profileId === profile.id)
+  const platform = config?.platform.toLowerCase()
+  return platform === 'grok' || platform === 'xai'
+}
+
 async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): Promise<CallApiResult> {
   const { prompt: originalPrompt, params, inputImageDataUrls } = opts
+  const isGrok = isSub2GrokProfile(opts, profile)
   const prompt = profile.codexCli && !opts.settings.allowPromptRewrite
     ? `${PROMPT_REWRITE_GUARD_PREFIX}\n${originalPrompt}`
     : originalPrompt
@@ -572,16 +579,15 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       const formData = new FormData()
       formData.append('model', profile.model)
       formData.append('prompt', prompt)
-      formData.append('size', params.size)
-      formData.append('output_format', params.output_format)
-      formData.append('moderation', params.moderation)
 
-      if (!profile.codexCli) {
-        formData.append('quality', params.quality)
-      }
-
-      if (params.output_format !== 'png' && params.output_compression != null) {
-        formData.append('output_compression', String(params.output_compression))
+      if (!isGrok) {
+        formData.append('size', params.size)
+        formData.append('output_format', params.output_format)
+        formData.append('moderation', params.moderation)
+        if (!profile.codexCli) formData.append('quality', params.quality)
+        if (params.output_format !== 'png' && params.output_compression != null) {
+          formData.append('output_compression', String(params.output_compression))
+        }
       }
       if (params.n > 1) {
         formData.append('n', String(params.n))
@@ -633,17 +639,16 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       const body: Record<string, unknown> = {
         model: profile.model,
         prompt,
-        size: params.size,
-        output_format: params.output_format,
-        moderation: params.moderation,
       }
 
-      if (!profile.codexCli) {
-        body.quality = params.quality
-      }
-
-      if (params.output_format !== 'png' && params.output_compression != null) {
-        body.output_compression = params.output_compression
+      if (!isGrok) {
+        body.size = params.size
+        body.output_format = params.output_format
+        body.moderation = params.moderation
+        if (!profile.codexCli) body.quality = params.quality
+        if (params.output_format !== 'png' && params.output_compression != null) {
+          body.output_compression = params.output_compression
+        }
       }
       if (params.n > 1) {
         body.n = params.n

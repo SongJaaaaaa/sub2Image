@@ -13,6 +13,7 @@ import type {
   CustomProviderSubmitMapping,
   CustomProviderTemplate,
   ReferenceImageEditAction,
+  Sub2Config,
 } from '../types'
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_STREAM_PARTIAL_IMAGES, DEFAULT_ZIP_DOWNLOAD_ROUTES, ZIP_DOWNLOAD_ROUTE_VALUES } from '../types'
 import { shouldUseApiProxy } from './devProxy'
@@ -503,6 +504,32 @@ function validateImportedProfileRecord(input: unknown) {
   }
 }
 
+
+function normalizeSub2Configs(value: unknown): Sub2Config[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item): Sub2Config[] => {
+    if (!isRecord(item) || (item.kind !== 'text' && item.kind !== 'image')) return []
+    const id = typeof item.id === 'string' ? item.id.trim() : ''
+    const profileId = typeof item.profileId === 'string' ? item.profileId.trim() : ''
+    const keyId = Number(item.keyId)
+    const groupId = Number(item.groupId)
+    const model = typeof item.model === 'string' ? item.model.trim() : ''
+    if (!id || !profileId || !Number.isFinite(keyId) || keyId <= 0 || !model) return []
+    return [{
+      id,
+      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : item.kind === 'image' ? '生图配置' : '文本配置',
+      kind: item.kind,
+      keyId,
+      keyName: typeof item.keyName === 'string' ? item.keyName : '',
+      groupId: Number.isFinite(groupId) ? groupId : 0,
+      groupName: typeof item.groupName === 'string' ? item.groupName : '',
+      platform: typeof item.platform === 'string' ? item.platform : '',
+      model,
+      profileId,
+    }]
+  })
+}
+
 export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSettings {
   const record = input && typeof input === 'object' ? input as Record<string, unknown> : {}
   const customProviders = normalizeCustomProviderDefinitions(record.customProviders)
@@ -523,6 +550,8 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
   const profiles = Array.isArray(record.profiles) && record.profiles.length
     ? record.profiles.map((profile) => normalizeApiProfile(profile, undefined, customProviderIds))
     : [legacyProfile]
+  const sub2OnlyVersion = typeof record.sub2OnlyVersion === 'number' ? record.sub2OnlyVersion : 0
+  const sub2Configs = normalizeSub2Configs(record.sub2Configs)
   const activeProfileId = typeof record.activeProfileId === 'string' && profiles.some((p) => p.id === record.activeProfileId)
     ? record.activeProfileId
     : profiles[0].id
@@ -564,6 +593,8 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     agentApiConfigMode,
     agentTextProfileId,
     agentImageProfileId,
+    sub2OnlyVersion,
+    sub2Configs,
     profiles,
     activeProfileId,
   }
@@ -872,4 +903,6 @@ export const DEFAULT_SETTINGS: AppSettings = normalizeSettings({
   agentApiConfigMode: 'off',
   agentTextProfileId: null,
   agentImageProfileId: null,
+  sub2OnlyVersion: 0,
+  sub2Configs: [],
 })

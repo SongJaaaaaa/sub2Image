@@ -26,6 +26,8 @@ ENV API_PROXY_URL=
 ENV ENABLE_API_PROXY=false
 ENV LOCK_API_PROXY=false
 ENV SHOW_DEFAULT_CONFIG_ONLY=false
+ENV SUB2API_URL=https://api.example.com
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY deploy/nginx.conf /etc/nginx/templates/default.conf.template

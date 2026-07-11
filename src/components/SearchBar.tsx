@@ -1,9 +1,10 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ALL_FAVORITES_COLLECTION_ID, clearFailedTasks, getTaskFavoriteCollectionIds, useStore, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import Select from './Select'
-import { ChevronLeftIcon, CollectionManageIcon, FavoriteIcon, TrashIcon } from './icons'
+import { ChevronLeftIcon, CollectionManageIcon, FavoriteIcon, PromptLibraryIcon, TrashIcon } from './icons'
 import ViewportTooltip from './ViewportTooltip'
+import PromptLibraryModal from './PromptLibraryModal'
 
 function SearchActionButton({
   tooltip,
@@ -45,6 +46,7 @@ function SearchActionButton({
 export default function SearchBar() {
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [showPromptLibrary, setShowPromptLibrary] = useState(false)
   const searchQuery = useStore((s) => s.searchQuery)
   const setSearchQuery = useStore((s) => s.setSearchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
@@ -67,6 +69,8 @@ export default function SearchBar() {
     }).length
   })
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
+  const setPrompt = useStore((s) => s.setPrompt)
+  const showToast = useStore((s) => s.showToast)
   const inCollectionOverview = filterFavorite && !activeFavoriteCollectionId
   const isFailedFilter = filterStatus === 'error'
   const favoriteTooltip = activeFavoriteCollectionId ? '返回收藏夹' : filterFavorite ? '退出收藏夹' : '收藏夹'
@@ -129,81 +133,102 @@ export default function SearchBar() {
   }
 
   return (
-    <div ref={rootRef} data-no-drag-select className="mt-6 mb-4 flex gap-3">
-      <div className="flex gap-2 flex-shrink-0 z-20">
-        <SearchActionButton
-          tooltip={favoriteTooltip}
-          onClick={handleFavoriteClick}
-          className={`p-2.5 rounded-xl border transition-all ${
-            filterFavorite
-              ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-500'
-              : 'border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06]'
-          }`}
-        >
-          {activeFavoriteCollectionId ? <ChevronLeftIcon className="w-5 h-5" /> : <FavoriteIcon filled={filterFavorite} className="w-5 h-5" />}
-        </SearchActionButton>
-        {inCollectionOverview && (
+    <>
+      <div ref={rootRef} data-no-drag-select className="mt-6 mb-4 flex flex-wrap gap-3 sm:flex-nowrap">
+        <div className="z-20 flex flex-shrink-0 gap-2">
           <SearchActionButton
-            tooltip="管理收藏夹"
-            onClick={openManageCollectionsModal}
-            className="p-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition-all"
+            tooltip={favoriteTooltip}
+            onClick={handleFavoriteClick}
+            className={`p-2.5 rounded-xl border transition-all ${
+              filterFavorite
+                ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-500'
+                : 'border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06]'
+            }`}
           >
-            <CollectionManageIcon className="w-5 h-5" />
+            {activeFavoriteCollectionId ? <ChevronLeftIcon className="w-5 h-5" /> : <FavoriteIcon filled={filterFavorite} className="w-5 h-5" />}
           </SearchActionButton>
-        )}
-        {!inCollectionOverview && (
-          <>
-            <div className="relative w-[88px]">
-              <Select
-                value={filterStatus}
-                onChange={handleStatusChange}
-                options={[
-                  { label: '全部', value: 'all' },
-                  { label: '已完成', value: 'done' },
-                  { label: '生成中', value: 'running' },
-                  { label: '失败', value: 'error' },
-                ]}
-                className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-white/[0.06] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+          {inCollectionOverview && (
+            <SearchActionButton
+              tooltip="管理收藏夹"
+              onClick={openManageCollectionsModal}
+              className="p-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition-all"
+            >
+              <CollectionManageIcon className="w-5 h-5" />
+            </SearchActionButton>
+          )}
+          {!inCollectionOverview && (
+            <>
+              <div className="relative w-[88px]">
+                <Select
+                  value={filterStatus}
+                  onChange={handleStatusChange}
+                  options={[
+                    { label: '全部', value: 'all' },
+                    { label: '已完成', value: 'done' },
+                    { label: '生成中', value: 'running' },
+                    { label: '失败', value: 'error' },
+                  ]}
+                  className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-white/[0.06] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+                />
+              </div>
+              {isFailedFilter && (
+                <button
+                  type="button"
+                  onClick={handleClearFailed}
+                  disabled={failedCount === 0}
+                  title={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
+                  aria-label={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
+                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-400 transition-all hover:bg-gray-50 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-white disabled:hover:text-gray-400 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300 dark:disabled:hover:bg-gray-900 dark:disabled:hover:text-gray-500"
+                >
+                  <TrashIcon className="h-[18px] w-[18px]" />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+        <div className="order-2 flex min-w-0 basis-full gap-2 sm:order-none sm:basis-auto sm:flex-1">
+          <div className="relative z-10 min-w-0 flex-1">
+            <svg
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
-            </div>
-            {isFailedFilter && (
-              <button
-                type="button"
-                onClick={handleClearFailed}
-                disabled={failedCount === 0}
-                title={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
-                aria-label={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
-                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-400 transition-all hover:bg-gray-50 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-white disabled:hover:text-gray-400 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300 dark:disabled:hover:bg-gray-900 dark:disabled:hover:text-gray-500"
-              >
-                <TrashIcon className="h-[18px] w-[18px]" />
-              </button>
-            )}
-          </>
-        )}
+            </svg>
+            <input
+              ref={inputRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              type="text"
+              placeholder={inCollectionOverview ? '搜索收藏夹名称...' : '搜索提示词、参数...'}
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPromptLibrary(true)}
+            className="flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+          >
+            <PromptLibraryIcon className="h-[18px] w-[18px]" />
+            <span>提示词库</span>
+          </button>
+        </div>
       </div>
-      <div className="relative z-10 flex-1">
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-        <input
-          ref={inputRef}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          type="text"
-          placeholder={inCollectionOverview ? '搜索收藏夹名称...' : '搜索提示词、参数...'}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
-        />
-      </div>
-    </div>
+      <PromptLibraryModal
+        open={showPromptLibrary}
+        onClose={() => setShowPromptLibrary(false)}
+        onUse={(item) => {
+          setPrompt(item.prompt)
+          setShowPromptLibrary(false)
+          showToast('已填入提示词', 'success')
+        }}
+      />
+    </>
   )
 }

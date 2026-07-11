@@ -1,6 +1,5 @@
 import {
   DEFAULT_AGENT_MAX_TOOL_ROUNDS,
-  type AgentApiConfigMode,
   type ApiProfile,
   type AppSettings,
 } from '../../types'
@@ -20,7 +19,6 @@ interface AgentSettingsTabProps {
   selectedAgentTextProfile: ApiProfile | null
   selectedAgentImageProfile: ApiProfile | null
   setAgentMaxToolRoundsInput: (value: string) => void
-  updateAgentApiConfigMode: (mode: AgentApiConfigMode) => void
   commitSettings: (nextDraft: AppSettings) => void
   commitAgentMaxToolRounds: () => void
 }
@@ -33,79 +31,48 @@ export default function AgentSettingsTab({
   selectedAgentTextProfile,
   selectedAgentImageProfile,
   setAgentMaxToolRoundsInput,
-  updateAgentApiConfigMode,
   commitSettings,
   commitAgentMaxToolRounds,
 }: AgentSettingsTabProps) {
   return (
     <div className="space-y-4">
-      <div className="block">
-        <div className="mb-1 flex items-center justify-between gap-3">
-          <span className="block text-sm text-gray-600 dark:text-gray-300">使用独立的 API 配置</span>
-          <div className="w-20 shrink-0">
-            <Select
-              value={draft.agentApiConfigMode}
-              onChange={(value) => updateAgentApiConfigMode(value as AgentApiConfigMode)}
-              options={[
-                { label: '关闭', value: 'off' },
-                { label: '原生', value: 'native' },
-                { label: '混合', value: 'hybrid' },
-              ]}
-              className="w-full px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] hover:bg-white dark:hover:bg-white/[0.06] text-xs transition-all duration-200 shadow-sm text-gray-700 dark:text-gray-200 outline-none"
-            />
-          </div>
-        </div>
-        <div data-selectable-text className="text-xs text-gray-500 dark:text-gray-500 space-y-1">
-          <div>原生：使用原生的 Responses API 配置，由模型调用 <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] dark:bg-white/[0.06]">image_generation</code> 工具生成图片。</div>
-          <div>混合：使用非原生的混合 API 配置，由文本模型调用自定义工具，请求图像模型生成图像，解决部分服务商/模型不支持 <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] dark:bg-white/[0.06]">image_generation</code> 工具的问题。</div>
-        </div>
+      <div className="rounded-xl bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+        Agent 固定使用 Sub2API 混合模式。文本与图像配置来自 Sub2API 设置页。
       </div>
 
-      {draft.agentApiConfigMode !== 'off' && (
-        <>
-          <div className="block">
-            <div className="mb-1 flex items-center justify-between gap-3">
-              <span className="block text-sm text-gray-600 dark:text-gray-300">文本模型 API 配置</span>
-              <div className="w-40 shrink-0">
-                {agentTextProfileOptions.length > 0 ? (
-                  <Select
-                    value={selectedAgentTextProfile?.id ?? ''}
-                    onChange={(value) => commitSettings({ ...draft, agentTextProfileId: String(value) })}
-                    options={agentTextProfileOptions}
-                    className="w-full px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] hover:bg-white dark:hover:bg-white/[0.06] text-xs transition-all duration-200 shadow-sm text-gray-700 dark:text-gray-200 outline-none"
-                  />
-                ) : (
-                  <div className="w-full rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 text-center text-xs text-gray-700 shadow-sm transition-all duration-200 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200">
-                    没有可用配置
-                  </div>
-                )}
-              </div>
-            </div>
-            <div data-selectable-text className="text-xs text-gray-500 dark:text-gray-500">
-              用于对话和调用工具，仅支持 Responses API 配置。
-            </div>
+      <div className="block">
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <span className="block text-sm text-gray-600 dark:text-gray-300">文本配置</span>
+          <div className="w-56 shrink-0">
+            {agentTextProfileOptions.length > 0 ? (
+              <Select
+                value={selectedAgentTextProfile?.id ?? ''}
+                onChange={(value) => commitSettings({ ...draft, agentApiConfigMode: 'hybrid', agentTextProfileId: String(value) })}
+                options={agentTextProfileOptions}
+                className="w-full px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] text-xs shadow-sm text-gray-700 dark:text-gray-200 outline-none"
+              />
+            ) : <div className="rounded-xl border border-gray-200/60 px-3 py-1.5 text-center text-xs text-gray-500 dark:border-white/[0.08]">尚未配置</div>}
           </div>
+        </div>
+        <div className="text-xs text-gray-500">只列出 Sub2API 设置中保存的文本配置。</div>
+      </div>
 
-          {draft.agentApiConfigMode === 'hybrid' && (
-            <div className="block">
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <span className="block text-sm text-gray-600 dark:text-gray-300">图像模型 API 配置</span>
-                <div className="w-40 shrink-0">
-                  <Select
-                    value={selectedAgentImageProfile?.id ?? ''}
-                    onChange={(value) => commitSettings({ ...draft, agentImageProfileId: String(value) })}
-                    options={agentImageProfileOptions}
-                    className="w-full px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] hover:bg-white dark:hover:bg-white/[0.06] text-xs transition-all duration-200 shadow-sm text-gray-700 dark:text-gray-200 outline-none"
-                  />
-                </div>
-              </div>
-              <div data-selectable-text className="text-xs text-gray-500 dark:text-gray-500">
-                用于生成图像，支持所有类型的 API 配置。
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      <div className="block">
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <span className="block text-sm text-gray-600 dark:text-gray-300">图像配置</span>
+          <div className="w-56 shrink-0">
+            {agentImageProfileOptions.length > 0 ? (
+              <Select
+                value={selectedAgentImageProfile?.id ?? ''}
+                onChange={(value) => commitSettings({ ...draft, agentApiConfigMode: 'hybrid', agentImageProfileId: String(value) })}
+                options={agentImageProfileOptions}
+                className="w-full px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] text-xs shadow-sm text-gray-700 dark:text-gray-200 outline-none"
+              />
+            ) : <div className="rounded-xl border border-gray-200/60 px-3 py-1.5 text-center text-xs text-gray-500 dark:border-white/[0.08]">尚未配置</div>}
+          </div>
+        </div>
+        <div className="text-xs text-gray-500">只列出 Sub2API 设置中保存的生图配置。</div>
+      </div>
       <label className="block">
         <span className="mb-1.5 block text-sm text-gray-600 dark:text-gray-300">最大工具调用轮数</span>
         <input

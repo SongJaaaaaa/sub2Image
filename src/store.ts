@@ -55,6 +55,7 @@ import { createTransparentOutputMeta, getTransparentRequestParams, removeKeyedBa
 import { blobToDataUrl, fileToDataUrl } from './lib/dataUrl'
 import { formatExportFileTime } from './lib/exportFileName'
 import { buildExportZip, readExportZip, readExportZipFileAsDataUrl } from './lib/exportZip'
+import { createSub2PlaceholderProfile, SUB2_ONLY_VERSION } from './lib/sub2Profiles'
 
 export const ALL_FAVORITES_COLLECTION_ID = '__all_favorites__'
 export const DEFAULT_FAVORITE_COLLECTION_ID = '__default_favorites__'
@@ -75,6 +76,18 @@ const MAX_THUMBNAIL_BACKFILL_CONCURRENT = 4
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
 const SUPPORT_PROMPT_IMAGE_THRESHOLD = 50
+const SUB2_DEFAULT_PROFILE = createSub2PlaceholderProfile()
+const SUB2_DEFAULT_SETTINGS = normalizeSettings({
+  ...DEFAULT_SETTINGS,
+  customProviders: [],
+  sub2OnlyVersion: SUB2_ONLY_VERSION,
+  sub2Configs: [],
+  profiles: [SUB2_DEFAULT_PROFILE],
+  activeProfileId: SUB2_DEFAULT_PROFILE.id,
+  agentApiConfigMode: 'hybrid',
+  agentTextProfileId: null,
+  agentImageProfileId: null,
+})
 const AGENT_INPUT_DRAFT_RETENTION_MS = 3 * 24 * 60 * 60 * 1000
 const AGENT_ROUND_IMAGE_MENTION_RE = /@(?:第)?(\d+)轮图(\d+)/g
 const falRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -121,7 +134,7 @@ function isErrorToastTitle(title: string): boolean {
   return /(?:失败|错误|异常|报错|无法|不能|超时|中断|断开|请先|请输入|已达上限|不存在|已丢失)$/.test(title)
 }
 
-export type SettingsTab = 'general' | 'agent' | 'api' | 'data' | 'about'
+export type SettingsTab = 'general' | 'agent' | 'sub2api' | 'api' | 'data'
 
 const TIMEOUT_STREAMING_HINT = '也可尝试打开「流式传输」，并提高「请求中间步骤图像数」来维持连接。'
 const TIMEOUT_PARTIAL_IMAGES_ZERO_HINT = '官方流式接口不发送心跳，当前「请求中间步骤图像数」为 0，连接可能因无数据传输而断开。建议提高到 2 或 3。'
@@ -568,8 +581,31 @@ function stripPersistedAgentConversations(value: unknown): unknown {
 
 export function migratePersistedState(persistedState: unknown): unknown {
   if (!isRecord(persistedState)) return persistedState
+  const rawSettings = isRecord(persistedState.settings) ? persistedState.settings : {}
+  const settings = Number(rawSettings.sub2OnlyVersion) === SUB2_ONLY_VERSION
+    ? rawSettings
+    : (() => {
+        const profile = createSub2PlaceholderProfile()
+        return {
+          ...rawSettings,
+          baseUrl: profile.baseUrl,
+          apiKey: '',
+          model: profile.model,
+          apiMode: 'images',
+          apiProxy: false,
+          customProviders: [],
+          sub2OnlyVersion: SUB2_ONLY_VERSION,
+          sub2Configs: [],
+          profiles: [profile],
+          activeProfileId: profile.id,
+          agentApiConfigMode: 'hybrid',
+          agentTextProfileId: null,
+          agentImageProfileId: null,
+        }
+      })()
   return {
     ...persistedState,
+    settings,
     agentConversations: stripPersistedAgentConversations(persistedState.agentConversations),
   }
 }
@@ -1195,7 +1231,7 @@ export const useStore = create<AppState>()(
             confirmText: '去设置',
             cancelText: '取消',
             action: () => {
-              useStore.getState().setShowSettings(true, 'api')
+              useStore.getState().setShowSettings(true, 'sub2api')
             },
           })
           return
@@ -1220,13 +1256,13 @@ export const useStore = create<AppState>()(
           confirmText: '去设置',
           cancelText: '取消',
           action: () => {
-            useStore.getState().setShowSettings(true, 'api')
+            useStore.getState().setShowSettings(true, 'sub2api')
           },
         })
       },
 
       // Settings
-      settings: { ...DEFAULT_SETTINGS },
+      settings: { ...SUB2_DEFAULT_SETTINGS },
       setSettings: (s) => set((st) => {
         const previous = normalizeSettings(st.settings)
         const incoming = s as Partial<AppSettings>
@@ -1591,7 +1627,7 @@ export const useStore = create<AppState>()(
         if (showSettings) dismissAllTooltips()
         set({
           showSettings,
-          ...(settingsTabRequest ? { settingsTabRequest } : {}),
+          ...(settingsTabRequest ? { settingsTabRequest: settingsTabRequest === 'api' ? 'sub2api' : settingsTabRequest } : {}),
           ...(!showSettings ? { settingsTabRequest: null } : {}),
         })
       },
@@ -1621,7 +1657,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'gpt-image-playground',
-      version: 2,
+      version: 3,
       migrate: (persistedState) => migratePersistedState(persistedState),
       partialize: getPersistedState,
       merge: mergePersistedState,
@@ -3521,7 +3557,7 @@ export async function submitAgentMessage() {
   const agentValidationError = getAgentProfileValidationError(normalizedSettings)
   if (agentValidationError) {
     showToast(`请先完善 Agent API 配置：${agentValidationError.message}`, 'error')
-    state.setShowSettings(true, normalizedSettings.agentApiConfigMode === 'off' ? 'api' : 'agent')
+    state.setShowSettings(true, normalizedSettings.agentApiConfigMode === 'off' ? 'sub2api' : 'agent')
     return
   }
 
@@ -3670,7 +3706,7 @@ export async function regenerateAgentAssistantMessage(conversationId: string, ro
   const agentValidationError = getAgentProfileValidationError(normalizedSettings)
   if (agentValidationError) {
     showToast(`请先完善 Agent API 配置：${agentValidationError.message}`, 'error')
-    state.setShowSettings(true, normalizedSettings.agentApiConfigMode === 'off' ? 'api' : 'agent')
+    state.setShowSettings(true, normalizedSettings.agentApiConfigMode === 'off' ? 'sub2api' : 'agent')
     return
   }
 

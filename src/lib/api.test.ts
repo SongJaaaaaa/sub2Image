@@ -79,6 +79,58 @@ describe('callImageApi', () => {
     expect(body.prompt).toBe('prompt')
   })
 
+  it('sends only xAI-supported fields for Sub2API Grok image profiles', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      data: [{ b64_json: 'aW1hZ2U=' }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    const profile = {
+      ...DEFAULT_SETTINGS.profiles[0],
+      id: 'sub2api-image-grok-test',
+      name: 'Grok 生图',
+      baseUrl: '/sub2api-v1',
+      apiKey: 'test-key',
+      model: 'grok-imagine',
+      apiMode: 'images' as const,
+      streamImages: false,
+    }
+
+    await callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        baseUrl: profile.baseUrl,
+        apiKey: profile.apiKey,
+        model: profile.model,
+        apiMode: profile.apiMode,
+        profiles: [profile],
+        activeProfileId: profile.id,
+        sub2Configs: [{
+          id: 'grok-test',
+          name: 'Grok 生图',
+          kind: 'image',
+          keyId: 8,
+          keyName: 'grok',
+          groupId: 5,
+          groupName: 'grok',
+          platform: 'grok',
+          model: 'grok-imagine',
+          profileId: profile.id,
+        }],
+      },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS },
+      inputImageDataUrls: [],
+    })
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      model: 'grok-imagine',
+      prompt: 'prompt',
+    })
+  })
+
   it('records actual params returned on Images API responses in Codex CLI mode', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       output_format: 'png',
@@ -140,6 +192,32 @@ describe('callImageApi', () => {
       output_format: 'png',
       size: '1033x1522',
     }])
+  })
+
+  it('splits non-streaming Images API requests when n is greater than 1', async () => {
+    const images = ['aW1hZ2UtMQ==', 'aW1hZ2UtMg==']
+    let idx = 0
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+      data: [{ b64_json: images[idx++] }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    const result = await callImageApi({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS, n: 2 },
+      inputImageDataUrls: [],
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    for (const [, init] of fetchMock.mock.calls) {
+      const body = JSON.parse(String((init as RequestInit).body))
+      expect(body.n).toBeUndefined()
+    }
+    expect(result.images).toHaveLength(2)
+    expect(result.actualParams).toMatchObject({ n: 2 })
   })
 
   it('streams Images API partial images and resolves the final completed image', async () => {
