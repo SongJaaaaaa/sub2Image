@@ -5,7 +5,7 @@
 ## 功能
 
 - Sub2API 用户登录
-- 读取用户 API Key、所属分组和可用模型
+- 读取用户 API Key 和所属分组，并通过用户 Key 获取可用模型
 - 支持 `gpt-image-2` 等 OpenAI 兼容图片模型
 - 文生图和图片编辑
 - 多图上传、遮罩编辑和批量任务
@@ -39,7 +39,6 @@
 - Docker
 - Docker Compose
 - 一个可以正常访问的 Sub2API
-- Sub2API 管理员 API Key
 - 已解析到服务器的域名
 
 ## 本地开发
@@ -65,7 +64,7 @@ npm test
 
 ## Sub2API 配置
 
-项目只使用一个 Sub2API 基础地址。普通接口和管理接口不需要分别配置。
+项目只需要配置一个 Sub2API 基础地址。用户登录后，模型列表由用户自己的 API Key 直接请求 Sub2API 的 `GET /v1/models` 获取，不需要管理员 API Key。
 
 复制环境变量示例：
 
@@ -77,7 +76,6 @@ cp deploy/sub2api.env.example .env
 
 ```env
 SUB2API_URL=https://api.sjiaa.cc.cd
-SUB2API_ADMIN_KEY=admin-replace-me
 APP_PORT=8080
 ```
 
@@ -86,10 +84,9 @@ APP_PORT=8080
 | 配置 | 必填 | 说明 |
 | --- | --- | --- |
 | `SUB2API_URL` | 是 | Sub2API 基础地址，末尾不要添加 `/v1` |
-| `SUB2API_ADMIN_KEY` | 是 | 管理员 API Key，只保存在服务器端 |
 | `APP_PORT` | 否 | 前端本地监听端口，默认 `8080` |
 
-管理员 API Key 不会发送给浏览器，只用于服务器端 Bridge 查询用户 Key 所属分组、分组账号和模型。
+部署时唯一必需的 Sub2API 配置是 `SUB2API_URL=https://api.sjiaa.cc.cd`。用户账号只用于登录并读取分组；用户在 Agent 配置中分别选择文本与图像分组和模型，应用会在内部使用对应分组的用户 Key。
 
 如果 `SUB2API_URL` 接入了 Cloudflare，请在 WAF 中放行图片站服务器出口 IP 对 `/api/v1/*` 和 `/v1/*` 的访问。Sub2API 开启 Turnstile 时，还需要把图片站正式域名加入对应 Site Key 的允许域名。
 
@@ -115,13 +112,13 @@ docker compose --env-file .env -f deploy/compose.sub2api.yaml logs -f --tail=200
 
 ```bash
 curl -I http://127.0.0.1:8080
-curl http://127.0.0.1:8080/sub2-bridge/health
+curl -H 'Authorization: Bearer <用户 API Key>' http://127.0.0.1:8080/sub2api-v1/models
 ```
 
-Bridge 正常时返回：
+模型接口正常时返回 OpenAI 兼容列表，例如：
 
 ```json
-{"ok":true}
+{"object":"list","data":[{"id":"gpt-image-2"}]}
 ```
 
 完整的新服务器部署流程请查看：
@@ -133,8 +130,8 @@ Bridge 正常时返回：
 1. 打开网站首页
 2. 点击“开始创作”
 3. 登录 Sub2API 用户账号
-4. 选择账号中已启用的 API Key
-5. 进入工作台并生成图片
+4. 进入“设置 → Agent 配置”，分别选择文本与图像使用的分组和模型
+5. 保存配置并开始生成图片
 
 用户 API Key 必须已经绑定分组，分组中需要存在状态正常、允许调度且额度充足的图片账号。
 
@@ -185,7 +182,7 @@ Bridge 正常时返回：
 
 - 用户 API Key 是否绑定分组
 - 分组中是否有可用账号
-- 管理员 API Key 是否有效
+- 用户 API Key 请求 `GET /v1/models` 是否成功
 - 账号是否返回支持的模型列表
 
 ### 提示词库加载失败
@@ -195,11 +192,9 @@ Bridge 正常时返回：
 ## 安全说明
 
 - 不要提交 `.env`
-- 不要把管理员 API Key 写入前端代码
-- 不要在浏览器中保存管理员 API Key
 - 不要在日志中输出密码和完整密钥
 - 建议使用 SSH 密钥登录服务器
-- 管理员 Key 泄露后应立即更换
+- 用户 API Key 泄露后应立即在 Sub2API 中禁用并更换
 
 ## 许可证
 

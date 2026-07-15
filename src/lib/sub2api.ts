@@ -1,15 +1,10 @@
-import type { Sub2Config } from '../types'
-import { readRuntimeEnv } from './runtimeEnv'
-
 const authBase = '/sub2api-auth'
-const bridgeBase = '/sub2-bridge'
 const tokenKey = 'image2.sub2api.token'
 const refreshKey = 'image2.sub2api.refresh'
 const expiresKey = 'image2.sub2api.expires'
 const userKey = 'image2.sub2api.user'
 
 export const OPEN_SUB2_CONNECT_EVENT = 'sub2-connect'
-export const SUB2_IMAGE_MODEL = readRuntimeEnv(import.meta.env.VITE_JWS_IMAGE_MODEL) || 'gpt-image-2'
 
 export interface Sub2User {
   id?: number
@@ -37,20 +32,8 @@ export interface Sub2Model {
   owned_by?: string
 }
 
-export interface Sub2KeyModels {
-  key: {
-    id: number
-    name: string
-    group_id: number
-    group_name: string
-    platform: string
-  }
-  accounts: Array<{
-    id: number
-    name: string
-    platform: string
-  }>
-  models: Sub2Model[]
+interface Sub2ModelPage {
+  data: Sub2Model[]
 }
 
 export interface Sub2PublicSettings {
@@ -134,17 +117,6 @@ async function authFetch(path: string, init: RequestInit = {}, retry = true) {
   return readJson(res)
 }
 
-async function bridgeFetch(path: string, retry = true) {
-  const res = await fetch(`${bridgeBase}/${path.replace(/^\/+/, '')}`, {
-    headers: { Authorization: `Bearer ${getSub2Token()}` },
-  })
-  if (res.status === 401 && retry && localStorage.getItem(refreshKey)) {
-    await refreshSub2Token()
-    return bridgeFetch(path, false)
-  }
-  return readJson(res)
-}
-
 export function getSub2Token() {
   return localStorage.getItem(tokenKey) || ''
 }
@@ -202,22 +174,10 @@ export async function listSub2Keys() {
   return (Array.isArray(items) ? items : []) as Sub2Key[]
 }
 
-export async function listSub2KeyModels(keyId: number) {
-  return bridgeFetch(`keys/${keyId}/models`) as Promise<Sub2KeyModels>
-}
-
-export function newSub2Config(kind: Sub2Config['kind']): Sub2Config {
-  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-  return {
-    id,
-    name: kind === 'image' ? '生图配置' : '文本配置',
-    kind,
-    keyId: 0,
-    keyName: '',
-    groupId: 0,
-    groupName: '',
-    platform: '',
-    model: '',
-    profileId: `sub2api-${kind}-${id}`,
-  }
+export async function listSub2Models(key: string) {
+  const res = await fetch('/sub2api-v1/models', {
+    headers: { Authorization: `Bearer ${key}` },
+  })
+  const data = await readJson(res) as Sub2ModelPage
+  return Array.isArray(data.data) ? data.data : []
 }

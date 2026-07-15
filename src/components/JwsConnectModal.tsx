@@ -1,18 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { normalizeSettings } from '../lib/apiProfiles'
 import {
   getSub2PublicSettings,
-  listSub2KeyModels,
   listSub2Keys,
   loginSub2,
   loginSub2TwoFactor,
-  SUB2_IMAGE_MODEL,
-  type Sub2Key,
-  type Sub2KeyModels,
   type Sub2PublicSettings,
 } from '../lib/sub2api'
-import { syncSub2Settings } from '../lib/sub2Profiles'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { CloseIcon } from './icons'
@@ -32,21 +26,18 @@ declare global {
 }
 
 export default function JwsConnectModal({ onClose }: JwsConnectModalProps) {
-  const settings = useStore((s) => s.settings)
-  const setSettings = useStore((s) => s.setSettings)
   const showToast = useStore((s) => s.showToast)
+  const setShowSettings = useStore((s) => s.setShowSettings)
   const scrollRef = useRef<HTMLDivElement>(null)
   const turnstileRef = useRef<HTMLDivElement>(null)
   const widgetIdRef = useRef('')
-  const [step, setStep] = useState<'login' | '2fa' | 'keys'>('login')
+  const [step, setStep] = useState<'login' | '2fa'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [tempToken, setTempToken] = useState('')
   const [publicSettings, setPublicSettings] = useState<Sub2PublicSettings | null>(null)
   const [turnstileToken, setTurnstileToken] = useState('')
-  const [keys, setKeys] = useState<Sub2Key[]>([])
-  const [selectedKeyId, setSelectedKeyId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -98,58 +89,13 @@ export default function JwsConnectModal({ onClose }: JwsConnectModalProps) {
     }
   }, [publicSettings])
 
-  const saveProfile = (item: Sub2Key, data: Sub2KeyModels) => {
-    const current = normalizeSettings(settings)
-    const existing = current.sub2Configs.find((config) => config.kind === 'image' && config.name === 'JWS Image')
-    const id = existing?.id ?? `jws-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`
-    const config = {
-      ...existing,
-      id,
-      name: 'JWS Image',
-      kind: 'image' as const,
-      keyId: item.id,
-      keyName: item.name,
-      groupId: data.key.group_id,
-      groupName: data.key.group_name,
-      platform: data.key.platform,
-      model: SUB2_IMAGE_MODEL,
-      profileId: existing?.profileId ?? `sub2api-image-${id}`,
-    }
-    const configs = existing
-      ? current.sub2Configs.map((item) => item.id === existing.id ? config : item)
-      : [...current.sub2Configs, config]
-
-    setSettings(syncSub2Settings(current, configs, new Map([[item.id, item.key]]), config.profileId))
-    showToast('JWS 已接入，可以开始创作', 'success')
-    onClose()
-  }
-
-  const connectProfile = async () => {
-    const item = keys.find((key) => String(key.id) === selectedKeyId)
-    if (!item) return
-
-    setBusy(true)
-    setError('')
-    try {
-      const data = await listSub2KeyModels(item.id)
-      if (!data.models.some((model) => model.id === SUB2_IMAGE_MODEL)) {
-        throw new Error(`当前 Key 分组不支持 ${SUB2_IMAGE_MODEL}`)
-      }
-      saveProfile(item, data)
-    } catch (err) {
-      console.error('[JWS] 校验 Key 模型失败', { keyId: item.id, err })
-      setError(err instanceof Error ? err.message : '无法读取 Key 模型')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const loadKeys = async () => {
+  const finishLogin = async () => {
     const items = (await listSub2Keys()).filter((item) => item.status === 'active')
+    const groups = new Set(items.flatMap((item) => item.group_id == null ? [] : [item.group_id]))
     setPassword('')
-    setKeys(items)
-    setSelectedKeyId(items[0] ? String(items[0].id) : '')
-    setStep('keys')
+    showToast(`已登录 Sub2API，读取到 ${groups.size} 个分组`, 'success')
+    onClose()
+    setShowSettings(true, 'agent')
   }
 
   const handleLogin = async (event: React.FormEvent) => {
@@ -175,7 +121,7 @@ export default function JwsConnectModal({ onClose }: JwsConnectModalProps) {
         setStep('2fa')
         return
       }
-      await loadKeys()
+      await finishLogin()
     } catch (err) {
       console.error('[JWS] 登录接入失败', err)
       setError(err instanceof Error ? err.message : '登录失败')
@@ -194,7 +140,7 @@ export default function JwsConnectModal({ onClose }: JwsConnectModalProps) {
     setError('')
     try {
       await loginSub2TwoFactor(tempToken, code.trim(), email.trim())
-      await loadKeys()
+      await finishLogin()
     } catch (err) {
       console.error('[JWS] 两步验证失败', err)
       setError(err instanceof Error ? err.message : '验证失败')
@@ -212,7 +158,7 @@ export default function JwsConnectModal({ onClose }: JwsConnectModalProps) {
           <img src="/jws-brand.jpg" alt="My Jarvis" className="h-auto max-h-48 w-full object-contain md:max-h-none" />
           <div className="hidden w-full border-t border-black pt-5 md:block">
             <p className="text-xs font-bold uppercase">JWS Connect / 我的贾维斯</p>
-            <p className="mt-3 text-sm leading-6 opacity-55">项目已预设 Sub2API 服务、图像网关与模型。</p>
+            <p className="mt-3 text-sm leading-6 opacity-55">登录后读取账号中的可用分组。</p>
           </div>
         </aside>
 
@@ -265,36 +211,6 @@ export default function JwsConnectModal({ onClose }: JwsConnectModalProps) {
             </form>
           )}
 
-          {step === 'keys' && (
-            <div className="mt-6 space-y-5">
-              <div>
-                <p className="text-sm font-bold">选择访问令牌</p>
-                <p className="mt-1 text-sm opacity-50">登录成功，选择要用于 JWS Image 的启用令牌。</p>
-              </div>
-              {keys.length > 0 ? (
-                <div className="divide-y divide-black/15 border-y border-black">
-                  {keys.map((item) => (
-                    <label key={item.id} className="flex min-h-14 cursor-pointer items-center gap-3 py-3">
-                      <input type="radio" name="jws-key" checked={selectedKeyId === String(item.id)} onChange={() => setSelectedKeyId(String(item.id))} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.name || '未命名令牌'}</span>
-                      <span className="text-[10px] font-bold uppercase opacity-35">Active</span>
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <p className="border-l-2 border-black bg-gray-50 px-3 py-3 text-sm opacity-60">当前账号没有启用令牌，请先在我的贾维斯创建或启用令牌。</p>
-              )}
-              {error && <p className="border-l-2 border-red-500 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-              <button
-                type="button"
-                disabled={!selectedKeyId || busy}
-                onClick={() => void connectProfile()}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-4 rounded-[4px] bg-black px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {busy ? '正在校验模型...' : '接入工作台'} <span aria-hidden="true">→</span>
-              </button>
-            </div>
-          )}
         </section>
       </div>
     </div>

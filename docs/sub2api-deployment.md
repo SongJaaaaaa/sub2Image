@@ -11,13 +11,11 @@
   ↓ 反向代理
 sub2Image 前端容器
   ├─ /api-proxy/*    → Sub2API /v1/*
-  ├─ /sub2api-v1/*   → Sub2API /v1/*
-  └─ /sub2-bridge/*  → 容器内 Sub2 Bridge
-                            ↓
-                       Sub2API 管理接口
+  ├─ /sub2api-auth/* → Sub2API /api/v1/*
+  └─ /sub2api-v1/*   → Sub2API /v1/*
 ```
 
-Sub2API 的普通接口和管理接口使用同一个基础地址，因此只配置一个 `SUB2API_URL`。
+部署只需要配置一个 `SUB2API_URL`。用户登录后，前端读取该用户的分组；选择模型时在内部使用对应分组的用户 API Key 直接请求 `GET /v1/models`，不需要管理员 API Key 或额外的 Bridge 服务。
 
 ## 2. 准备信息
 
@@ -26,8 +24,7 @@ Sub2API 的普通接口和管理接口使用同一个基础地址，因此只配
 - 一台 Linux 服务器
 - Docker 和 Docker Compose
 - 一个已解析到服务器的图片站域名
-- 新 Sub2API 的 HTTPS 地址，例如 `https://api.example.com`
-- 新 Sub2API 的管理员 API Key
+- Sub2API 的 HTTPS 地址：`https://api.sjiaa.cc.cd`
 
 Sub2API 后台还需要提前准备：
 
@@ -66,8 +63,7 @@ cp deploy/sub2api.env.example .env
 编辑 `.env`：
 
 ```env
-SUB2API_URL=https://api.example.com
-SUB2API_ADMIN_KEY=admin-replace-me
+SUB2API_URL=https://api.sjiaa.cc.cd
 APP_PORT=8080
 ```
 
@@ -76,23 +72,21 @@ APP_PORT=8080
 填写 Sub2API 基础地址，末尾不要添加 `/v1`：
 
 ```env
-SUB2API_URL=https://api.example.com
+SUB2API_URL=https://api.sjiaa.cc.cd
 ```
 
 项目会自动请求：
 
 ```text
-https://api.example.com/v1/images/generations
-https://api.example.com/v1/images/edits
-https://api.example.com/v1/responses
-https://api.example.com/api/v1/admin/accounts
+https://api.sjiaa.cc.cd/api/v1/auth/login
+https://api.sjiaa.cc.cd/api/v1/keys
+https://api.sjiaa.cc.cd/v1/models
+https://api.sjiaa.cc.cd/v1/images/generations
+https://api.sjiaa.cc.cd/v1/images/edits
+https://api.sjiaa.cc.cd/v1/responses
 ```
 
-### `SUB2API_ADMIN_KEY`
-
-填写 Sub2API 管理员 API Key。这个 Key 只保存在服务器端，用于查询用户 Key 所属分组、分组账号和模型，不会发送给浏览器。
-
-不要把真实 Key 写进源码、Dockerfile、部署文档或提交到 GitHub。
+`GET /v1/models` 使用用户在 Agent 配置中选择的 API Key 作为 Bearer Token。Key 绑定的分组决定返回哪些模型。
 
 ### `APP_PORT`
 
@@ -130,25 +124,27 @@ docker compose --env-file .env -f deploy/compose.sub2api.yaml logs -f --tail=200
 
 ```bash
 curl -I http://127.0.0.1:8080
-curl http://127.0.0.1:8080/sub2-bridge/health
+curl -H 'Authorization: Bearer <用户 API Key>' http://127.0.0.1:8080/sub2api-v1/models
 ```
 
-健康接口正常时返回：
+模型接口正常时返回 OpenAI 兼容列表，例如：
 
 ```json
-{"ok":true}
+{"object":"list","data":[{"id":"gpt-image-2"}]}
 ```
 
-如果 Bridge 启动失败，查看日志：
+如果模型列表请求失败，查看应用日志：
 
 ```bash
-docker compose --env-file .env -f deploy/compose.sub2api.yaml logs --tail=200 sub2-bridge
+docker compose --env-file .env -f deploy/compose.sub2api.yaml logs --tail=200 app
 ```
 
 常见原因：
 
 - `SUB2API_URL` 填写错误
-- `SUB2API_ADMIN_KEY` 无效
+- 用户 API Key 无效或已禁用
+- 用户 API Key 尚未绑定分组
+- 分组没有配置可用模型
 - 新服务器无法访问 Sub2API
 - Sub2API HTTPS 证书或反向代理异常
 
@@ -203,9 +199,9 @@ https://image.example.com
 
 1. 进入“设置 → Sub2API”
 2. 登录新的 Sub2API 用户账号
-3. 选择用户自己的 API Key
-4. 确认能读取 Key 所属分组和模型
-5. 选择 `gpt-image-2` 或新 Sub2API 实际支持的模型
+3. 确认能读取账号的可用分组
+4. 进入“设置 → Agent 配置”
+5. 分别选择文本与图像使用的分组和模型
 6. 使用短提示词生成一张测试图片
 7. 打开“提示词库”，确认提示词列表可以加载
 
@@ -214,7 +210,7 @@ https://image.example.com
 - 用户 API Key 是否绑定分组
 - 分组内是否有可调度账号
 - 账号是否支持对应模型
-- 管理员 API Key 是否有权读取账号和模型
+- 用户 API Key 请求 `GET /v1/models` 是否成功
 
 如果生成图片提示 `Upstream service temporarily unavailable`，说明请求已经到达 Sub2API，但可用上游全部失败。应检查 Sub2API 图片请求日志、账号额度、账号状态和上游响应，不要先修改前端判断。
 
@@ -251,9 +247,9 @@ docker compose --env-file .env -f deploy/compose.sub2api.yaml down
 ## 12. 安全要求
 
 - `.env` 不要提交到 Git
-- 不要把管理员 Key 写入前端代码
-- 不要在浏览器控制台输出管理员 Key
+- 不要把用户 API Key 写入源码或部署文档
+- 不要在浏览器控制台或服务器日志中输出完整用户 API Key
 - 建议使用 SSH 密钥登录服务器
 - 防火墙只公开 `22`、`80`、`443`
 - `APP_PORT` 建议只通过 `127.0.0.1` 或防火墙限制访问
-- 管理员 Key 泄露后立即在 Sub2API 中更换
+- 用户 API Key 泄露后立即在 Sub2API 中禁用并更换

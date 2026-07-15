@@ -413,19 +413,6 @@ export default function SettingsModal() {
     ? `已开启 ${enabledZipDownloadRouteCount} 项使用压缩包进行批量下载的途径`
     : '未开启任何使用压缩包进行批量下载的途径'
 
-  const agentTextConfigs = draft.sub2Configs.filter((config) => config.kind === 'text')
-  const agentImageConfigs = draft.sub2Configs.filter((config) => config.kind === 'image')
-  const selectedAgentTextProfile = draft.profiles.find((profile) => profile.id === draft.agentTextProfileId && profile.id.startsWith('sub2api-text-')) ?? null
-  const selectedAgentImageProfile = draft.profiles.find((profile) => profile.id === draft.agentImageProfileId && profile.id.startsWith('sub2api-image-')) ?? null
-  const agentTextProfileOptions = agentTextConfigs.map((config) => ({
-    label: `${config.name} · ${config.keyName} · ${config.model}`,
-    value: config.profileId,
-  }))
-  const agentImageProfileOptions = agentImageConfigs.map((config) => ({
-    label: `${config.name} · ${config.keyName} · ${config.model}`,
-    value: config.profileId,
-  }))
-
   const wasSettingsOpenRef = useRef(false)
 
   useEffect(() => {
@@ -1245,10 +1232,6 @@ export default function SettingsModal() {
               <AgentSettingsTab
                 draft={draft}
                 agentMaxToolRoundsInput={agentMaxToolRoundsInput}
-                agentTextProfileOptions={agentTextProfileOptions}
-                agentImageProfileOptions={agentImageProfileOptions}
-                selectedAgentTextProfile={selectedAgentTextProfile}
-                selectedAgentImageProfile={selectedAgentImageProfile}
                 setAgentMaxToolRoundsInput={setAgentMaxToolRoundsInput}
                 commitSettings={commitSettings}
                 commitAgentMaxToolRounds={commitAgentMaxToolRounds}
@@ -1256,10 +1239,7 @@ export default function SettingsModal() {
             )}
             
             {activeTab === 'sub2api' && (
-              <Sub2ApiSettingsTab
-                draft={draft}
-                commitSettings={commitSettings}
-              />
+              <Sub2ApiSettingsTab />
             )}
 
             {activeTab === 'api' && (

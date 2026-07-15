@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getSub2PublicSettings, loginSub2, loginSub2TwoFactor } from './sub2api'
+import { getSub2PublicSettings, listSub2Models, loginSub2, loginSub2TwoFactor } from './sub2api'
 
 const values = new Map<string, string>()
 
@@ -74,5 +74,26 @@ describe('Sub2API 登录', () => {
       body: JSON.stringify({ temp_token: 'temp-token', totp_code: '123456' }),
     }))
     expect(values.get('image2.sub2api.token')).toBe('access-token')
+  })
+})
+
+describe('Sub2API 模型', () => {
+  it('使用用户 Key 读取所属分组的模型', async () => {
+    const fetcher = vi.fn().mockResolvedValue(ok({
+      object: 'list',
+      data: [
+        { id: 'gpt-5.4', object: 'model' },
+        { id: 'gpt-image-2', object: 'model' },
+      ],
+    }))
+    vi.stubGlobal('fetch', fetcher)
+
+    await expect(listSub2Models('sk-user')).resolves.toEqual([
+      { id: 'gpt-5.4', object: 'model' },
+      { id: 'gpt-image-2', object: 'model' },
+    ])
+    expect(fetcher).toHaveBeenCalledWith('/sub2api-v1/models', {
+      headers: { Authorization: 'Bearer sk-user' },
+    })
   })
 })

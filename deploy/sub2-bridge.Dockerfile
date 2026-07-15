@@ -1,6 +1,0 @@
-FROM node:20-alpine
-WORKDIR /app
-COPY server ./server
-ENV PORT=8787
-EXPOSE 8787
-CMD ["node", "server/sub2Bridge.mjs"]

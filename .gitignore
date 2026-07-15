@@ -3,3 +3,6 @@ dist/
 dev-proxy.config.json
 .wrangler/
 .env
+.codegraph/
+.playwright-cli/
+output/

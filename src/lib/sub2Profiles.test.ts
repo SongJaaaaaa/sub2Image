@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from './apiProfiles'
-import { filterSub2Models, syncSub2Settings } from './sub2Profiles'
+import { syncSub2Settings } from './sub2Profiles'
 import type { Sub2Config } from '../types'
 
 function config(id: string, kind: Sub2Config['kind'], keyId = 1): Sub2Config {
@@ -19,12 +19,6 @@ function config(id: string, kind: Sub2Config['kind'], keyId = 1): Sub2Config {
 }
 
 describe('Sub2API profiles', () => {
-  it('separates text, image and video models', () => {
-    const models = ['gpt-5.5', 'gpt-image-2', 'grok-imagine', 'grok-imagine-video-1.5']
-    expect(filterSub2Models(models, 'image')).toEqual(['gpt-image-2', 'grok-imagine'])
-    expect(filterSub2Models(models, 'text')).toEqual(['gpt-5.5'])
-  })
-
   it('allows multiple configs to reuse the same key and separates agent profiles', () => {
     const configs = [config('a', 'image'), config('b', 'image'), config('c', 'text')]
     const settings = syncSub2Settings(DEFAULT_SETTINGS, configs, new Map([[1, 'sk-user']]))

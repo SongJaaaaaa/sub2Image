@@ -11,17 +11,6 @@ export function isSub2ImageProfile(profile: ApiProfile) {
   return profile.id.startsWith('sub2api-image-')
 }
 
-export function isImageModel(model: string) {
-  const id = model.toLowerCase()
-  return !id.includes('video') && (id.includes('image') || id.includes('imagine'))
-}
-
-export function filterSub2Models(models: string[], kind: Sub2Config['kind']) {
-  return models.filter((model) => kind === 'image'
-    ? isImageModel(model)
-    : !isImageModel(model) && !model.toLowerCase().includes('video'))
-}
-
 export function createSub2PlaceholderProfile(): ApiProfile {
   return {
     id: SUB2_PLACEHOLDER_PROFILE_ID,
