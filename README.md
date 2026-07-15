@@ -76,7 +76,7 @@ cp deploy/sub2api.env.example .env
 编辑 `.env`：
 
 ```env
-SUB2API_URL=https://api.aijws.com
+SUB2API_URL=https://api.sjiaa.cc.cd
 SUB2API_ADMIN_KEY=admin-replace-me
 APP_PORT=8080
 ```

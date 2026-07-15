@@ -35,7 +35,7 @@ function createSub2Proxy(target: string, prefix: string, upstream: string): Prox
 export default defineConfig(({ command, mode }) => {
   const devProxyConfig = command === 'serve' ? loadDevProxyConfig() : null
   const env = loadEnv(mode, '.', '')
-  const sub2Url = (env.SUB2API_URL || 'https://api.aijws.com').replace(/\/+$/, '')
+  const sub2Url = (env.SUB2API_URL || 'https://api.sjiaa.cc.cd').replace(/\/+$/, '')
   const bridgeUrl = (env.SUB2_BRIDGE_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '')
   const proxy: Record<string, ProxyOptions> = command === 'serve'
     ? {
