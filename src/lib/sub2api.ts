@@ -1,4 +1,5 @@
 import type { Sub2Config } from '../types'
+import { readRuntimeEnv } from './runtimeEnv'
 
 const authBase = '/sub2api-auth'
 const bridgeBase = '/sub2-bridge'
@@ -6,6 +7,9 @@ const tokenKey = 'image2.sub2api.token'
 const refreshKey = 'image2.sub2api.refresh'
 const expiresKey = 'image2.sub2api.expires'
 const userKey = 'image2.sub2api.user'
+
+export const OPEN_SUB2_CONNECT_EVENT = 'sub2-connect'
+export const SUB2_IMAGE_MODEL = readRuntimeEnv(import.meta.env.VITE_JWS_IMAGE_MODEL) || 'gpt-image-2'
 
 export interface Sub2User {
   id?: number
@@ -49,13 +53,24 @@ export interface Sub2KeyModels {
   models: Sub2Model[]
 }
 
+export interface Sub2PublicSettings {
+  turnstile_enabled?: boolean
+  turnstile_site_key?: string
+}
+
 interface AuthResult {
   access_token?: string
   refresh_token?: string
   expires_in?: number
   user?: Sub2User
   requires_2fa?: boolean
+  temp_token?: string
+  user_email_masked?: string
 }
+
+export type Sub2LoginResult =
+  | { requires2fa: true; tempToken: string; maskedEmail: string }
+  | { requires2fa: false; user: Sub2User }
 
 function saveAuth(data: AuthResult) {
   if (!data.access_token) throw new Error('登录响应中没有 access_token')
@@ -64,13 +79,26 @@ function saveAuth(data: AuthResult) {
   if (data.expires_in) localStorage.setItem(expiresKey, String(Date.now() + data.expires_in * 1000))
 }
 
+function saveUser(data: AuthResult, email: string) {
+  saveAuth(data)
+  const user = data.user || { email }
+  localStorage.setItem(userKey, JSON.stringify(user))
+  return user
+}
+
 async function readJson(res: Response) {
   const text = await res.text()
   let json: any
   try {
     json = text ? JSON.parse(text) : null
   } catch {
-    throw new Error(text || `请求失败 (${res.status})`)
+    console.error('[Sub2API] 响应不是 JSON', {
+      url: res.url,
+      status: res.status,
+      contentType: res.headers.get('content-type'),
+      body: text.slice(0, 300),
+    })
+    throw new Error(`Sub2API 响应异常 (${res.status})`)
   }
 
   if (!res.ok || (json && typeof json.code !== 'undefined' && json.code !== 0)) {
@@ -129,16 +157,36 @@ export function getSub2User(): Sub2User | null {
   }
 }
 
-export async function loginSub2(email: string, password: string) {
+export function getSub2PublicSettings() {
+  return authFetch('settings/public', {}, false) as Promise<Sub2PublicSettings>
+}
+
+export async function loginSub2(email: string, password: string, turnstileToken = ''): Promise<Sub2LoginResult> {
   const data = await authFetch('auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      ...(turnstileToken ? { turnstile_token: turnstileToken } : {}),
+    }),
   }, false) as AuthResult
-  if (data.requires_2fa) throw new Error('该账号启用了两步验证，当前版本暂不支持 2FA 登录')
-  saveAuth(data)
-  const user = data.user || { email }
-  localStorage.setItem(userKey, JSON.stringify(user))
-  return user
+  if (data.requires_2fa) {
+    if (!data.temp_token) throw new Error('两步验证响应中没有 temp_token')
+    return {
+      requires2fa: true,
+      tempToken: data.temp_token,
+      maskedEmail: data.user_email_masked || '',
+    }
+  }
+  return { requires2fa: false, user: saveUser(data, email) }
+}
+
+export async function loginSub2TwoFactor(tempToken: string, code: string, email: string) {
+  const data = await authFetch('auth/login/2fa', {
+    method: 'POST',
+    body: JSON.stringify({ temp_token: tempToken, totp_code: code }),
+  }, false) as AuthResult
+  return saveUser(data, email)
 }
 
 export function logoutSub2() {

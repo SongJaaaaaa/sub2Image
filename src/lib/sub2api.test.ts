@@ -1,0 +1,78 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getSub2PublicSettings, loginSub2, loginSub2TwoFactor } from './sub2api'
+
+const values = new Map<string, string>()
+
+beforeEach(() => {
+  values.clear()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+  })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function ok(data: unknown) {
+  return new Response(JSON.stringify({ code: 0, data }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+describe('Sub2API 登录', () => {
+  it('从同源代理读取公共设置', async () => {
+    const fetcher = vi.fn().mockResolvedValue(ok({ turnstile_enabled: true, turnstile_site_key: 'site-key' }))
+    vi.stubGlobal('fetch', fetcher)
+
+    await expect(getSub2PublicSettings()).resolves.toEqual({ turnstile_enabled: true, turnstile_site_key: 'site-key' })
+    expect(fetcher).toHaveBeenCalledWith('/sub2api-auth/settings/public', expect.any(Object))
+  })
+
+  it('携带 Turnstile token 并保存登录状态', async () => {
+    const fetcher = vi.fn().mockResolvedValue(ok({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      expires_in: 3600,
+      user: { email: 'hello@example.com' },
+    }))
+    vi.stubGlobal('fetch', fetcher)
+
+    await expect(loginSub2('hello@example.com', 'secret', 'turnstile-token')).resolves.toEqual({
+      requires2fa: false,
+      user: { email: 'hello@example.com' },
+    })
+    expect(fetcher).toHaveBeenCalledWith('/sub2api-auth/auth/login', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'hello@example.com',
+        password: 'secret',
+        turnstile_token: 'turnstile-token',
+      }),
+    }))
+    expect(values.get('image2.sub2api.token')).toBe('access-token')
+    expect(values.get('image2.sub2api.refresh')).toBe('refresh-token')
+  })
+
+  it('完成两步验证后保存登录状态', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(ok({ requires_2fa: true, temp_token: 'temp-token', user_email_masked: 'h***@example.com' }))
+      .mockResolvedValueOnce(ok({ access_token: 'access-token', user: { email: 'hello@example.com' } }))
+    vi.stubGlobal('fetch', fetcher)
+
+    await expect(loginSub2('hello@example.com', 'secret')).resolves.toEqual({
+      requires2fa: true,
+      tempToken: 'temp-token',
+      maskedEmail: 'h***@example.com',
+    })
+    await expect(loginSub2TwoFactor('temp-token', '123456', 'hello@example.com')).resolves.toEqual({ email: 'hello@example.com' })
+    expect(fetcher).toHaveBeenLastCalledWith('/sub2api-auth/auth/login/2fa', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ temp_token: 'temp-token', totp_code: '123456' }),
+    }))
+    expect(values.get('image2.sub2api.token')).toBe('access-token')
+  })
+})

@@ -76,7 +76,7 @@ cp deploy/sub2api.env.example .env
 编辑 `.env`：
 
 ```env
-SUB2API_URL=https://api.example.com
+SUB2API_URL=https://api.aijws.com
 SUB2API_ADMIN_KEY=admin-replace-me
 APP_PORT=8080
 ```
@@ -90,6 +90,8 @@ APP_PORT=8080
 | `APP_PORT` | 否 | 前端本地监听端口，默认 `8080` |
 
 管理员 API Key 不会发送给浏览器，只用于服务器端 Bridge 查询用户 Key 所属分组、分组账号和模型。
+
+如果 `SUB2API_URL` 接入了 Cloudflare，请在 WAF 中放行图片站服务器出口 IP 对 `/api/v1/*` 和 `/v1/*` 的访问。Sub2API 开启 Turnstile 时，还需要把图片站正式域名加入对应 Site Key 的允许域名。
 
 ## Docker 部署
 
@@ -128,13 +130,11 @@ Bridge 正常时返回：
 
 ## 使用流程
 
-1. 打开网站
-2. 进入“设置 → Sub2API”
+1. 打开网站首页
+2. 点击“开始创作”
 3. 登录 Sub2API 用户账号
-4. 选择用户自己的 API Key
-5. 加载 Key 所属分组和支持的模型
-6. 选择图片模型
-7. 输入提示词并生成图片
+4. 选择账号中已启用的 API Key
+5. 进入工作台并生成图片
 
 用户 API Key 必须已经绑定分组，分组中需要存在状态正常、允许调度且额度充足的图片账号。
 

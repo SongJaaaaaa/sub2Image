@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { initStore } from './store'
 import { useStore } from './store'
 import { activateFirstImportedProfile, buildSettingsFromUrlParams, clearUrlSettingParams, hasUrlSettingParams } from './lib/urlSettings'
 import { isDefaultConfigOnlyEnabled, mergeImportedSettings } from './lib/apiProfiles'
 import { getCustomProviderConfigUrl, loadCustomProviderSettingsFromUrl } from './lib/customProviderConfigUrl'
+import { OPEN_SUB2_CONNECT_EVENT } from './lib/sub2api'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
 import type { AppSettings } from './types'
 import Header from './components/Header'
@@ -19,18 +20,55 @@ import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
 import SupportPromptModal from './components/SupportPromptModal'
+import LandingPage from './components/LandingPage'
+import JwsConnectModal from './components/JwsConnectModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
 
 let customProviderConfigUrlImportStarted = false
 
 export default function App() {
+  const [path, setPath] = useState(window.location.pathname)
+
+  useEffect(() => {
+    const onPopState = () => setPath(window.location.pathname)
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  if (path !== '/app' && path !== '/app/') {
+    return (
+      <LandingPage
+        onEnter={() => {
+          window.history.pushState(null, '', '/app?connect=jws')
+          setPath('/app')
+        }}
+      />
+    )
+  }
+
+  return <Workspace />
+}
+
+function Workspace() {
   const setSettings = useStore((s) => s.setSettings)
   const appMode = useStore((s) => s.appMode)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
+  const [showJwsConnect, setShowJwsConnect] = useState(() => new URLSearchParams(window.location.search).get('connect') === 'jws')
   useDockerApiUrlMigrationNotice()
   useGlobalClickSuppression()
+
+  useEffect(() => {
+    const open = () => {
+      setShowJwsConnect(true)
+      const params = new URLSearchParams(window.location.search)
+      params.set('connect', 'jws')
+      window.history.replaceState(null, '', `${window.location.pathname}?${params}${window.location.hash}`)
+    }
+    window.addEventListener(OPEN_SUB2_CONNECT_EVENT, open)
+    return () => window.removeEventListener(OPEN_SUB2_CONNECT_EVENT, open)
+  }, [])
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -123,6 +161,17 @@ export default function App() {
       <InputBar />
       <DetailModal />
       <Lightbox />
+      {showJwsConnect && (
+        <JwsConnectModal
+          onClose={() => {
+            setShowJwsConnect(false)
+            const params = new URLSearchParams(window.location.search)
+            params.delete('connect')
+            const search = params.toString()
+            window.history.replaceState(null, '', `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`)
+          }}
+        />
+      )}
       <SettingsModal />
       <ConfirmDialog />
       <SupportPromptModal />

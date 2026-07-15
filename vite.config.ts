@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'fs'
 import { normalizeDevProxyConfig } from './src/lib/devProxy'
@@ -17,33 +17,57 @@ function loadDevProxyConfig() {
   }
 }
 
-export default defineConfig(({ command }) => {
+function createSub2Proxy(target: string, prefix: string, upstream: string): ProxyOptions {
+  return {
+    target,
+    changeOrigin: true,
+    secure: true,
+    rewrite: (path) => `${upstream}${path.slice(prefix.length)}`,
+    configure: (proxy) => {
+      proxy.on('proxyReq', (req) => {
+        req.removeHeader('origin')
+        req.removeHeader('referer')
+      })
+    },
+  }
+}
+
+export default defineConfig(({ command, mode }) => {
   const devProxyConfig = command === 'serve' ? loadDevProxyConfig() : null
+  const env = loadEnv(mode, '.', '')
+  const sub2Url = (env.SUB2API_URL || 'https://api.aijws.com').replace(/\/+$/, '')
+  const bridgeUrl = (env.SUB2_BRIDGE_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '')
+  const proxy: Record<string, ProxyOptions> = command === 'serve'
+    ? {
+        '/sub2api-auth': createSub2Proxy(sub2Url, '/sub2api-auth', '/api/v1'),
+        '/sub2api-v1': createSub2Proxy(sub2Url, '/sub2api-v1', '/v1'),
+        '/sub2-bridge': createSub2Proxy(bridgeUrl, '/sub2-bridge', ''),
+      }
+    : {}
+
+  if (devProxyConfig?.enabled) {
+    proxy[devProxyConfig.prefix] = {
+      target: devProxyConfig.target,
+      changeOrigin: devProxyConfig.changeOrigin,
+      secure: devProxyConfig.secure,
+      rewrite: (path) =>
+        path.replace(
+          new RegExp(`^${devProxyConfig.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+          '',
+        ),
+    }
+  }
 
   return {
     plugins: [react()],
-    base: './',
+    base: '/',
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __DEV_PROXY_CONFIG__: JSON.stringify(devProxyConfig),
     },
     server: {
       host: true,
-      proxy:
-        devProxyConfig?.enabled
-          ? {
-              [devProxyConfig.prefix]: {
-                target: devProxyConfig.target,
-                changeOrigin: devProxyConfig.changeOrigin,
-                secure: devProxyConfig.secure,
-                rewrite: (path) =>
-                  path.replace(
-                    new RegExp(`^${devProxyConfig.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
-                    '',
-                  ),
-              },
-            }
-          : undefined,
+      proxy: Object.keys(proxy).length ? proxy : undefined,
     },
   }
 })

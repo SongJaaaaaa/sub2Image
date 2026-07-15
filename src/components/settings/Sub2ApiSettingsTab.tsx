@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AppSettings, Sub2Config } from '../../types'
+import { useStore } from '../../store'
 import {
   getSub2Token,
   getSub2User,
   listSub2KeyModels,
   listSub2Keys,
-  loginSub2,
   logoutSub2,
   newSub2Config,
+  OPEN_SUB2_CONNECT_EVENT,
   type Sub2Key,
   type Sub2User,
 } from '../../lib/sub2api'
@@ -23,8 +24,6 @@ const inputClass = 'w-full rounded-xl border border-gray-200/70 bg-white/60 px-3
 const selectClass = 'w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2.5 text-sm text-gray-700 outline-none dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200'
 
 export default function Sub2ApiSettingsTab({ draft, commitSettings }: Props) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [user, setUser] = useState<Sub2User | null>(() => getSub2User())
   const [keys, setKeys] = useState<Sub2Key[]>([])
   const [edit, setEdit] = useState<Sub2Config | null>(null)
@@ -53,21 +52,6 @@ export default function Sub2ApiSettingsTab({ draft, commitSettings }: Props) {
   useEffect(() => {
     if (getSub2Token()) void loadKeys()
   }, [])
-
-  const login = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const nextUser = await loginSub2(email.trim(), password)
-      setUser(nextUser)
-      setPassword('')
-      await loadKeys()
-    } catch (err) {
-      console.error('[Sub2API] 登录失败', err)
-      setError(err instanceof Error ? err.message : String(err))
-      setLoading(false)
-    }
-  }
 
   const logout = () => {
     logoutSub2()
@@ -154,17 +138,15 @@ export default function Sub2ApiSettingsTab({ draft, commitSettings }: Props) {
           <h3 className="text-sm font-medium text-gray-800 dark:text-gray-100">登录 Sub2API</h3>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">登录后读取当前账号的 API Key，并严格根据所选 Key 的分组获取模型。</p>
         </div>
-        <label className="block">
-          <span className="mb-1.5 block text-sm text-gray-600 dark:text-gray-300">邮箱</span>
-          <input className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="username" />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm text-gray-600 dark:text-gray-300">密码</span>
-          <input className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" onKeyDown={(e) => e.key === 'Enter' && void login()} />
-        </label>
-        {error && <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{error}</div>}
-        <button type="button" disabled={loading || !email.trim() || !password} onClick={() => void login()} className="w-full rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
-          {loading ? '登录中…' : '登录并获取密钥'}
+        <button
+          type="button"
+          onClick={() => {
+            useStore.getState().setShowSettings(false)
+            window.dispatchEvent(new Event(OPEN_SUB2_CONNECT_EVENT))
+          }}
+          className="w-full rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-medium text-white"
+        >
+          登录我的贾维斯
         </button>
       </div>
     )
