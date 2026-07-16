@@ -1851,6 +1851,82 @@ describe('agent draft lifecycle', () => {
 
 })
 
+describe('agent round editing contract', () => {
+  it('creates a sibling round without changing the completed source round', async () => {
+    const profile = createDefaultOpenAIProfile({
+      id: 'responses-profile',
+      apiKey: 'test-key',
+      apiMode: 'responses',
+      model: DEFAULT_RESPONSES_MODEL,
+    })
+    const sourceRound = {
+      id: 'round-a',
+      index: 1,
+      parentRoundId: null,
+      userMessageId: 'user-a',
+      assistantMessageId: 'assistant-a',
+      prompt: '白天街道',
+      inputImageIds: [],
+      outputTaskIds: [],
+      status: 'done' as const,
+      error: null,
+      createdAt: 1,
+      finishedAt: 2,
+    }
+    const conversation = agentConversation({
+      activeRoundId: sourceRound.id,
+      rounds: [sourceRound],
+      messages: [
+        { id: 'user-a', role: 'user', content: sourceRound.prompt, roundId: sourceRound.id, createdAt: 1 },
+        { id: 'assistant-a', role: 'assistant', content: '原回复', roundId: sourceRound.id, createdAt: 2 },
+      ],
+    })
+    vi.mocked(callAgentResponsesApi).mockResolvedValueOnce({
+      responseId: 'response-edited',
+      text: '新回复',
+      images: [],
+      outputItems: [{ type: 'message', content: [{ type: 'output_text', text: '新回复' }] }],
+    })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+      }),
+      appMode: 'agent',
+      prompt: '改成雨夜街道',
+      inputImages: [imageA],
+      maskDraft: null,
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      agentConversations: [conversation],
+      activeAgentConversationId: conversation.id,
+      agentEditingRoundId: sourceRound.id,
+      showToast: vi.fn(),
+    })
+
+    await submitAgentMessage()
+    for (let i = 0; i < 10 && useStore.getState().agentConversations[0].rounds.some((round) => round.status === 'running'); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    const state = useStore.getState()
+    const updated = state.agentConversations[0]
+    const sibling = updated.rounds.find((round) => round.id !== sourceRound.id)
+    expect(updated.rounds).toHaveLength(2)
+    expect(updated.rounds.find((round) => round.id === sourceRound.id)).toEqual(sourceRound)
+    expect(sibling).toMatchObject({
+      parentRoundId: null,
+      prompt: '改成雨夜街道',
+      inputImageIds: [imageA.id],
+      status: 'done',
+      responseId: 'response-edited',
+    })
+    expect(updated.activeRoundId).toBe(sibling?.id)
+    expect(state.agentEditingRoundId).toBeNull()
+  })
+})
+
 describe('agent context for removed outputs', () => {
   beforeEach(() => {
     const profile = createDefaultOpenAIProfile({

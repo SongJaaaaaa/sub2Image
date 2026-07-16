@@ -10,6 +10,10 @@
     "deploy:cf": "npm run build && wrangler deploy",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:unit": "vitest run src",
+    "test:ui": "vitest run tests/ui",
+    "test:e2e": "playwright test",
+    "test:ci": "npm run build && npm test && npm run test:e2e",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -30,10 +34,15 @@
     "dompurify": "^3.4.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.4.21",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
