@@ -210,7 +210,7 @@ describe('Sub2ImageConversationComposer', () => {
 
     await waitFor(() => expect(editor.textContent).toBe('旧输入框更新'))
     expect(screen.getByRole('button', { name: '预览参考图1' })).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: '设置' }))
+    await user.click(screen.getByRole('button', { name: '图片设置' }))
     expect(screen.getByRole('button', { name: '高' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: '横向 16:9' })).toBeTruthy()
     expect(screen.getByRole('combobox', { name: '生成数量' })).toBeTruthy()
@@ -226,7 +226,9 @@ describe('Sub2ImageConversationComposer', () => {
     expect(document.querySelector('[data-conversation-composer-dock] [title="提示词库"]')).toBeNull()
     await user.click(agent)
 
-    expect(agent.getAttribute('aria-pressed')).toBe('true')
+    // 选中后 Agent 按钮会切换为液态样式的新元素，需要重新查询
+    const agentSelected = document.querySelector<HTMLButtonElement>('.cc-agent-button')!
+    expect(agentSelected.getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('textbox', { name: '图片提示词输入' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '发送到图片提示词 Agent' })).toBeTruthy()
     expect(document.querySelector('[data-prompt-agent-card]')).toBeNull()
@@ -237,13 +239,13 @@ describe('Sub2ImageConversationComposer', () => {
     render(<Sub2ImageConversationComposer />)
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: '设置' }))
+    await user.click(screen.getByRole('button', { name: '图片设置' }))
     await user.click(screen.getByRole('button', { name: '高' }))
     await user.click(screen.getByRole('button', { name: '关闭设置' }))
     expect(useStore.getState().params.quality).toBe('auto')
     expect(screen.getByRole('textbox', { name: '图片提示词输入' })).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: '设置' }))
+    await user.click(screen.getByRole('button', { name: '图片设置' }))
     await user.click(screen.getByRole('button', { name: '高' }))
     await user.click(screen.getByRole('button', { name: 'JPEG' }))
     await user.click(screen.getByRole('button', { name: '横向 16:9' }))

@@ -95,8 +95,8 @@ describe('Prompt Agent inline card', () => {
 
     await user.click(await screen.findByRole('button', { name: '商业海报' }))
     await user.click(await screen.findByRole('button', { name: '产品主体' }))
-    await user.click(screen.getByRole('button', { name: '返回' }))
-    await user.click(screen.getByRole('button', { name: '返回' }))
+    await user.click(screen.getByRole('button', { name: '上一个问题' }))
+    await user.click(screen.getByRole('button', { name: '上一个问题' }))
     await user.click(await screen.findByRole('button', { name: '社交封面' }))
 
     const snapshot = bundle.store.getSnapshot(conversationId)

@@ -537,7 +537,7 @@ export default function Sub2ImageConversationComposer() {
                     size="sm"
                     idleSpeed={0.35}
                     aria-pressed
-                    className="!h-8 !min-w-0 !px-4 !text-[13px]"
+                    className="cc-agent-button !h-8 !min-w-0 !px-4 !text-[13px]"
                     onClick={() => { void togglePromptAgent() }}
                   >
                     Agent
@@ -546,7 +546,7 @@ export default function Sub2ImageConversationComposer() {
                   <button
                     type="button"
                     aria-pressed={false}
-                    className="inline-flex h-8 min-w-0 items-center rounded-full bg-gray-100 px-4 text-[13px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-white/[0.08] dark:text-gray-300 dark:hover:bg-white/[0.14] dark:hover:text-gray-100"
+                    className="cc-agent-button inline-flex h-8 min-w-0 items-center rounded-full bg-gray-100 px-4 text-[13px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-white/[0.08] dark:text-gray-300 dark:hover:bg-white/[0.14] dark:hover:text-gray-100"
                     onClick={() => { void togglePromptAgent() }}
                   >
                     Agent
