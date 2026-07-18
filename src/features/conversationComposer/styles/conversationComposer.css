@@ -329,10 +329,18 @@
   cursor: pointer;
 }
 
+@property --cc-marquee-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .cc-composer--agent {
   overflow: hidden;
-  border-color: rgba(28, 199, 179, 0.52);
+  border-color: rgba(0, 0, 0, 0.12);
   isolation: isolate;
+  --cc-marquee-core: rgba(90, 96, 108, 0.95);
+  --cc-marquee-tail: rgba(150, 156, 168, 0.45);
 }
 
 .cc-composer--agent::before,
@@ -346,13 +354,39 @@
 }
 
 .cc-composer--agent::before {
-  background: conic-gradient(from 0deg, transparent 0 18%, rgba(32, 208, 184, 0.9) 31%, rgba(211, 179, 96, 0.78) 44%, transparent 58% 82%, rgba(32, 208, 184, 0.72));
-  animation: ps-liquid-flow 5s linear infinite;
+  background: conic-gradient(
+    from var(--cc-marquee-angle),
+    transparent 0deg 300deg,
+    var(--cc-marquee-tail) 336deg,
+    var(--cc-marquee-core) 356deg,
+    var(--cc-marquee-tail) 360deg
+  );
+  animation: cc-agent-marquee 2.6s linear forwards;
 }
 
 .cc-composer--agent::after {
   inset: 1px;
   background: var(--cc-bg);
+}
+
+.dark .cc-composer--agent {
+  border-color: rgba(255, 255, 255, 0.14);
+  --cc-marquee-core: rgba(255, 255, 255, 0.95);
+  --cc-marquee-tail: rgba(224, 226, 232, 0.5);
+}
+
+@keyframes cc-agent-marquee {
+  0% {
+    --cc-marquee-angle: 0deg;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    --cc-marquee-angle: 720deg;
+    opacity: 0;
+  }
 }
 
 .cc-toolbar-action {
@@ -872,7 +906,7 @@
   }
 
   .cc-composer--agent::before {
-    background: rgba(28, 199, 179, 0.7);
+    opacity: 0;
   }
 }
 
