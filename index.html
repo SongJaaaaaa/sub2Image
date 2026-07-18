@@ -3,7 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#eef1f4" />
+    <script>
+      const media = window.matchMedia('(prefers-color-scheme: dark)')
+      let theme = 'system'
+      try {
+        const raw = localStorage.getItem('gpt-image-playground')
+        theme = raw ? JSON.parse(raw)?.state?.settings?.theme : 'system'
+      } catch (err) {
+        console.warn('读取主题设置失败:', err)
+      }
+      const dark = theme === 'dark' || (theme !== 'light' && media.matches)
+      document.documentElement.classList.toggle('dark', dark)
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#09090b' : '#eef1f4')
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="JWS Image" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -12,7 +26,7 @@
     <link rel="icon" href="/pwa-icon.svg" type="image/svg+xml" />
     <title>JWS Image · 我的贾维斯</title>
   </head>
-  <body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 min-h-screen">
+  <body class="min-h-screen bg-background text-gray-900 dark:bg-gray-950 dark:text-gray-100">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

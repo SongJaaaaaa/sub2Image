@@ -347,8 +347,8 @@ export default function TaskCard({
 
       <div
         ref={cardRef}
-        className={`relative bg-white dark:bg-gray-900 rounded-xl border overflow-hidden cursor-pointer touch-pan-y will-change-transform duration-200 hover:shadow-lg dark:hover:bg-gray-800/80 ${
-          isSwiping ? '!bg-white dark:!bg-gray-900' : ''
+        className={`relative cursor-pointer touch-pan-y overflow-hidden rounded-xl border bg-sidebar duration-200 will-change-transform hover:shadow-lg dark:bg-gray-900 dark:hover:bg-gray-800/80 ${
+          isSwiping ? '!bg-sidebar dark:!bg-gray-900' : ''
         } ${
           !isSwiping ? 'transition-[box-shadow,border-color,background-color,transform]' : 'transition-[box-shadow,border-color,background-color]'
         } ${
@@ -356,7 +356,7 @@ export default function TaskCard({
             ? 'border-blue-400 generating'
             : isSelected
             ? 'border-blue-500 shadow-md ring-2 ring-blue-500/50'
-            : 'border-gray-200 dark:border-white/[0.08] hover:border-gray-300 dark:hover:border-white/[0.18]'
+            : 'border-border hover:border-gray-400/80 dark:border-white/[0.08] dark:hover:border-white/[0.18]'
         }`}
         onClick={(e) => {
           if (Date.now() < suppressClickUntilRef.current) {

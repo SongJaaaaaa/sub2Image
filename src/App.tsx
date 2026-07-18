@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { initStore } from './store'
 import { useStore } from './store'
 import { activateFirstImportedProfile, buildSettingsFromUrlParams, clearUrlSettingParams, hasUrlSettingParams } from './lib/urlSettings'
@@ -29,6 +29,23 @@ let customProviderConfigUrlImportStarted = false
 
 export default function App() {
   const [path, setPath] = useState(window.location.pathname)
+  const theme = useStore((s) => s.settings.theme)
+
+  useLayoutEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => {
+      const dark = theme === 'dark' || (theme === 'system' && media.matches)
+      document.documentElement.classList.toggle('dark', dark)
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#09090b' : '#eef1f4')
+    }
+
+    apply()
+    if (theme !== 'system') return
+
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [theme])
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname)

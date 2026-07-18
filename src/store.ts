@@ -966,6 +966,7 @@ interface AppState {
       action: (checkboxChecked?: boolean) => void
     }>
     icon?: 'info' | 'copy'
+    surface?: 'metal3d'
     minConfirmDelayMs?: number
     messageAlign?: 'left' | 'center'
     tone?: 'danger' | 'warning'

@@ -112,6 +112,7 @@ export interface AppSettings {
   streamPartialImages?: number
   customProviders: CustomProviderDefinition[]
   providerOrder?: string[]
+  theme: 'system' | 'dark' | 'light'
   clearInputAfterSubmit: boolean
   persistInputOnRestart: boolean
   reuseTaskApiProfileTemporarily: boolean

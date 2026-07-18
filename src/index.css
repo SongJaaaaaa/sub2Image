@@ -6,15 +6,15 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
+  --background: 212 16% 89%;
   --foreground: 240 10% 10%;
-  --muted: 240 5% 96%;
+  --muted: 212 15% 91%;
   --muted-foreground: 240 4% 46%;
-  --border: 240 6% 90%;
-  --input: 240 6% 90%;
+  --border: 212 14% 74%;
+  --input: 212 14% 74%;
   --primary: 221 83% 53%;
   --primary-foreground: 0 0% 100%;
-  --sidebar: 240 5% 96%;
+  --sidebar: 220 23% 97.5%;
   --sidebar-foreground: 240 10% 10%;
   --font-ui-sans: 'HarmonyOS Sans SC', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Maple Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
@@ -22,11 +22,39 @@
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
+  color-scheme: light;
   scrollbar-gutter: stable;
 }
 
 html {
+  background-color: hsl(var(--background));
   overflow-y: scroll;
+}
+
+/**
+ * 液态银画布（白天模式）：
+ * 冷银渐变底 + 左上高光/右下暗部两处柔和光斑，模拟液态金属表面的漫反射，
+ * 与 Metal3DButton / AiLiquidButton 的银色质感呼应。
+ */
+html:not(.dark) {
+  background-image:
+    radial-gradient(90% 60% at 10% -8%, rgba(255, 255, 255, 0.95), transparent 52%),
+    radial-gradient(75% 60% at 90% 112%, rgba(93, 106, 121, 0.45), transparent 62%),
+    linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%),
+    linear-gradient(160deg, #f0f3f6 0%, #d8dfe6 46%, #c2ccd6 100%);
+  background-attachment: fixed;
+}
+
+/* body 自带不透明 bg-background，白天放行让上面的液态银画布透出 */
+html:not(.dark) body {
+  background-color: transparent;
+}
+
+@media (max-width: 639px) {
+  :root {
+    overflow-y: auto;
+    scrollbar-gutter: auto;
+  }
 }
 
 body {
@@ -69,23 +97,23 @@ body.drag-selecting * {
   user-select: none !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
-    --border: 240 4% 22%;
-    --input: 240 4% 22%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --sidebar: 240 5% 12%;
-    --sidebar-foreground: 0 0% 98%;
-  }
+.dark {
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
+  --muted: 240 4% 16%;
+  --muted-foreground: 240 5% 65%;
+  --border: 240 4% 22%;
+  --input: 240 4% 22%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --sidebar: 240 5% 12%;
+  --sidebar-foreground: 0 0% 98%;
+  color-scheme: dark;
+}
 
-  * {
-    scrollbar-color: #3f3f46 transparent;
-  }
+.dark,
+.dark * {
+  scrollbar-color: #3f3f46 transparent;
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -103,10 +131,10 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb { background: #3f3f46; }
-  ::-webkit-scrollbar-thumb:hover { background: #52525b; }
-}
+.dark::-webkit-scrollbar-thumb,
+.dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
+.dark::-webkit-scrollbar-thumb:hover,
+.dark ::-webkit-scrollbar-thumb:hover { background: #52525b; }
 
 @keyframes pulse-border {
   0%, 100% { border-color: #3b82f6; }
@@ -139,17 +167,211 @@ input[type="number"] {
   animation: agent-web-search-text-sweep 2.5s linear infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  .agent-web-search-running-text {
-    --agent-web-search-text: #9ca3af;
-    --agent-web-search-highlight: #ffffff;
-  }
+.dark .agent-web-search-running-text {
+  --agent-web-search-text: #9ca3af;
+  --agent-web-search-highlight: #ffffff;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .agent-web-search-running-text {
     color: var(--agent-web-search-text);
     background-image: none;
+    animation: none;
+  }
+}
+
+.metal-3d-button {
+  --metal-3d-ambient: rgba(24, 24, 27, 0.16);
+  --metal-3d-shell: linear-gradient(180deg, #ffffff 0%, #d8dde3 46%, #87919d 100%);
+  --metal-3d-rim: linear-gradient(180deg, #fdfefe 0%, #aeb6c0 52%, #e9edf1 100%);
+  --metal-3d-core: linear-gradient(180deg, #f7f8fa 0%, #dce1e6 100%);
+  --metal-3d-shadow: 0 18px 36px rgba(24, 24, 27, 0.28), 0 8px 16px rgba(24, 24, 27, 0.2);
+  --metal-3d-shadow-pressed: 0 5px 15px rgba(24, 24, 27, 0.38), 0 2px 5px rgba(24, 24, 27, 0.28);
+  --metal-3d-core-shadow: inset 0 4px 10px rgba(255, 255, 255, 0.9), inset 0 -2px 5px rgba(63, 63, 70, 0.2);
+  --metal-3d-core-shadow-pressed: inset 0 7px 16px rgba(63, 63, 70, 0.24), inset 0 2px 6px rgba(63, 63, 70, 0.14);
+  --metal-3d-text: #3f3f46;
+  --metal-3d-text-hover: #09090b;
+  --metal-3d-text-click: #000000;
+  --metal-3d-click-filter: drop-shadow(0 0 8px rgba(63, 63, 70, 0.3));
+  --metal-3d-glow-strong: rgba(255, 255, 255, 0.98);
+  --metal-3d-glow-mid: rgba(255, 255, 255, 0.72);
+  --metal-3d-glow-soft: rgba(228, 228, 231, 0.38);
+  --metal-3d-top-highlight: linear-gradient(to bottom, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.12), transparent);
+  --metal-3d-bottom-highlight: linear-gradient(to top, rgba(63, 63, 70, 0.14), transparent);
+  --metal-3d-core-border: rgba(63, 63, 70, 0.16);
+  --metal-3d-pressed-overlay: rgba(24, 24, 27, 0.06);
+  --metal-3d-specular: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.9), transparent);
+}
+
+.dark .metal-3d-button {
+  --metal-3d-ambient: rgba(255, 255, 255, 0.16);
+  --metal-3d-shell: linear-gradient(180deg, #3f3f46 0%, #18181b 48%, #09090b 100%);
+  --metal-3d-rim: linear-gradient(180deg, #71717a 0%, #27272a 52%, #52525b 100%);
+  --metal-3d-core: linear-gradient(180deg, #252525 0%, #181818 100%);
+  --metal-3d-shadow: 0 18px 36px rgba(0, 0, 0, 0.72), 0 8px 16px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --metal-3d-shadow-pressed: 0 5px 15px rgba(0, 0, 0, 0.82), 0 2px 5px rgba(0, 0, 0, 0.68);
+  --metal-3d-core-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.6), inset 0 -1px 4px rgba(255, 255, 255, 0.05);
+  --metal-3d-core-shadow-pressed: inset 0 8px 20px rgba(0, 0, 0, 0.8), inset 0 2px 8px rgba(0, 0, 0, 0.6);
+  --metal-3d-text: #a1a1aa;
+  --metal-3d-text-hover: #e4e4e7;
+  --metal-3d-text-click: #ffffff;
+  --metal-3d-click-filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.85));
+  --metal-3d-glow-strong: rgba(255, 255, 255, 0.95);
+  --metal-3d-glow-mid: rgba(255, 255, 255, 0.55);
+  --metal-3d-glow-soft: rgba(220, 230, 255, 0.25);
+  --metal-3d-top-highlight: linear-gradient(to bottom, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02), transparent);
+  --metal-3d-bottom-highlight: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
+  --metal-3d-core-border: rgba(82, 82, 91, 0.2);
+  --metal-3d-pressed-overlay: rgba(255, 255, 255, 0.05);
+  --metal-3d-specular: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.ai-liquid-button {
+  --ai-liquid-shell: linear-gradient(135deg, #ffffff 0%, #c7cdd4 56%, #87919d 100%);
+  --ai-liquid-core: linear-gradient(180deg, #f7f8fa 0%, #dde2e7 100%);
+  --ai-liquid-shadow: 0 0 0 1px rgba(24, 24, 27, 0.34), 0 20px 12px rgba(24, 24, 27, 0.09), 0 9px 9px rgba(24, 24, 27, 0.14), 0 2px 5px rgba(24, 24, 27, 0.18);
+  --ai-liquid-shadow-hover: 0 0 0 1px rgba(24, 24, 27, 0.42), 0 12px 6px rgba(24, 24, 27, 0.07), 0 8px 5px rgba(24, 24, 27, 0.12), 0 4px 4px rgba(24, 24, 27, 0.18);
+  --ai-liquid-shadow-pressed: 0 0 0 1px rgba(24, 24, 27, 0.5), 0 1px 2px rgba(24, 24, 27, 0.32);
+  --ai-liquid-core-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9), inset 0 -1px 3px rgba(63, 63, 70, 0.18);
+  --ai-liquid-core-shadow-pressed: inset 0 3px 6px rgba(63, 63, 70, 0.2), inset 0 1px 2px rgba(63, 63, 70, 0.14);
+  --ai-liquid-text-shadow: 0 1px 1px rgba(255, 255, 255, 0.7);
+  --ai-liquid-ripple: rgba(24, 24, 27, 0.32);
+}
+
+.dark .ai-liquid-button {
+  --ai-liquid-shell: linear-gradient(135deg, #e4e4e7 0%, #71717a 52%, #27272a 100%);
+  --ai-liquid-core: linear-gradient(180deg, #202020 0%, #000000 100%);
+  --ai-liquid-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 20px 12px rgba(0, 0, 0, 0.35), 0 9px 9px rgba(0, 0, 0, 0.42), 0 2px 5px rgba(0, 0, 0, 0.55);
+  --ai-liquid-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 12px 6px rgba(0, 0, 0, 0.3), 0 8px 5px rgba(0, 0, 0, 0.38), 0 4px 4px rgba(0, 0, 0, 0.48);
+  --ai-liquid-shadow-pressed: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.62);
+  --ai-liquid-core-shadow: inset 0 -1px 2px rgba(255, 255, 255, 0.05);
+  --ai-liquid-core-shadow-pressed: inset 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  --ai-liquid-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --ai-liquid-ripple: rgba(255, 255, 255, 0.4);
+}
+
+.ai-liquid-mode-switch {
+  background: linear-gradient(180deg, #f7f8fa 0%, #c7cdd4 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.85),
+    inset 0 -2px 5px rgba(63, 63, 70, 0.18),
+    0 6px 18px rgba(24, 24, 27, 0.14),
+    0 0 0 1px rgba(63, 63, 70, 0.2);
+}
+
+.ai-liquid-mode-switch__thumb {
+  background: linear-gradient(180deg, #ffffff 0%, #929ca8 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(63, 63, 70, 0.22),
+    0 4px 10px rgba(24, 24, 27, 0.24);
+}
+
+.dark .ai-liquid-mode-switch {
+  background: linear-gradient(180deg, #27272a 0%, #18181b 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.06),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.55),
+    0 6px 18px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.dark .ai-liquid-mode-switch__thumb {
+  background: linear-gradient(180deg, #d4d4d8 0%, #71717a 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.65),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.3),
+    0 4px 10px rgba(0, 0, 0, 0.42);
+}
+
+.metal-3d-surface {
+  border: 1px solid rgba(126, 136, 148, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.94),
+    0 0 0 3px rgba(174, 182, 192, 0.76),
+    0 24px 60px rgba(63, 70, 80, 0.2),
+    0 8px 20px rgba(63, 70, 80, 0.14);
+}
+
+.metal-3d-surface::before {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(24, 24, 27, 0.22);
+  content: '';
+  pointer-events: none;
+}
+
+.metal-3d-surface::after {
+  position: absolute;
+  top: 2px;
+  right: 12%;
+  left: 12%;
+  z-index: 31;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.82), transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.dark .metal-3d-surface {
+  border-color: rgba(161, 161, 170, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(24, 24, 27, 0.95),
+    0 0 0 3px rgba(161, 161, 170, 0.32),
+    0 26px 70px rgba(0, 0, 0, 0.68),
+    0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.dark .metal-3d-surface::before {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.72);
+}
+
+.dark .metal-3d-surface::after {
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.42), transparent);
+}
+
+.ai-liquid-shader canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 9999px !important;
+}
+
+.ai-liquid-shader {
+  filter: brightness(1.15) contrast(0.78);
+  opacity: 0.68;
+}
+
+.dark .ai-liquid-shader {
+  filter: none;
+  opacity: 1;
+}
+
+.ai-liquid-ripple {
+  animation: ai-liquid-ripple 0.6s ease-out;
+}
+
+@keyframes ai-liquid-ripple {
+  from {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-liquid-ripple {
     animation: none;
   }
 }
@@ -246,26 +468,24 @@ input[type="number"] {
   border-radius: 0.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  .markdown-renderer :where(blockquote) {
-    color: #a1a1aa;
-  }
+.dark .markdown-renderer :where(blockquote) {
+  color: #a1a1aa;
+}
 
-  .markdown-renderer :where(a) {
-    color: #60a5fa;
-  }
+.dark .markdown-renderer :where(a) {
+  color: #60a5fa;
+}
 
-  .markdown-renderer :where(:not(pre) > code) {
-    background: rgba(255, 255, 255, 0.1);
-  }
+.dark .markdown-renderer :where(:not(pre) > code) {
+  background: rgba(255, 255, 255, 0.1);
+}
 
-  .markdown-renderer :where(th, td) {
-    border-color: rgba(255, 255, 255, 0.12);
-  }
+.dark .markdown-renderer :where(th, td) {
+  border-color: rgba(255, 255, 255, 0.12);
+}
 
-  .markdown-renderer :where(th) {
-    background: rgba(255, 255, 255, 0.06);
-  }
+.dark .markdown-renderer :where(th) {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .mask-edge-r {
@@ -450,35 +670,33 @@ input[type="number"] {
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
 }
 
-@media (prefers-color-scheme: dark) {
-  .mention-tag {
-    background: rgba(59, 130, 246, 0.12);
-    color: #93c5fd;
-    border-color: rgba(59, 130, 246, 0.2);
-  }
+.dark .mention-tag {
+  background: rgba(184, 196, 207, 0.12);
+  color: #c6d0d9;
+  border-color: rgba(184, 196, 207, 0.2);
+}
 
-  .mention-tag::selection,
-  .mention-tag *::selection {
-    background: transparent !important;
-    color: inherit !important;
-  }
+.dark .mention-tag::selection,
+.dark .mention-tag *::selection {
+  background: transparent !important;
+  color: inherit !important;
+}
 
-  [contenteditable]::selection,
-  [contenteditable] *::selection {
-    background: rgba(59, 130, 246, 0.3);
-    color: inherit;
-  }
+.dark [contenteditable]::selection,
+.dark [contenteditable] *::selection {
+  background: rgba(184, 196, 207, 0.3);
+  color: inherit;
+}
 
-  .mention-tag:hover {
-    background: rgba(59, 130, 246, 0.2);
-  }
+.dark .mention-tag:hover {
+  background: rgba(184, 196, 207, 0.2);
+}
 
-  .mention-tag.selected {
-    background: #3b82f6;
-    color: #ffffff;
-    border-color: #60a5fa;
-    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
-  }
+.dark .mention-tag.selected {
+  background: linear-gradient(180deg, #45454d 0%, #232329 55%, #121215 100%);
+  color: #ffffff;
+  border-color: #55555e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 /* 修复 iOS/Webkit 上带圆角的滚动容器内容/滚动条溢出的 bug */
@@ -638,4 +856,314 @@ input[type="number"] {
   .landing-road-mark {
     transform: none;
   }
+}
+/* ============================================================
+   液态银主题覆盖（仅白天模式）
+   将全站蓝色强调色重映射为钢银色，与液态银画布、
+   Metal3DButton / AiLiquidButton 的金属质感统一。
+   黑夜模式（.dark）不受影响���保持原蓝色。
+   钢银色阶: 50 #eef1f5 / 100 #e2e7ed / 300 #aab6c2
+             400 #8494a3 / 500 #5f6f7e / 600 #49586593 / 700 #3a4753
+   ============================================================ */
+
+/* --- 实心按钮 / 填充背景：3D 银色金属（渐变 + 顶部高光 + 内外阴影，呼应 Metal3DButton） --- */
+html:not(.dark) .bg-blue-500,
+html:not(.dark) .bg-blue-600 {
+  background-color: #5f6f7e;
+  background-image: linear-gradient(180deg, #8b9aa9 0%, #5f6f7e 52%, #46535f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 3px rgba(20, 28, 36, 0.35),
+    0 2px 5px rgba(50, 62, 74, 0.35);
+  text-shadow: 0 1px 1px rgba(20, 28, 36, 0.3);
+}
+
+html:not(.dark) .hover\:bg-blue-600:hover,
+html:not(.dark) .hover\:bg-blue-700:hover {
+  background-color: #4a5966;
+  background-image: linear-gradient(180deg, #7c8c9c 0%, #52616f 52%, #3c4854 100%);
+}
+
+html:not(.dark) .bg-blue-500:active,
+html:not(.dark) .bg-blue-600:active {
+  background-image: linear-gradient(180deg, #4d5b68 0%, #5f6f7e 60%, #6d7d8c 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(20, 28, 36, 0.45),
+    0 1px 2px rgba(50, 62, 74, 0.25);
+}
+
+html:not(.dark) .bg-blue-500\/90 {
+  background-color: rgba(95, 111, 126, 0.9);
+  background-image: none;
+}
+
+/* --- 浅色填充（选中态/悬浮态底色） --- */
+html:not(.dark) .bg-blue-50 {
+  background-color: #e8edf2;
+}
+
+html:not(.dark) .bg-blue-100 {
+  background-color: #dde4eb;
+}
+
+html:not(.dark) .hover\:bg-blue-50:hover {
+  background-color: #e8edf2;
+}
+
+html:not(.dark) .hover\:bg-blue-100:hover,
+html:not(.dark) .hover\:bg-blue-200:hover {
+  background-color: #d5dde5;
+}
+
+html:not(.dark) .bg-blue-500\/10 {
+  background-color: rgba(95, 111, 126, 0.1);
+}
+
+html:not(.dark) .bg-blue-500\/20 {
+  background-color: rgba(95, 111, 126, 0.2);
+}
+
+html:not(.dark) .hover\:bg-blue-500\/10:hover {
+  background-color: rgba(95, 111, 126, 0.1);
+}
+
+html:not(.dark) .hover\:bg-blue-500\/20:hover {
+  background-color: rgba(95, 111, 126, 0.2);
+}
+
+html:not(.dark) .hover\:bg-blue-500\/40:hover {
+  background-color: rgba(95, 111, 126, 0.4);
+}
+
+html:not(.dark) .from-blue-50 {
+  --tw-gradient-from: #e8edf2 var(--tw-gradient-from-position);
+  --tw-gradient-to: rgba(232, 237, 242, 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+/* --- 文字颜色 --- */
+html:not(.dark) .text-blue-500 {
+  color: #5f6f7e;
+}
+
+html:not(.dark) .text-blue-600 {
+  color: #495865;
+}
+
+html:not(.dark) .text-blue-700 {
+  color: #3a4753;
+}
+
+html:not(.dark) .hover\:text-blue-500:hover {
+  color: #5f6f7e;
+}
+
+html:not(.dark) .hover\:text-blue-600:hover {
+  color: #495865;
+}
+
+/* --- 边框 / 描边 / 焦点环 --- */
+html:not(.dark) .border-blue-400 {
+  border-color: #8494a3;
+}
+
+html:not(.dark) .border-blue-500 {
+  border-color: #5f6f7e;
+}
+
+html:not(.dark) .border-blue-400\/50 {
+  border-color: rgba(132, 148, 163, 0.5);
+}
+
+html:not(.dark) .border-blue-500\/50 {
+  border-color: rgba(95, 111, 126, 0.5);
+}
+
+html:not(.dark) .hover\:border-blue-300:hover {
+  border-color: #aab6c2;
+}
+
+html:not(.dark) .hover\:border-blue-500\/40:hover {
+  border-color: rgba(95, 111, 126, 0.4);
+}
+
+html:not(.dark) .focus\:border-blue-300:focus {
+  border-color: #aab6c2;
+}
+
+html:not(.dark) .focus\:border-blue-400:focus {
+  border-color: #8494a3;
+}
+
+html:not(.dark) .focus\:border-blue-500:focus {
+  border-color: #5f6f7e;
+}
+
+html:not(.dark) .focus\:border-blue-500\/50:focus {
+  border-color: rgba(95, 111, 126, 0.5);
+}
+
+html:not(.dark) .ring-blue-400\/50 {
+  --tw-ring-color: rgba(132, 148, 163, 0.5);
+}
+
+html:not(.dark) .ring-blue-500\/50 {
+  --tw-ring-color: rgba(95, 111, 126, 0.5);
+}
+
+html:not(.dark) .focus\:ring-blue-500:focus {
+  --tw-ring-color: #5f6f7e;
+}
+
+html:not(.dark) .focus\:ring-blue-500\/20:focus {
+  --tw-ring-color: rgba(95, 111, 126, 0.2);
+}
+
+html:not(.dark) .focus\:ring-blue-500\/30:focus {
+  --tw-ring-color: rgba(95, 111, 126, 0.3);
+}
+
+html:not(.dark) .shadow-blue-500\/20 {
+  --tw-shadow-color: rgba(95, 111, 126, 0.2);
+  --tw-shadow: var(--tw-shadow-colored);
+}
+
+/* --- 文字选区高亮：钢银色 --- */
+html:not(.dark) ::selection {
+  background: rgba(95, 111, 126, 0.28);
+  color: inherit;
+}
+
+/* ============================================================
+   黑夜模式金属化覆盖
+   黑夜的蓝色强调 → 亮银白钢色，实心按钮 → 深锌 3D 金属，
+   与 Metal3DButton 的黑夜壳（#3f3f46 → #09090b）统一。
+   亮银色阶: 300 #dbe2e8 / 400 #b8c4cf / 500 #93a2b0
+   ============================================================ */
+
+/* --- 实心按钮：深锌 3D 金属 --- */
+html.dark .bg-blue-500,
+html.dark .bg-blue-600,
+html.dark .dark\:bg-blue-500 {
+  background-color: #232329;
+  background-image: linear-gradient(180deg, #45454d 0%, #232329 52%, #121215 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+html.dark .hover\:bg-blue-600:hover,
+html.dark .hover\:bg-blue-700:hover {
+  background-color: #2c2c33;
+  background-image: linear-gradient(180deg, #55555e 0%, #2c2c33 52%, #17171b 100%);
+}
+
+html.dark .bg-blue-500:active,
+html.dark .bg-blue-600:active {
+  background-image: linear-gradient(180deg, #121215 0%, #232329 60%, #33333a 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+html.dark .bg-blue-500\/90 {
+  background-color: rgba(35, 35, 41, 0.92);
+  background-image: none;
+}
+
+html.dark .dark\:bg-blue-400 {
+  background-color: #b8c4cf;
+}
+
+/* --- 文字颜色：亮银白 --- */
+html.dark .dark\:text-blue-400 {
+  color: #b8c4cf;
+}
+
+html.dark .dark\:text-blue-300 {
+  color: #dbe2e8;
+}
+
+html.dark .dark\:hover\:text-blue-300:hover {
+  color: #e7ecf0;
+}
+
+/* --- 半透明填充（选中态/悬浮态底色） --- */
+html.dark .dark\:bg-blue-500\/10 {
+  background-color: rgba(184, 196, 207, 0.1);
+}
+
+html.dark .dark\:bg-blue-500\/20 {
+  background-color: rgba(184, 196, 207, 0.18);
+}
+
+html.dark .dark\:bg-blue-500\/30 {
+  background-color: rgba(184, 196, 207, 0.26);
+}
+
+html.dark .dark\:hover\:bg-blue-500\/10:hover {
+  background-color: rgba(184, 196, 207, 0.1);
+}
+
+html.dark .dark\:hover\:bg-blue-500\/20:hover {
+  background-color: rgba(184, 196, 207, 0.18);
+}
+
+html.dark .dark\:hover\:bg-blue-500\/40:hover {
+  background-color: rgba(184, 196, 207, 0.34);
+}
+
+html.dark .dark\:bg-blue-900\/50 {
+  background-color: rgba(62, 72, 82, 0.5);
+}
+
+html.dark .dark\:hover\:bg-blue-950\/30:hover {
+  background-color: rgba(48, 56, 64, 0.3);
+}
+
+html.dark .dark\:from-blue-950\/40 {
+  --tw-gradient-from: rgba(48, 56, 64, 0.4) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgba(48, 56, 64, 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+/* --- 边框 / 焦点环 --- */
+html.dark .dark\:border-blue-500\/50 {
+  border-color: rgba(147, 162, 176, 0.5);
+}
+
+html.dark .dark\:border-blue-400\/30 {
+  border-color: rgba(184, 196, 207, 0.3);
+}
+
+html.dark .dark\:border-blue-400\/20 {
+  border-color: rgba(184, 196, 207, 0.2);
+}
+
+html.dark .dark\:hover\:border-blue-500\/40:hover {
+  border-color: rgba(147, 162, 176, 0.4);
+}
+
+html.dark .dark\:focus\:border-blue-500\/50:focus {
+  border-color: rgba(147, 162, 176, 0.5);
+}
+
+html.dark .dark\:focus\:border-blue-400:focus {
+  border-color: #b8c4cf;
+}
+
+html.dark .dark\:ring-blue-400\/50 {
+  --tw-ring-color: rgba(184, 196, 207, 0.5);
+}
+
+html.dark .dark\:focus\:ring-blue-500\/30:focus {
+  --tw-ring-color: rgba(147, 162, 176, 0.3);
+}
+
+/* --- 文字选区高亮：亮银色 --- */
+html.dark ::selection {
+  background: rgba(184, 196, 207, 0.3);
+  color: inherit;
 }

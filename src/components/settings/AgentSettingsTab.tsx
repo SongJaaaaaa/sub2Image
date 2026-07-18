@@ -14,6 +14,7 @@ import {
   type Sub2Key,
 } from '../../lib/sub2api'
 import { syncSub2Settings } from '../../lib/sub2Profiles'
+import Select from '../Select'
 
 interface AgentSettingsTabProps {
   draft: AppSettings
@@ -22,8 +23,6 @@ interface AgentSettingsTabProps {
   commitSettings: (nextDraft: AppSettings) => void
   commitAgentMaxToolRounds: () => void
 }
-
-const selectClass = 'w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2.5 text-sm text-gray-700 outline-none dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200'
 
 export default function AgentSettingsTab({
   draft,
@@ -202,64 +201,76 @@ export default function AgentSettingsTab({
           <section className="space-y-3 border-b border-gray-200/70 pb-5 dark:border-white/[0.08]">
             <h3 className="text-sm font-medium text-gray-800 dark:text-gray-100">文本</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs text-gray-500">
+              <div className="block text-xs text-gray-500">
                 文本分组
-                <select
-                  aria-label="文本分组"
+                <Select
                   value={textGroupId || ''}
                   disabled={!groupOptions.length || Boolean(loading)}
-                  onChange={(event) => {
-                    const id = Number(event.target.value)
+                  onChange={(value) => {
+                    const id = Number(value)
                     setTextGroupId(id)
                     setTextModel('')
                     setTextModels([])
                     if (id) void loadModels('text', id)
                   }}
-                  className={`mt-1.5 ${selectClass}`}
-                >
-                  <option value="">{groupOptions.length ? '请选择文本分组' : '暂无可用分组'}</option>
-                  {groupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label className="block text-xs text-gray-500">
+                  options={[
+                    { value: '', label: groupOptions.length ? '请选择文本分组' : '暂无可用分组' },
+                    ...groupOptions,
+                  ]}
+                  className="mt-1.5 w-full"
+                />
+              </div>
+              <div className="block text-xs text-gray-500">
                 文本模型
-                <select aria-label="文本模型" value={textModel} disabled={!textModels.length || Boolean(loading)} onChange={(event) => setTextModel(event.target.value)} className={`mt-1.5 ${selectClass}`}>
-                  <option value="">{loading === 'text' ? '正在读取...' : '请选择文本模型'}</option>
-                  {textModels.map((id) => <option key={id} value={id}>{id}</option>)}
-                </select>
-              </label>
+                <Select
+                  value={textModel}
+                  disabled={!textModels.length || Boolean(loading)}
+                  onChange={(value) => setTextModel(String(value))}
+                  options={[
+                    { value: '', label: loading === 'text' ? '正在读取...' : '请选择文本模型' },
+                    ...textModels.map((id) => ({ value: id, label: id })),
+                  ]}
+                  className="mt-1.5 w-full"
+                />
+              </div>
             </div>
           </section>
 
           <section className="space-y-3">
             <h3 className="text-sm font-medium text-gray-800 dark:text-gray-100">图像</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs text-gray-500">
+              <div className="block text-xs text-gray-500">
                 图像分组
-                <select
-                  aria-label="图像分组"
+                <Select
                   value={imageGroupId || ''}
                   disabled={!groupOptions.length || Boolean(loading)}
-                  onChange={(event) => {
-                    const id = Number(event.target.value)
+                  onChange={(value) => {
+                    const id = Number(value)
                     setImageGroupId(id)
                     setImageModel('')
                     setImageModels([])
                     if (id) void loadModels('image', id)
                   }}
-                  className={`mt-1.5 ${selectClass}`}
-                >
-                  <option value="">{groupOptions.length ? '请选择图像分组' : '暂无可用分组'}</option>
-                  {groupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label className="block text-xs text-gray-500">
+                  options={[
+                    { value: '', label: groupOptions.length ? '请选择图像分组' : '暂无可用分组' },
+                    ...groupOptions,
+                  ]}
+                  className="mt-1.5 w-full"
+                />
+              </div>
+              <div className="block text-xs text-gray-500">
                 图像模型
-                <select aria-label="图像模型" value={imageModel} disabled={!imageModels.length || Boolean(loading)} onChange={(event) => setImageModel(event.target.value)} className={`mt-1.5 ${selectClass}`}>
-                  <option value="">{loading === 'image' ? '正在读取...' : '请选择图像模型'}</option>
-                  {imageModels.map((id) => <option key={id} value={id}>{id}</option>)}
-                </select>
-              </label>
+                <Select
+                  value={imageModel}
+                  disabled={!imageModels.length || Boolean(loading)}
+                  onChange={(value) => setImageModel(String(value))}
+                  options={[
+                    { value: '', label: loading === 'image' ? '正在读取...' : '请选择图像模型' },
+                    ...imageModels.map((id) => ({ value: id, label: id })),
+                  ]}
+                  className="mt-1.5 w-full"
+                />
+              </div>
             </div>
           </section>
 

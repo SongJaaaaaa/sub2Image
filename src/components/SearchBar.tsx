@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ALL_FAVORITES_COLLECTION_ID, clearFailedTasks, getTaskFavoriteCollectionIds, useStore, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import Select from './Select'
+import { AiLiquidButton } from './aiLiquidButton'
 import { ChevronLeftIcon, CollectionManageIcon, FavoriteIcon, PromptLibraryIcon, TrashIcon } from './icons'
 import ViewportTooltip from './ViewportTooltip'
 import PromptLibraryModal from './PromptLibraryModal'
@@ -142,7 +143,7 @@ export default function SearchBar() {
             className={`p-2.5 rounded-xl border transition-all ${
               filterFavorite
                 ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-500'
-                : 'border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06]'
+                : 'border-border bg-sidebar text-gray-400 hover:bg-muted dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]'
             }`}
           >
             {activeFavoriteCollectionId ? <ChevronLeftIcon className="w-5 h-5" /> : <FavoriteIcon filled={filterFavorite} className="w-5 h-5" />}
@@ -151,7 +152,7 @@ export default function SearchBar() {
             <SearchActionButton
               tooltip="管理收藏夹"
               onClick={openManageCollectionsModal}
-              className="p-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition-all"
+              className="rounded-xl border border-border bg-sidebar p-2.5 text-gray-400 transition-all hover:bg-muted dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]"
             >
               <CollectionManageIcon className="w-5 h-5" />
             </SearchActionButton>
@@ -168,7 +169,7 @@ export default function SearchBar() {
                     { label: '生成中', value: 'running' },
                     { label: '失败', value: 'error' },
                   ]}
-                  className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-white/[0.06] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+                  className="rounded-xl border border-border bg-sidebar px-3 py-2.5 text-sm transition hover:bg-muted focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]"
                 />
               </div>
               {isFailedFilter && (
@@ -178,7 +179,7 @@ export default function SearchBar() {
                   disabled={failedCount === 0}
                   title={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
                   aria-label={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
-                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-400 transition-all hover:bg-gray-50 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-white disabled:hover:text-gray-400 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300 dark:disabled:hover:bg-gray-900 dark:disabled:hover:text-gray-500"
+                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-border bg-sidebar text-gray-400 transition-all hover:bg-muted hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-sidebar disabled:hover:text-gray-400 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300 dark:disabled:hover:bg-gray-900 dark:disabled:hover:text-gray-500"
                 >
                   <TrashIcon className="h-[18px] w-[18px]" />
                 </button>
@@ -207,17 +208,20 @@ export default function SearchBar() {
               onChange={(e) => setSearchQuery(e.target.value)}
               type="text"
               placeholder={inCollectionOverview ? '搜索收藏夹名称...' : '搜索提示词、参数...'}
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900"
+              className="w-full rounded-xl border border-border bg-sidebar py-2.5 pl-10 pr-4 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900"
             />
           </div>
-          <button
-            type="button"
+          <AiLiquidButton
+            size="sm"
+            idleSpeed={0}
             onClick={() => setShowPromptLibrary(true)}
-            className="flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+            className="h-[42px] shrink-0"
           >
-            <PromptLibraryIcon className="h-[18px] w-[18px]" />
-            <span>提示词库</span>
-          </button>
+            <span className="flex items-center gap-1.5">
+              <PromptLibraryIcon className="h-[18px] w-[18px]" />
+              <span>提示词库</span>
+            </span>
+          </AiLiquidButton>
         </div>
       </div>
       <PromptLibraryModal

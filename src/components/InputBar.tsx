@@ -1246,7 +1246,7 @@ export default function InputBar({ actionBar, dualComposer = false }: { actionBa
     }
   }, [])
 
-  const selectClass = 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] hover:bg-white dark:hover:bg-white/[0.06] text-xs transition-all duration-200 shadow-sm'
+  const selectClass = 'rounded-xl border border-border/80 bg-muted/80 px-3 py-1.5 text-xs shadow-sm transition-all duration-200 hover:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]'
 
   const getTouchDropIndex = (touch: React.Touch) => {
     const target = document
@@ -1658,7 +1658,7 @@ export default function InputBar({ actionBar, dualComposer = false }: { actionBa
         <div
           data-composer-card
           ref={cardRef}
-          className={`bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10${dualComposer ? ' max-h-[45dvh] overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-visible' : ''}`}
+          className={`rounded-2xl border border-border/80 bg-sidebar/90 p-3 shadow-[0_10px_34px_rgba(63,70,80,0.14)] ring-1 ring-white/80 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-gray-900/70 dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] dark:ring-white/10 sm:rounded-3xl sm:p-4${dualComposer ? ' max-h-[45dvh] overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-visible' : ''}`}
         >
           {/* 移动端拖动条 */}
           <div
@@ -1700,7 +1700,7 @@ export default function InputBar({ actionBar, dualComposer = false }: { actionBa
           {/* 输入框 */}
           <div className="relative grid">
             {showAtImageMenu && (
-              <div style={{ left: `${menuLeft}px` }} className="absolute bottom-full z-50 mb-2 w-64 overflow-hidden rounded-2xl border border-gray-200/70 bg-white/95 p-1.5 shadow-xl ring-1 ring-black/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10">
+              <div style={{ left: `${menuLeft}px` }} className="absolute bottom-full z-50 mb-2 w-64 overflow-hidden rounded-2xl border border-border/70 bg-sidebar/95 p-1.5 shadow-xl ring-1 ring-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10">
                 <div className="px-2 pb-1 pt-0.5 text-[11px] text-gray-400 dark:text-gray-500">选择图片引用</div>
                 <div className="max-h-56 overflow-y-auto custom-scrollbar">
                   {atImageOptions.map((option, optionIndex) => (
@@ -1771,7 +1771,7 @@ export default function InputBar({ actionBar, dualComposer = false }: { actionBa
                 syncMentionTagSelection(el)
               }}
               aria-label={promptPlaceholder}
-              className="col-start-1 row-start-1 min-h-[42px] w-full overflow-hidden ios-rounded-scroll-fix whitespace-pre-wrap break-words rounded-2xl border border-gray-200/60 bg-white/50 pl-4 pr-10 py-3 text-sm leading-relaxed shadow-sm outline-none transition-[border-color,box-shadow] duration-200 focus:ring-1 focus:ring-blue-300/40 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-100 dark:focus:ring-blue-500/30"
+              className="ios-rounded-scroll-fix col-start-1 row-start-1 min-h-[42px] w-full overflow-hidden whitespace-pre-wrap break-words rounded-2xl border border-border/80 bg-muted/80 py-3 pl-4 pr-10 text-sm leading-relaxed shadow-sm outline-none transition-[border-color,box-shadow] duration-200 focus:ring-1 focus:ring-blue-300/40 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-100 dark:focus:ring-blue-500/30"
             />
             {prompt.length === 0 && (
               <div className={`prompt-placeholder col-start-1 row-start-1 pointer-events-none pl-4 pr-10 py-3 text-sm leading-relaxed text-gray-400 dark:text-gray-500${
@@ -1898,7 +1898,7 @@ export default function InputBar({ actionBar, dualComposer = false }: { actionBa
                         className="fixed inset-0 z-40"
                         onClick={() => setShowMobileUploadMenu(false)}
                       />
-                      <div className="absolute bottom-full left-0 mb-2 w-32 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <div className="animate-in fade-in slide-in-from-bottom-2 absolute bottom-full left-0 z-50 mb-2 w-32 overflow-hidden rounded-xl border border-border bg-sidebar shadow-lg duration-200 dark:border-gray-700 dark:bg-gray-800">
                         <button
                           className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2 transition-colors"
                           onClick={() => {

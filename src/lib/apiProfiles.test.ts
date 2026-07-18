@@ -694,6 +694,15 @@ describe('custom providers', () => {
     expect(normalizeSettings({ agentScrollToBottomAfterSubmit: false }).agentScrollToBottomAfterSubmit).toBe(false)
   })
 
+  it('normalizes the global theme preference', () => {
+    expect(DEFAULT_SETTINGS.theme).toBe('system')
+    expect(normalizeSettings({}).theme).toBe('system')
+    expect(normalizeSettings({ theme: 'system' }).theme).toBe('system')
+    expect(normalizeSettings({ theme: 'dark' }).theme).toBe('dark')
+    expect(normalizeSettings({ theme: 'light' }).theme).toBe('light')
+    expect(normalizeSettings({ theme: 'unknown' }).theme).toBe('system')
+  })
+
   it('enables Agent math formatting prompt by default', () => {
     expect(DEFAULT_SETTINGS.agentMathFormattingPrompt).toBe(true)
     expect(normalizeSettings({}).agentMathFormattingPrompt).toBe(true)

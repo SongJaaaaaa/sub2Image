@@ -600,7 +600,7 @@ export default function AgentWorkspace() {
       )}
       
       {/* Left Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-[320px] flex-col border-r border-gray-200 bg-white/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-white/[0.08] dark:bg-gray-950/95 lg:hidden ${!sidebarCollapsed ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-[320px] flex-col border-r border-border bg-sidebar/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-white/[0.08] dark:bg-gray-950/95 lg:hidden ${!sidebarCollapsed ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="pl-[max(1rem,env(safe-area-inset-left))] flex h-full min-h-0 w-full flex-col">
           <div className="safe-area-top shrink-0">
             <div className="flex h-14 items-center justify-between gap-2 px-4">
@@ -618,7 +618,7 @@ export default function AgentWorkspace() {
               value={conversationSearchQuery}
               onChange={(e) => setConversationSearchQuery(e.target.value)}
               placeholder="搜索聊天..."
-              className="w-full rounded-xl border border-gray-200 bg-gray-100/80 px-3 py-2 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400 dark:focus:bg-white/[0.07]"
+              className="w-full rounded-xl border border-border bg-muted/80 px-3 py-2 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-400 focus:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400 dark:focus:bg-white/[0.07]"
             />
           </div>
           <div className="space-y-1 overflow-y-auto flex-1 px-4 pb-4">
@@ -644,7 +644,7 @@ export default function AgentWorkspace() {
                   <div className="min-w-0 flex-1 flex flex-col justify-center h-[38px]">
                     <input
                       type="text"
-                      className="h-7 flex-1 bg-white dark:bg-black/20 border border-blue-400/50 dark:border-white/20 rounded px-1.5 py-0 text-sm leading-7 outline-none text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-white/40 shadow-sm min-w-0"
+                      className="h-7 min-w-0 flex-1 rounded border border-blue-400/50 bg-sidebar px-1.5 py-0 text-sm leading-7 text-gray-900 shadow-sm outline-none focus:border-blue-500 dark:border-white/20 dark:bg-black/20 dark:text-white dark:focus:border-white/40"
                       value={editingConversationTitle}
                       onChange={(e) => setEditingConversationTitle(e.target.value)}
                       onKeyDown={handleRenameKeyDown}
@@ -694,7 +694,7 @@ export default function AgentWorkspace() {
         {/* Mobile Header Toggles */}
         <div className={`sticky top-0 z-20 lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${mobileTopBarVisible ? 'max-h-16 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0 pointer-events-none'}`}>
           <div
-            className="flex h-14 items-center justify-between border-b border-gray-200 bg-white/80 px-2 backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/80"
+            className="flex h-14 items-center justify-between border-b border-border bg-sidebar/90 px-2 backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/80"
             onTouchStart={handleHeaderTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -792,8 +792,8 @@ export default function AgentWorkspace() {
                       <article 
                         className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${
                         isAssistant 
-                          ? 'bg-white/70 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.08] rounded-tl-sm hover:bg-white dark:hover:bg-white/[0.04]' 
-                          : `bg-gray-100 dark:bg-[#2A2D31] rounded-tr-sm ${isEditing ? 'ring-2 ring-blue-500/50 dark:ring-blue-400/50' : ''}`
+                          ? 'rounded-tl-sm border border-border bg-sidebar/80 hover:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.04]'
+                          : `rounded-tr-sm bg-muted dark:bg-[#2A2D31] ${isEditing ? 'ring-2 ring-blue-500/50 dark:ring-blue-400/50' : ''}`
                       }`}
                       >
                     <div className="mb-2 flex items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
@@ -937,7 +937,7 @@ export default function AgentWorkspace() {
                   {renderedMessages}
                   {runningRounds.map((round) => (
                     <div key={`running-${round.id}`} className="flex w-full justify-start mb-6">
-                      <article className="flex min-w-[16rem] max-w-[95%] flex-col rounded-2xl rounded-tl-sm border border-gray-200 bg-white/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03] md:max-w-[85%] lg:max-w-[75%]">
+                      <article className="flex min-w-[16rem] max-w-[95%] flex-col rounded-2xl rounded-tl-sm border border-border bg-sidebar/80 p-4 dark:border-white/[0.08] dark:bg-white/[0.03] md:max-w-[85%] lg:max-w-[75%]">
                         <div className="mb-2 text-sm text-gray-500 dark:text-gray-400">
                           <span className="text-blue-600 dark:text-blue-400 font-semibold">Agent</span> <span className="ml-1 font-normal opacity-60">· 第 {round.index} 轮</span>
                         </div>
@@ -963,7 +963,7 @@ export default function AgentWorkspace() {
 
         <button
           onClick={scrollToAgentBottom}
-          className={`fixed bottom-[calc(var(--composer-stack-clearance,10rem)+1.5rem)] left-1/2 -translate-x-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow-[0_2px_12px_rgba(0,0,0,0.1)] border border-gray-200/50 text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
+          className={`fixed bottom-[calc(var(--composer-stack-clearance,10rem)+1.5rem)] left-1/2 z-30 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full border border-border/70 bg-sidebar/90 text-gray-500 shadow-[0_2px_12px_rgba(63,70,80,0.14)] backdrop-blur transition-all duration-300 hover:bg-muted hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
             !isScrolledToBottom && activeMessages.length > 0 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'
           }`}
           aria-label="滚动到底部"

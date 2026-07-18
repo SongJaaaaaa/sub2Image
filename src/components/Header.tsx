@@ -3,6 +3,8 @@ import { useStore } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
 import ViewportTooltip from './ViewportTooltip'
+import { AiLiquidButton } from './aiLiquidButton'
+import { AiLiquidModeSwitch } from './aiLiquidModeSwitch'
 import HelpModal from './HelpModal'
 import HistoryModal from './HistoryModal'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
@@ -151,6 +153,7 @@ export default function Header() {
         setConfirmDialog({
           title: '安装为应用',
           message: '在 Safari 浏览器中，点击底部「分享」按钮，选择「添加到主屏幕」即可安装此应用。',
+          surface: 'metal3d',
           showCancel: false,
           confirmText: '我知道了',
           icon: 'info',
@@ -160,6 +163,7 @@ export default function Header() {
         setConfirmDialog({
           title: '安装为应用',
           message: '请在浏览器的菜单中选择「添加到主屏幕」或「安装应用」。\n\n（如果在微信等内置浏览器中，请先在外部浏览器打开）',
+          surface: 'metal3d',
           showCancel: false,
           confirmText: '我知道了',
           icon: 'info',
@@ -171,7 +175,7 @@ export default function Header() {
 
   return (
     <>
-      <header ref={headerRef} data-app-header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08] transition-transform duration-300 ease-in-out ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
+      <header ref={headerRef} data-app-header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 border-b border-border bg-sidebar/90 backdrop-blur transition-transform duration-300 ease-in-out dark:border-white/[0.08] dark:bg-gray-950/80 ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between relative">
           <div className="flex-1 min-w-0 pr-2 flex items-center gap-2">
             <h1 className="inline-flex min-w-0 items-start relative mr-2">
@@ -244,38 +248,25 @@ export default function Header() {
               </div>
             </div>
           )}
-          <div className="hidden sm:flex items-center gap-1 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-gray-100/70 dark:bg-white/[0.04] p-1 mr-4">
-            <button
-              type="button"
-              onClick={() => setAppMode('gallery')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'gallery' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
-            >
-              画廊
-            </button>
-            <button
-              type="button"
-              onClick={() => setAppMode('agent')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
-            >
-              Agent
-            </button>
-          </div>
+          <AiLiquidModeSwitch value={appMode} onChange={setAppMode} className="mr-4 hidden w-[168px] sm:grid" />
           <div className="flex items-center gap-1 shrink-0">
             {!isPwaInstalled && (
               <div
                 className="relative"
                 {...installTooltip.handlers}
               >
-                <button
+                <AiLiquidButton
+                  size="sm"
+                  iconOnly
+                  idleSpeed={0}
                   onClick={() => {
                     dismissAllTooltips()
                     handleInstallClick()
                   }}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
                   aria-label="安装为应用"
                 >
-                  <InstallIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                </button>
+                  <InstallIcon />
+                </AiLiquidButton>
                 <ViewportTooltip visible={installTooltip.visible} className="whitespace-nowrap">
                   安装为应用
                 </ViewportTooltip>
@@ -285,16 +276,18 @@ export default function Header() {
               className="relative"
               {...helpTooltip.handlers}
             >
-              <button
+              <AiLiquidButton
+                size="sm"
+                iconOnly
+                idleSpeed={0}
                 onClick={() => {
                   dismissAllTooltips()
                   setShowHelp(true)
                 }}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
                 aria-label="操作指南"
               >
-                <HelpCircleIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
+                <HelpCircleIcon />
+              </AiLiquidButton>
               <ViewportTooltip visible={helpTooltip.visible} className="whitespace-nowrap">
                 操作指南
               </ViewportTooltip>
@@ -303,13 +296,15 @@ export default function Header() {
               className="relative"
               {...settingsTooltip.handlers}
             >
-              <button
+              <AiLiquidButton
+                size="sm"
+                iconOnly
+                idleSpeed={0}
                 onClick={() => setShowSettings(true)}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
                 aria-label="设置"
               >
-                <SettingsIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
+                <SettingsIcon />
+              </AiLiquidButton>
               <ViewportTooltip visible={settingsTooltip.visible} className="whitespace-nowrap">
                 设置
               </ViewportTooltip>
@@ -317,22 +312,7 @@ export default function Header() {
           </div>
         </div>
         <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-20 opacity-100 pb-2'}`}>
-          <div className="grid grid-cols-2 gap-1 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-gray-100/70 dark:bg-white/[0.04] p-1 mx-2">
-            <button
-              type="button"
-              onClick={() => setAppMode('gallery')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'gallery' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
-            >
-              画廊
-            </button>
-            <button
-              type="button"
-              onClick={() => setAppMode('agent')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
-            >
-              Agent
-            </button>
-          </div>
+          <AiLiquidModeSwitch value={appMode} onChange={setAppMode} className="mx-2 w-[calc(100%-1rem)]" />
         </div>
       </header>
       

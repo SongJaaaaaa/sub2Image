@@ -1089,6 +1089,17 @@ describe('input persistence setting', () => {
   })
 })
 
+describe('settings persistence', () => {
+  it('persists the global theme preference', () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
+    useStore.getState().setSettings({ theme: 'dark' })
+
+    const persisted = getPersistedState(useStore.getState())
+
+    expect(persisted.settings.theme).toBe('dark')
+  })
+})
+
 describe('agent conversation persistence', () => {
   beforeEach(async () => {
     await clearAgentConversations()
