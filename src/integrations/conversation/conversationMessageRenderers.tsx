@@ -153,7 +153,7 @@ function AgentImageTaskMessage({ message }: ConversationMessageProps) {
 
   if (!task) {
     return (
-      <div className="mt-4 flex min-h-[120px] w-full min-w-[16rem] max-w-sm flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-4 text-gray-400 dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-gray-500" onClick={(e) => e.stopPropagation()}>
+      <div className="mr-3 mt-4 inline-flex min-h-[120px] w-[calc(50%-12px)] max-w-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-4 align-top text-gray-400 dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-gray-500 md:w-[calc(25%-12px)] 2xl:w-[calc(16.666%-12px)]" onClick={(e) => e.stopPropagation()}>
         <TrashIcon className="mb-2 h-6 w-6 opacity-50" />
         <span className="text-xs">[Image Removed]</span>
       </div>
@@ -161,7 +161,7 @@ function AgentImageTaskMessage({ message }: ConversationMessageProps) {
   }
 
   return (
-    <div className="mt-4 w-[200px] max-w-full" onClick={(e) => e.stopPropagation()}>
+    <div className="mr-3 mt-4 inline-block w-[calc(50%-12px)] max-w-full align-top md:w-[calc(25%-12px)] 2xl:w-[calc(16.666%-12px)]" onClick={(e) => e.stopPropagation()}>
       <TaskCard
         task={task}
         disableSwipe

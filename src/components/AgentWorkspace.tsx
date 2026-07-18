@@ -604,7 +604,7 @@ export default function AgentWorkspace() {
         <div className="pl-[max(1rem,env(safe-area-inset-left))] flex h-full min-h-0 w-full flex-col">
           <div className="safe-area-top shrink-0">
             <div className="flex h-14 items-center justify-between gap-2 px-4">
-              <button type="button" onClick={() => setSidebarCollapsed(true)} className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors" title="折叠左侧边栏">
+              <button type="button" onClick={() => setSidebarCollapsed(true)} className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors" title="折叠左侧边��">
                 <SidebarLeftIcon className="w-5 h-5" />
               </button>
               <button type="button" onClick={createConversation} className="p-2 -mr-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 lg:hover:bg-gray-100 lg:dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话">
@@ -787,10 +787,10 @@ export default function AgentWorkspace() {
                         if (!isAssistant && node) messageRefs.current.set(message.roundId, node)
                         else if (!isAssistant) messageRefs.current.delete(message.roundId)
                       }}
-                      className={`group flex max-w-[95%] flex-col md:max-w-[85%] lg:max-w-[75%] ${isAssistant ? 'items-start' : 'items-end'}`}
+                      className={`group flex max-w-[95%] flex-col md:max-w-[85%] lg:max-w-[75%] ${isAssistant ? 'items-start' : 'items-end'} ${isAssistant && tasksForRound.length > 0 ? 'w-full' : ''}`}
                     >
                       <article 
-                        className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${
+                        className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${isAssistant && tasksForRound.length > 0 ? 'w-full ' : ''}${
                         isAssistant 
                           ? 'rounded-tl-sm border border-border bg-sidebar/80 hover:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.04]'
                           : `rounded-tr-sm bg-muted dark:bg-[#2A2D31] ${isEditing ? 'ring-2 ring-blue-500/50 dark:ring-blue-400/50' : ''}`
