@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import type { PromptQuestion, PromptScalar } from '../../features/promptStudio'
 import type { PromptQuestionAnswer, PromptStudioToolBundle } from '../../features/promptStudio'
-import { ChevronLeftIcon, ChevronRightIcon } from '../../components/icons'
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, StopIcon } from '../../components/icons'
 
 type Props = {
   conversationId: string
@@ -99,32 +99,39 @@ export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClo
           <strong>图片提示词 Agent</strong>
           <span>{snapshot.running ? '正在分析并生成下一步' : snapshot.project?.title || '正在建立项目'}</span>
         </div>
-        {question && !snapshot.running && snapshot.project?.phase !== 'error' && (
-          <div className="ps-agent-nav" role="group" aria-label="切换问题">
-            <button
-              type="button"
-              className="ps-agent-nav-btn"
-              aria-label="上一个问题"
-              disabled={index === 0}
-              onClick={() => bundle.store.setCurrentQuestion(conversationId, snapshot.questions[index - 1]!.id)}
-            >
-              <ChevronLeftIcon className="h-4 w-4" />
+        <div className="ps-agent-actions">
+          {question && !snapshot.running && snapshot.project?.phase !== 'error' && snapshot.questions.length > 1 && (
+            <div className="ps-agent-nav" role="group" aria-label="切换问题">
+              <button
+                type="button"
+                className="ps-agent-nav-btn"
+                aria-label="上一个问题"
+                disabled={index === 0}
+                onClick={() => bundle.store.setCurrentQuestion(conversationId, snapshot.questions[index - 1]!.id)}
+              >
+                <ChevronLeftIcon className="h-4 w-4" />
+              </button>
+              <span className="ps-agent-nav-count">{index + 1} / {snapshot.questions.length}</span>
+              <button
+                type="button"
+                className="ps-agent-nav-btn"
+                aria-label="下一个问题"
+                disabled={index >= snapshot.questions.length - 1}
+                onClick={() => bundle.store.setCurrentQuestion(conversationId, snapshot.questions[index + 1]!.id)}
+              >
+                <ChevronRightIcon className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {snapshot.running && (
+            <button type="button" className="ps-agent-icon-btn is-stop" aria-label="停止当前请求" title="停止" onClick={() => bundle.store.stop(conversationId)}>
+              <StopIcon className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              className="ps-agent-nav-btn"
-              aria-label="下一个问题"
-              disabled={index >= snapshot.questions.length - 1}
-              onClick={() => bundle.store.setCurrentQuestion(conversationId, snapshot.questions[index + 1]!.id)}
-            >
-              <ChevronRightIcon className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-        {snapshot.running && (
-          <button type="button" className="ps-agent-stop" onClick={() => bundle.store.stop(conversationId)}>停止</button>
-        )}
-        <button type="button" className="ps-agent-close" aria-label="暂停并关闭提示词 Agent" onClick={close}>关闭</button>
+          )}
+          <button type="button" className="ps-agent-icon-btn" aria-label="暂停并关闭提示词 Agent" title="关闭" onClick={close}>
+            <CloseIcon className="h-4 w-4" />
+          </button>
+        </div>
       </header>
 
       <div className="ps-agent-body">
@@ -161,7 +168,16 @@ export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClo
             onSubmitCustom={submitCustom}
           />
         ) : (
-          <div className="ps-agent-done" role="status"><p>需求已确认，正在准备完整提示词。</p></div>
+          <div className="ps-agent-done" role="status">
+            <p>{err || '需求已确认，正在准备完整提示词。'}</p>
+            <button
+              type="button"
+              className="ps-agent-retry"
+              onClick={() => run(() => bundle.store.generate(conversationId))}
+            >
+              {err ? '重试生成' : '生成完整提示词'}
+            </button>
+          </div>
         )}
         {err && question && <div className="ps-inline-error" role="alert">{err}</div>}
       </div>
@@ -220,7 +236,7 @@ function Question({
 
   return (
     <div className="ps-agent-question">
-      <span className="ps-agent-question-count">问题 {index + 1} / {total}</span>
+      {total > 1 && <span className="ps-agent-question-count">问题 {index + 1} / {total}</span>}
       <h3>{question.text}</h3>
       {uniqueOptions.length > 0 && (
         <div className="ps-agent-options">

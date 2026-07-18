@@ -148,8 +148,6 @@
   font-size: 10px;
 }
 
-.ps-agent-close,
-.ps-agent-stop,
 .ps-agent-back,
 .ps-agent-skip {
   border: 0;
@@ -158,7 +156,31 @@
   font-size: 11px;
 }
 
-.ps-agent-stop {
+.ps-agent-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.ps-agent-icon-btn {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--ps-muted);
+  transition: background 150ms, color 150ms;
+}
+
+.ps-agent-icon-btn:hover {
+  background: var(--ps-panel-soft);
+  color: var(--ps-text);
+}
+
+.ps-agent-icon-btn.is-stop:hover {
   color: var(--ps-danger);
 }
 
@@ -166,6 +188,17 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  margin-right: 2px;
+  padding-right: 4px;
+  border-right: 1px solid var(--ps-line);
+}
+
+.ps-agent-nav-count {
+  min-width: 34px;
+  color: var(--ps-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  text-align: center;
 }
 
 .ps-agent-nav-btn {

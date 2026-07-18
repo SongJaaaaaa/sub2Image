@@ -105,7 +105,7 @@ describe('image prompt domain', () => {
     const interview = imageDomain.buildInstructions(brief)
     const artifact = imageDomain.buildArtifactInstructions(brief)
 
-    expect(interview).toContain('每轮按需询问主题相关的精确问题，不设固定题数')
+    expect(interview).toContain('每一轮请一次性返回一组问题')
     expect(interview).toContain('不要创建冲突确认问题')
     expect(interview).toContain('重新检查依赖字段')
     expect(interview).toContain('高级感')

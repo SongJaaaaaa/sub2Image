@@ -88,7 +88,9 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
 
   const tags = useMemo(() => {
     const sourceItems = sourceId ? items.filter((item) => item.source === sourceId) : items
-    return Array.from(new Set(sourceItems.flatMap((item) => item.tags))).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    return Array.from(new Set(sourceItems.flatMap((item) => item.tags)))
+      .filter((tag) => /[\u4e00-\u9fff]/.test(tag))
+      .sort((a, b) => a.localeCompare(b, 'zh-CN'))
   }, [items, sourceId])
 
   useEffect(() => {
