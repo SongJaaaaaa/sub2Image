@@ -3,7 +3,6 @@ import { useStore } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
 import ViewportTooltip from './ViewportTooltip'
-import { AiLiquidButton } from './aiLiquidButton'
 import { AiLiquidModeSwitch } from './aiLiquidModeSwitch'
 import HelpModal from './HelpModal'
 import HistoryModal from './HistoryModal'
@@ -255,18 +254,17 @@ export default function Header() {
                 className="relative"
                 {...installTooltip.handlers}
               >
-                <AiLiquidButton
-                  size="sm"
-                  iconOnly
-                  idleSpeed={0}
+                <button
+                  type="button"
                   onClick={() => {
                     dismissAllTooltips()
                     handleInstallClick()
                   }}
                   aria-label="安装为应用"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.06] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
                 >
                   <InstallIcon />
-                </AiLiquidButton>
+                </button>
                 <ViewportTooltip visible={installTooltip.visible} className="whitespace-nowrap">
                   安装为应用
                 </ViewportTooltip>
@@ -276,18 +274,17 @@ export default function Header() {
               className="relative"
               {...helpTooltip.handlers}
             >
-              <AiLiquidButton
-                size="sm"
-                iconOnly
-                idleSpeed={0}
+              <button
+                type="button"
                 onClick={() => {
                   dismissAllTooltips()
                   setShowHelp(true)
                 }}
                 aria-label="操作指南"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.06] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
               >
                 <HelpCircleIcon />
-              </AiLiquidButton>
+              </button>
               <ViewportTooltip visible={helpTooltip.visible} className="whitespace-nowrap">
                 操作指南
               </ViewportTooltip>
@@ -296,15 +293,14 @@ export default function Header() {
               className="relative"
               {...settingsTooltip.handlers}
             >
-              <AiLiquidButton
-                size="sm"
-                iconOnly
-                idleSpeed={0}
+              <button
+                type="button"
                 onClick={() => setShowSettings(true)}
                 aria-label="设置"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.06] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
               >
                 <SettingsIcon />
-              </AiLiquidButton>
+              </button>
               <ViewportTooltip visible={settingsTooltip.visible} className="whitespace-nowrap">
                 设置
               </ViewportTooltip>

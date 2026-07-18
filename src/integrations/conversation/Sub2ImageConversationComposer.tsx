@@ -13,7 +13,8 @@ import {
 } from '../../features/conversationComposer'
 import type { PromptProject, PromptStudioToolBundle } from '../../features/promptStudio'
 import GallerySelectionActionBar from '../../components/GallerySelectionActionBar'
-import { SettingsIcon } from '../../components/icons'
+import { TuneIcon } from '../../components/icons'
+import { AiLiquidButton } from '../../components/aiLiquidButton'
 import { clearActiveComposerOwner, isComposerFocused, NEXT_COMPOSER_OWNER, setActiveComposerOwner } from './composerFocus'
 import { conversationTools, SUB2_CHAT_TOOL_ID, SUB2_IMAGE_TOOL_ID } from './conversationTools'
 import { registerSub2ImageMessageRenderers } from './conversationMessageRenderers'
@@ -531,19 +532,25 @@ export default function Sub2ImageConversationComposer() {
                 />
               )}
               toolSlot={appMode === 'gallery' ? (
-                <button
-                  type="button"
-                  className={`cc-toolbar-action cc-agent-button${promptAgentSelected ? ' cc-agent-button--active' : ''}`}
+                <AiLiquidButton
+                  size="sm"
+                  idleSpeed={0.35}
                   aria-pressed={promptAgentSelected}
+                  className="!h-8 !min-w-0 !px-4 !text-[13px]"
                   onClick={() => { void togglePromptAgent() }}
                 >
                   Agent
-                </button>
+                </AiLiquidButton>
               ) : undefined}
               paramsSlot={(
-                <button type="button" className="cc-toolbar-action" title="图片设置" onClick={() => setShowSettings(true)}>
-                  <SettingsIcon />
-                  <span>设置</span>
+                <button
+                  type="button"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.08] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
+                  title="图片设置"
+                  aria-label="图片设置"
+                  onClick={() => setShowSettings(true)}
+                >
+                  <TuneIcon />
                 </button>
               )}
               onChange={(value) => {

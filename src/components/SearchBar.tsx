@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ALL_FAVORITES_COLLECTION_ID, clearFailedTasks, getTaskFavoriteCollectionIds, useStore, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import Select from './Select'
-import { AiLiquidButton } from './aiLiquidButton'
 import { ChevronLeftIcon, CollectionManageIcon, FavoriteIcon, PromptLibraryIcon, TrashIcon } from './icons'
 import ViewportTooltip from './ViewportTooltip'
 import PromptLibraryModal from './PromptLibraryModal'
@@ -211,17 +210,14 @@ export default function SearchBar() {
               className="w-full rounded-full border border-border bg-sidebar py-2.5 pl-10 pr-4 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900"
             />
           </div>
-          <AiLiquidButton
-            size="sm"
-            idleSpeed={0}
+          <button
+            type="button"
             onClick={() => setShowPromptLibrary(true)}
-            className="h-[42px] shrink-0"
+            className="flex h-[42px] shrink-0 items-center gap-1.5 rounded-full border border-border bg-sidebar px-4 text-sm text-gray-600 transition-all hover:bg-muted hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.06] dark:hover:text-gray-100"
           >
-            <span className="flex items-center gap-1.5">
-              <PromptLibraryIcon className="h-[18px] w-[18px]" />
-              <span>提示词库</span>
-            </span>
-          </AiLiquidButton>
+            <PromptLibraryIcon className="h-[18px] w-[18px]" />
+            <span>提示词库</span>
+          </button>
         </div>
       </div>
       <PromptLibraryModal

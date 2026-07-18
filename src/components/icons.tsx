@@ -200,6 +200,19 @@ export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function TuneIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6"
+      />
+    </svg>
+  )
+}
+
 export function PromptLibraryIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>

@@ -203,13 +203,13 @@
 }
 
 .cc-submit-button {
-  background: var(--cc-primary);
+  background: #1f2937;
   color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
 .cc-submit-button:hover {
-  background: #2563eb;
+  background: #111827;
 }
 
 .cc-submit-button--running {
@@ -221,9 +221,10 @@
 }
 
 .cc-submit-button:disabled {
-  background: #d1d5db;
+  background: #e5e7eb;
+  color: #9ca3af;
   cursor: not-allowed;
-  opacity: 0.65;
+  opacity: 1;
 }
 
 .cc-stop-icon {
@@ -977,8 +978,18 @@
   color: #111827;
 }
 
+.dark .cc-submit-button {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f4f4f5;
+}
+
+.dark .cc-submit-button:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .dark .cc-submit-button:disabled {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  color: #6b7280;
 }
 
 .dark .cc-settings-drawer {
