@@ -140,7 +140,7 @@ export default function SearchBar() {
           <SearchActionButton
             tooltip={favoriteTooltip}
             onClick={handleFavoriteClick}
-            className={`p-2.5 rounded-xl border transition-all ${
+            className={`p-2.5 rounded-full border transition-all ${
               filterFavorite
                 ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-500'
                 : 'border-border bg-sidebar text-gray-400 hover:bg-muted dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]'
@@ -152,7 +152,7 @@ export default function SearchBar() {
             <SearchActionButton
               tooltip="管理收藏夹"
               onClick={openManageCollectionsModal}
-              className="rounded-xl border border-border bg-sidebar p-2.5 text-gray-400 transition-all hover:bg-muted dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]"
+              className="rounded-full border border-border bg-sidebar p-2.5 text-gray-400 transition-all hover:bg-muted dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]"
             >
               <CollectionManageIcon className="w-5 h-5" />
             </SearchActionButton>
@@ -169,7 +169,7 @@ export default function SearchBar() {
                     { label: '生成中', value: 'running' },
                     { label: '失败', value: 'error' },
                   ]}
-                  className="rounded-xl border border-border bg-sidebar px-3 py-2.5 text-sm transition hover:bg-muted focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]"
+                  className="rounded-full border border-border bg-sidebar px-3 py-2.5 text-sm transition hover:bg-muted focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06]"
                 />
               </div>
               {isFailedFilter && (
@@ -179,7 +179,7 @@ export default function SearchBar() {
                   disabled={failedCount === 0}
                   title={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
                   aria-label={failedCount > 0 ? `清除 ${failedCount} 条失败记录` : '没有失败记录'}
-                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-border bg-sidebar text-gray-400 transition-all hover:bg-muted hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-sidebar disabled:hover:text-gray-400 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300 dark:disabled:hover:bg-gray-900 dark:disabled:hover:text-gray-500"
+                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-sidebar text-gray-400 transition-all hover:bg-muted hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-sidebar disabled:hover:text-gray-400 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300 dark:disabled:hover:bg-gray-900 dark:disabled:hover:text-gray-500"
                 >
                   <TrashIcon className="h-[18px] w-[18px]" />
                 </button>
@@ -208,7 +208,7 @@ export default function SearchBar() {
               onChange={(e) => setSearchQuery(e.target.value)}
               type="text"
               placeholder={inCollectionOverview ? '搜索收藏夹名称...' : '搜索提示词、参数...'}
-              className="w-full rounded-xl border border-border bg-sidebar py-2.5 pl-10 pr-4 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900"
+              className="w-full rounded-full border border-border bg-sidebar py-2.5 pl-10 pr-4 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-900"
             />
           </div>
           <AiLiquidButton
