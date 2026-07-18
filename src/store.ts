@@ -3767,7 +3767,7 @@ export async function submitAgentDirectImage(options: { signal?: AbortSignal; dr
     return
   }
   if (conversation.rounds.some((round) => round.status === 'running')) {
-    showToast('请等待生成完成，或���停止生成', 'info')
+    showToast('请等待生成完成，或先停止生成', 'info')
     return
   }
 
@@ -5171,7 +5171,7 @@ async function executeTask(taskId: string, signal?: AbortSignal) {
       useStore.getState().setDetailTaskId(taskId)
     }
   } finally {
-    // 释放输入图片的内存缓存（已持久化到 IndexedDB，后续按需从 DB 加载）
+    // ��放输入图片的内存缓存（已持久化到 IndexedDB，后续按需从 DB 加载）
     for (const imgId of task.inputImageIds) {
       imageCache.delete(imgId)
     }
