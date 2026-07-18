@@ -320,12 +320,23 @@ describe('Sub2ImageConversationComposer', () => {
     render(<Sub2ImageConversationComposer />)
     const user = userEvent.setup()
 
+    // 未选中 Agent：直接生成图片，不经过 Agent 文本分析
+    act(() => useStore.getState().setPrompt('直接生成图片'))
+    await user.click(screen.getByRole('button', { name: '发送 Agent 消息' }))
+
+    expect(mocks.submitAgentDirectImage).toHaveBeenCalledOnce()
+    expect(mocks.submitAgentMessage).not.toHaveBeenCalled()
+    expect(mocks.submitTask).not.toHaveBeenCalled()
+
+    // 选中 Agent 后：走 Agent 对话分析流程
+    const agentButton = document.querySelector<HTMLButtonElement>('.cc-agent-button')
+    expect(agentButton).not.toBeNull()
+    await user.click(agentButton!)
     act(() => useStore.getState().setPrompt('Agent 单次提交'))
     await user.click(screen.getByRole('button', { name: '发送 Agent 消息' }))
 
     expect(mocks.submitAgentMessage).toHaveBeenCalledOnce()
     expect(mocks.submitTask).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Agent' })).toBeNull()
   })
 
   it('stops the Image Tool without invoking Agent stop', async () => {
