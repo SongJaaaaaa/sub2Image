@@ -49,14 +49,14 @@ export default function AgentSettingsTab({
   const activeKeys = useMemo(() => keys.filter((item) => item.status === 'active' && item.group_id != null), [keys])
   const keyMap = useMemo(() => new Map(activeKeys.map((item) => [item.id, item.key])), [activeKeys])
   const groupOptions = useMemo(() => {
-    const groups = new Map<number, { label: string; value: string }>()
+    const groups = new Map<number, { label: string; value: number }>()
     activeKeys.forEach((item) => {
       const id = Number(item.group_id)
       if (groups.has(id)) return
       const name = item.group?.name || `分组 ${id}`
       groups.set(id, {
         label: item.group?.platform ? `${name} · ${item.group.platform}` : name,
-        value: String(id),
+        value: id,
       })
     })
     return [...groups.values()]

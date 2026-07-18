@@ -10,7 +10,9 @@ import {
   PROMPT_SOURCES,
   refreshPromptLibrary,
 } from '../lib/promptLibrary'
-import { ChevronLeftIcon, CloseIcon, RefreshIcon } from './icons'
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, RefreshIcon } from './icons'
+
+const PAGE_SIZE = 24
 
 type PromptLibraryModalProps = {
   open: boolean
@@ -20,10 +22,12 @@ type PromptLibraryModalProps = {
 
 export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibraryModalProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const [items, setItems] = useState<RemotePrompt[]>([])
   const [query, setQuery] = useState('')
   const [sourceId, setSourceId] = useState('')
   const [tag, setTag] = useState('')
+  const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<RemotePrompt | null>(null)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -95,6 +99,15 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
     () => filterPromptLibrary(items, query, sourceId, tag),
     [items, query, sourceId, tag],
   )
+  const pageCount = Math.ceil(filtered.length / PAGE_SIZE)
+  const currentPage = Math.min(page, Math.max(pageCount, 1))
+  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  useEffect(() => {
+    if (!pageCount || page <= pageCount) return
+    setPage(pageCount)
+    listRef.current?.scrollTo({ top: 0 })
+  }, [page, pageCount])
 
   if (!open) return null
 
@@ -149,14 +162,22 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
                   </svg>
                   <input
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => {
+                      setQuery(event.target.value)
+                      setPage(1)
+                      listRef.current?.scrollTo({ top: 0 })
+                    }}
                     placeholder="搜索标题、提示词、标签..."
                     className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-100"
                   />
                 </div>
                 <select
                   value={sourceId}
-                  onChange={(event) => setSourceId(event.target.value)}
+                  onChange={(event) => {
+                    setSourceId(event.target.value)
+                    setPage(1)
+                    listRef.current?.scrollTo({ top: 0 })
+                  }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-200"
                 >
                   <option value="">全部来源</option>
@@ -170,7 +191,11 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
                 <div className="mt-3 flex max-h-[72px] flex-wrap gap-1.5 overflow-y-auto custom-scrollbar">
                   <button
                     type="button"
-                    onClick={() => setTag('')}
+                    onClick={() => {
+                      setTag('')
+                      setPage(1)
+                      listRef.current?.scrollTo({ top: 0 })
+                    }}
                     className={`rounded-full px-3 py-1 text-xs transition-colors ${!tag ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-white/[0.06] dark:text-gray-400 dark:hover:bg-white/[0.1]'}`}
                   >
                     全部标签
@@ -179,7 +204,11 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
                     <button
                       key={item}
                       type="button"
-                      onClick={() => setTag(item === tag ? '' : item)}
+                      onClick={() => {
+                        setTag(item === tag ? '' : item)
+                        setPage(1)
+                        listRef.current?.scrollTo({ top: 0 })
+                      }}
                       className={`rounded-full px-3 py-1 text-xs transition-colors ${item === tag ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-white/[0.06] dark:text-gray-400 dark:hover:bg-white/[0.1]'}`}
                     >
                       {item}
@@ -195,12 +224,12 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
               )}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 custom-scrollbar sm:p-6">
+            <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-4 custom-scrollbar sm:p-6">
               {loading && !items.length ? (
                 <div className="flex h-56 items-center justify-center text-sm text-gray-400">正在读取提示词...</div>
               ) : filtered.length ? (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {filtered.map((item) => (
+                  {pageItems.map((item) => (
                     <PromptCard key={item.id} prompt={item} onClick={() => setSelected(item)} />
                   ))}
                 </div>
@@ -211,6 +240,52 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
                 </div>
               )}
             </div>
+            {pageCount > 1 && (
+              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-200/80 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/[0.08] dark:bg-gray-900/90 sm:px-6">
+                <span className="text-xs text-gray-400 dark:text-gray-500">共 {filtered.length} 条</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPage(currentPage - 1)
+                      listRef.current?.scrollTo({ top: 0 })
+                    }}
+                    disabled={currentPage === 1}
+                    className="rounded-lg border border-gray-200 bg-white p-2 text-gray-500 transition-colors hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-400 dark:hover:border-blue-500/40 dark:hover:text-blue-400"
+                    aria-label="上一页"
+                    title="上一页"
+                  >
+                    <ChevronLeftIcon className="h-4 w-4" />
+                  </button>
+                  <select
+                    value={currentPage}
+                    onChange={(event) => {
+                      setPage(Number(event.target.value))
+                      listRef.current?.scrollTo({ top: 0 })
+                    }}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-300"
+                    aria-label="选择页码"
+                  >
+                    {Array.from({ length: pageCount }, (_, idx) => (
+                      <option key={idx + 1} value={idx + 1}>第 {idx + 1} 页</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPage(currentPage + 1)
+                      listRef.current?.scrollTo({ top: 0 })
+                    }}
+                    disabled={currentPage === pageCount}
+                    className="rounded-lg border border-gray-200 bg-white p-2 text-gray-500 transition-colors hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-400 dark:hover:border-blue-500/40 dark:hover:text-blue-400"
+                    aria-label="下一页"
+                    title="下一页"
+                  >
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

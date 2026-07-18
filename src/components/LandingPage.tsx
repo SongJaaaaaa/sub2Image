@@ -167,6 +167,59 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
   const activeWork = activeSlot % featuredWorks.length
   const work = featuredWorks[activeWork]
 
+  useEffect(() => {
+    const root = document.documentElement
+    const snapType = root.style.scrollSnapType
+    let locked = false
+    let wheelDelta = 0
+    let wheelTimer = 0
+    let lockTimer = 0
+    root.style.scrollSnapType = 'y mandatory'
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+
+      const pages = Array.from(document.querySelectorAll<HTMLElement>('[data-snap-page]'))
+        .filter((el) => el.offsetHeight > 0)
+      if (pages.length === 0) return
+
+      const first = pages[0].offsetTop - window.innerHeight
+      if (window.scrollY < first - 2) return
+
+      e.preventDefault()
+      if (locked) return
+
+      wheelDelta += e.deltaY
+      window.clearTimeout(wheelTimer)
+      wheelTimer = window.setTimeout(() => {
+        wheelDelta = 0
+      }, 120)
+      if (Math.abs(wheelDelta) < 40) return
+
+      const end = root.scrollHeight - window.innerHeight
+      const stops = [first, ...pages.map((el) => el.offsetTop), end]
+      const top = wheelDelta > 0
+        ? stops.find((stop) => stop > window.scrollY + 2)
+        : stops.slice().reverse().find((stop) => stop < window.scrollY - 2)
+      if (top === undefined) return
+
+      locked = true
+      wheelDelta = 0
+      window.scrollTo({ top, behavior: 'smooth' })
+      lockTimer = window.setTimeout(() => {
+        locked = false
+      }, 700)
+    }
+
+    window.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      window.removeEventListener('wheel', onWheel)
+      window.clearTimeout(wheelTimer)
+      window.clearTimeout(lockTimer)
+      root.style.scrollSnapType = snapType
+    }
+  }, [])
+
   /** 转轮视频：仅播放焦点卡位，其余暂停省资源 */
   const ringVideoRefs = useRef<(HTMLVideoElement | null)[]>([])
   useEffect(() => {
@@ -248,7 +301,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
     setActiveStage(idx)
     const total = track.offsetHeight - window.innerHeight
     const top = track.offsetTop + (total * (idx + 0.5)) / stages.length
-    window.scrollTo({ top, behavior: 'smooth' })
+    window.scrollTo({ top })
   }
 
   return (
@@ -288,7 +341,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </header>
 
       {/* Hero：图片瀑布墙 + 叠加内容 */}
-      <section className="relative flex min-h-svh flex-col overflow-hidden pt-16">
+      <section className="relative flex min-h-svh snap-start snap-always flex-col overflow-hidden pt-16">
         {/* 瀑布墙背景 */}
         <div ref={wallRef} className="absolute inset-0 top-16" aria-hidden="true">
           <div className="flex h-full flex-col gap-2 p-2">
@@ -366,7 +419,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </section>
 
       {/* 能力区：滚动固定切换（复刻 Flow Capabilities） */}
-      <section ref={capsTrackRef} className="relative h-[450vh]" aria-label="模型能力">
+      <section ref={capsTrackRef} className="relative h-[450vh] snap-start snap-always" aria-label="模型能力">
         <div className="sticky top-0 flex h-svh flex-col overflow-hidden [background:radial-gradient(120%_100%_at_50%_115%,#1a4a8a_0%,#0c2a55_38%,#050d1c_70%,#000_100%)]">
           {/* 区块标题 */}
           <p className="pt-24 text-center text-lg text-zinc-400">模型能力</p>
@@ -481,7 +534,8 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
       {/* 创作者精选区（复刻 Flow Sessions：文字层在上，下层是 3D 媒体转轮）。布局依赖三列宽屏结构，窄屏隐藏 */}
       <section
-        className="relative hidden h-svh overflow-hidden [background:radial-gradient(120%_120%_at_30%_80%,#4a3208_0%,#2b1d06_40%,#120b02_75%,#000_100%)] lg:block"
+        data-snap-page
+        className="relative hidden h-svh snap-start snap-always overflow-hidden [background:radial-gradient(120%_120%_at_30%_80%,#4a3208_0%,#2b1d06_40%,#120b02_75%,#000_100%)] lg:block"
         aria-label="创作者精选"
       >
         {/* ===== 底层：3D 转轮（卡片围绕圆环，切换时整环旋转） ===== */}
@@ -628,17 +682,17 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </section>
 
       {/* 视频生成预告区 */}
-      <section className="relative overflow-hidden bg-black py-24 md:py-32" aria-label="视频生成">
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-8 px-4 text-center">
+      <section data-snap-page className="relative h-svh snap-start snap-always overflow-hidden bg-black" aria-label="视频生成">
+        <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-4 px-4 py-16 text-center">
           <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">即将上线</p>
           <h2 className="text-4xl font-medium tracking-tight text-white md:text-6xl">
             <span className="text-balance">视频生成，让画面动起来</span>
           </h2>
           <p className="max-w-2xl text-pretty text-lg leading-relaxed text-zinc-400">
-            视频生成能力即将接入我的贾维斯。从一张图、一段描述出发，生成流畅��动态影像，与图像创作共用同一套工作流。
+            视频生成能力即将接入我的贾维斯。从一张图、一段描述出发，生成流畅的动态影像，与图像创作共用同一套工作流。
           </p>
 
-          <div className="relative mt-4 w-full overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+          <div className="relative mt-2 w-full max-w-[min(64rem,70svh)] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
             <LazyVideo
               src="/videos/flow-showcase.mp4"
               poster="/gallery/g7.jpg"
@@ -655,7 +709,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
           <button
             type="button"
             onClick={onEnter}
-            className="mt-4 rounded-full bg-white px-8 py-4 text-base font-medium text-black shadow-xl transition-transform hover:scale-[1.03] md:text-lg"
+            className="mt-2 rounded-full bg-white px-8 py-4 text-base font-medium text-black shadow-xl transition-transform hover:scale-[1.03] md:text-lg"
           >
             先从图像创作开始
           </button>
@@ -663,7 +717,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </section>
 
       {/* 收尾 CTA 区：液态金属视频背景 + 玻璃卡片（懒加载，进入视口才播放） */}
-      <section className="relative h-svh overflow-hidden" aria-label="开始创作">
+      <section data-snap-page className="relative h-svh snap-start snap-always overflow-hidden" aria-label="开始创作">
         <LazyVideo
           src="/videos/liquid-metal.mp4"
           poster="/videos/liquid-metal-poster.png"
@@ -692,7 +746,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </section>
 
       {/* 页脚 */}
-      <footer className="border-t border-white/10 bg-black py-10">
+      <footer className="snap-end snap-always border-t border-white/10 bg-black py-10">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-4 md:flex-row">
           <div className="flex items-center gap-3">
             <img src="/jws-brand.jpg" alt="JWS Image 标志" className="h-8 w-8 rounded-lg object-cover object-top" />

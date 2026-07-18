@@ -1,7 +1,5 @@
 node_modules/
 dist/
-3Dbuttons/
-Aibutton/
 dev-proxy.config.json
 .wrangler/
 .env

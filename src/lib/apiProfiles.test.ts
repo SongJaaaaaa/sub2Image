@@ -695,12 +695,12 @@ describe('custom providers', () => {
   })
 
   it('normalizes the global theme preference', () => {
-    expect(DEFAULT_SETTINGS.theme).toBe('system')
-    expect(normalizeSettings({}).theme).toBe('system')
+    expect(DEFAULT_SETTINGS.theme).toBe('dark')
+    expect(normalizeSettings({}).theme).toBe('dark')
     expect(normalizeSettings({ theme: 'system' }).theme).toBe('system')
     expect(normalizeSettings({ theme: 'dark' }).theme).toBe('dark')
     expect(normalizeSettings({ theme: 'light' }).theme).toBe('light')
-    expect(normalizeSettings({ theme: 'unknown' }).theme).toBe('system')
+    expect(normalizeSettings({ theme: 'unknown' }).theme).toBe('dark')
   })
 
   it('enables Agent math formatting prompt by default', () => {

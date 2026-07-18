@@ -4,7 +4,7 @@ import { useStore } from './store'
 import { activateFirstImportedProfile, buildSettingsFromUrlParams, clearUrlSettingParams, hasUrlSettingParams } from './lib/urlSettings'
 import { isDefaultConfigOnlyEnabled, mergeImportedSettings } from './lib/apiProfiles'
 import { getCustomProviderConfigUrl, loadCustomProviderSettingsFromUrl } from './lib/customProviderConfigUrl'
-import { OPEN_SUB2_CONNECT_EVENT } from './lib/sub2api'
+import { getSub2Token, OPEN_SUB2_CONNECT_EVENT } from './lib/sub2api'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
 import type { AppSettings } from './types'
 import Header from './components/Header'
@@ -57,7 +57,7 @@ export default function App() {
     return (
       <LandingPage
         onEnter={() => {
-          window.history.pushState(null, '', '/app?connect=jws')
+          window.history.pushState(null, '', getSub2Token() ? '/app' : '/app?connect=jws')
           setPath('/app')
         }}
       />
