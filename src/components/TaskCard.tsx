@@ -574,8 +574,7 @@ export default function TaskCard({
           </div>
           {/* 悬停操作栏：叠放在图片底部 */}
           <div
-            className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-end gap-0.5 bg-gradient-to-t from-black/70 via-black/35 to-transparent px-1.5 pb-1 pt-8 opacity-0 transition-opacity duration-150 group-hover/card:opacity-100 focus-within:opacity-100"
-            onClick={(e) => e.stopPropagation()}
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-end gap-0.5 bg-gradient-to-t from-black/70 via-black/35 to-transparent px-1.5 pb-1 pt-8 opacity-0 transition-opacity duration-150 group-hover/card:pointer-events-auto group-hover/card:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
             onTouchStart={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
@@ -584,7 +583,10 @@ export default function TaskCard({
             {((task.status === 'error' && !isFalReconnecting) || settings.alwaysShowRetryButton) && (
               <TaskActionButton
                 tooltip="重试任务"
-                onClick={() => retryTask(task)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  retryTask(task)
+                }}
                 className="p-1.5 rounded-md text-white/80 hover:text-blue-300 hover:bg-white/10 transition"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -594,7 +596,10 @@ export default function TaskCard({
             )}
             <TaskActionButton
               tooltip={task.isFavorite ? '编辑收藏夹' : '收藏任务'}
-              onClick={() => openFavoritePicker([task.id])}
+              onClick={(e) => {
+                e.stopPropagation()
+                openFavoritePicker([task.id])
+              }}
               className={`p-1.5 rounded-md transition hover:bg-white/10 ${
                 task.isFavorite ? 'text-yellow-400' : 'text-white/80 hover:text-yellow-300'
               }`}
@@ -615,7 +620,10 @@ export default function TaskCard({
             </TaskActionButton>
             <TaskActionButton
               tooltip="复用配置"
-              onClick={onReuse}
+              onClick={(e) => {
+                e.stopPropagation()
+                onReuse()
+              }}
               className="p-1.5 rounded-md text-white/80 hover:text-blue-300 hover:bg-white/10 transition"
             >
               <svg
@@ -634,7 +642,10 @@ export default function TaskCard({
             </TaskActionButton>
             <TaskActionButton
               tooltip="编辑输出"
-              onClick={onEditOutputs}
+              onClick={(e) => {
+                e.stopPropagation()
+                onEditOutputs()
+              }}
               className="p-1.5 rounded-md text-white/80 hover:text-green-300 hover:bg-white/10 transition disabled:opacity-30"
               disabled={!task.outputImages?.length}
             >

@@ -150,7 +150,6 @@ function AgentImageTaskMessage({ message }: ConversationMessageProps) {
   const task = payload?.type === 'agent-image-task' ? payload.task : null
   const setDetailTaskId = useStore((s) => s.setDetailTaskId)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
-  const setAppMode = useStore((s) => s.setAppMode)
 
   if (!task) {
     return (
@@ -162,21 +161,15 @@ function AgentImageTaskMessage({ message }: ConversationMessageProps) {
   }
 
   return (
-    <div className="mt-4 max-w-sm" onClick={(e) => e.stopPropagation()}>
+    <div className="mt-4 w-44 max-w-full" onClick={(e) => e.stopPropagation()}>
       <TaskCard
         task={task}
         disableSwipe
         onClick={() => setDetailTaskId(task.id)}
-        onReuse={() => setConfirmDialog({
-          title: '切换到画廊模式？',
-          message: '复用参数会应用到画廊输入区。切换到画廊模式后，当前 Agent 对话仍会保留。',
-          confirmText: '切换并复用',
-          cancelText: '取消',
-          action: () => {
-            setAppMode('gallery')
-            void reuseConfig(task)
-          },
-        })}
+        onReuse={() => {
+          void reuseConfig(task)
+          useStore.getState().showToast('提示词与配置已放入输入框', 'success')
+        }}
         onEditOutputs={() => editOutputs(task)}
         onDelete={() => setConfirmDialog({ title: '删除任务', message: '确定要删除这个任务吗？', action: () => removeTask(task) })}
       />

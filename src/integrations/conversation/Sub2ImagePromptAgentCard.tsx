@@ -167,16 +167,23 @@ export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClo
             }}
             onSubmitCustom={submitCustom}
           />
-        ) : (
-          <div className="ps-agent-done" role="status">
-            <p>{err || '需求已确认，正在准备完整提示词。'}</p>
+        ) : err ? (
+          <div className="ps-agent-done" role="alert">
+            <p>{err}</p>
             <button
               type="button"
               className="ps-agent-retry"
-              onClick={() => run(() => bundle.store.generate(conversationId))}
+              onClick={() => run(() => snapshot.project?.phase === 'review'
+                ? bundle.store.generate(conversationId)
+                : bundle.store.submitAnswers(conversationId))}
             >
-              {err ? '重试生成' : '生成完整提示词'}
+              重试生成
             </button>
+          </div>
+        ) : (
+          <div className="ps-agent-loading" role="status">
+            <span className="ps-liquid-loader" aria-hidden="true" />
+            <span>需求已确认，正在准备完整提示词</span>
           </div>
         )}
         {err && question && <div className="ps-inline-error" role="alert">{err}</div>}
@@ -228,7 +235,36 @@ function Question({
   const uniqueOptions = question.options.filter(
     (option, i, arr) => arr.findIndex((item) => sameValue(item.value, option.value)) === i,
   )
+  // 键盘高亮：默认选中第一条，上下键切换，回车确认
+  const [highlight, setHighlight] = useState(0)
+  useEffect(() => {
+    setHighlight(0)
+  }, [question.id])
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (uniqueOptions.length > 0 && !custom.trim()) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setHighlight((i) => (i + 1) % uniqueOptions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setHighlight((i) => (i - 1 + uniqueOptions.length) % uniqueOptions.length)
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        const option = uniqueOptions[highlight]
+        if (!option) return
+        if (question.input === 'multiple') {
+          onToggle(option.value)
+        } else {
+          onAnswer({ mode: 'answer', value: option.value })
+        }
+        return
+      }
+    }
     if (e.key !== 'Enter' && e.key !== 'ArrowRight') return
     e.preventDefault()
     onSubmitCustom()
@@ -246,8 +282,9 @@ function Question({
               <button
                 key={`${question.id}-opt-${optionIndex}`}
                 type="button"
-                className={`ps-agent-option${active ? ' is-active' : ''}`}
+                className={`ps-agent-option${active ? ' is-active' : ''}${optionIndex === highlight ? ' is-highlighted' : ''}`}
                 aria-pressed={active}
+                onMouseEnter={() => setHighlight(optionIndex)}
                 onClick={() => question.input === 'multiple'
                   ? onToggle(option.value)
                   : onAnswer({ mode: 'answer', value: option.value })}
@@ -264,10 +301,12 @@ function Question({
       )}
       <div className="ps-agent-custom">
         <input
+          key={question.id}
           type={question.input === 'number' ? 'number' : 'text'}
           aria-label="自定义答案"
           placeholder="自定义答案"
           value={custom}
+          autoFocus
           onChange={(e) => setCustom(e.target.value)}
           onKeyDown={handleKeyDown}
         />

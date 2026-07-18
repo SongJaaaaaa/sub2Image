@@ -27,21 +27,23 @@
   overflow: hidden;
   box-sizing: border-box;
   border-radius: 10px;
-  background: var(--ps-panel);
+  /* 透明背景：与外层对话框（cc-composer）颜色保持一致 */
+  background: transparent;
   color: var(--ps-text);
   font-family: var(--font-ui-sans, system-ui, sans-serif);
   letter-spacing: 0;
 }
 
 .dark .ps-agent-card {
-  --ps-bg: #131517;
-  --ps-panel: #1a1d1f;
-  --ps-panel-soft: #24282b;
-  --ps-text: #e8eaeb;
+  /* 与 .dark .cc-composer 的配色保持一致 */
+  --ps-bg: #1a1a1c;
+  --ps-panel: rgba(255, 255, 255, 0.06);
+  --ps-panel-soft: rgba(255, 255, 255, 0.08);
+  --ps-text: #f4f4f5;
   --ps-text-soft: #b6bcc1;
   --ps-muted: #8b9298;
-  --ps-line: #33383c;
-  --ps-line-strong: #4a5157;
+  --ps-line: rgba(255, 255, 255, 0.1);
+  --ps-line-strong: rgba(255, 255, 255, 0.22);
   --ps-focus: #35c2c9;
   --ps-ai-ink: #a9f0e6;
   --ps-danger: #f08c8c;
@@ -489,24 +491,24 @@
   to { transform: rotate(360deg); }
 }
 
-@media (prefers-color-scheme: dark) {
-  .ps-agent-card {
-    --ps-bg: #141617;
-    --ps-panel: #1b1d1f;
-    --ps-panel-soft: #202326;
-    --ps-text: #f0f1f1;
-    --ps-text-soft: #c6c9cb;
-    --ps-muted: #a5aaad;
-    --ps-line: #383c3f;
-    --ps-line-strong: #565c61;
-    --ps-focus: #55d7d2;
-    --ps-ai-start: #8ff1dc;
-    --ps-ai-mid: #48d1cd;
-    --ps-ai-end: #38a4c3;
-    --ps-ai-ink: #aaf5e9;
-    --ps-danger: #ff9a93;
-    --ps-danger-soft: #2b1919;
-  }
+/* 深色模式由 html.dark 类控制（见上方 .dark .ps-agent-card），
+   不使用 prefers-color-scheme 媒体查询，避免与应用主题开关冲突 */
+
+.ps-agent-option.is-highlighted {
+  border-color: color-mix(in srgb, var(--ps-ai-mid) 55%, var(--ps-line));
+  background: color-mix(in srgb, var(--ps-ai-mid) 12%, var(--ps-panel));
+  color: var(--ps-text);
+}
+
+.ps-agent-option.is-highlighted .ps-agent-option-arrow {
+  opacity: 1;
+  color: var(--ps-ai-ink);
+}
+
+.ps-agent-option.is-highlighted .ps-agent-option-index {
+  border-color: transparent;
+  background: var(--ps-ai-mid);
+  color: #04201d;
 }
 
 @media (prefers-reduced-motion: reduce) {
