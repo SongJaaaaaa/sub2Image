@@ -8,6 +8,7 @@ import {
   startPromptGeneration,
   startPromptOptimization,
 } from '../core/session'
+import { sanitizePromptQuestions } from '../core/questions'
 import { getActivePromptVersion, restorePromptVersion } from '../core/versions'
 import type {
   PromptArtifact,
@@ -540,11 +541,12 @@ export function createPromptStudioStore(opts: PromptStudioStoreOptions) {
       if (response.format !== 'interview') throw new Error('提示词访谈返回了错误的响应类型')
       const reply = sanitizeInterviewReply(response.output, ready.brief)
       const result = applyPromptInterviewReply(ready, reply, domain)
+      const questions = sanitizePromptQuestions(reply.questions, result.project.brief, domain)
       const next = withUi(result.project, {
-        questions: reply.questions,
+        questions,
         questionSource: 'http',
         answers: {},
-        currentQuestionId: response.output.questions[0]?.id,
+        currentQuestionId: questions[0]?.id,
         paused: false,
         error: undefined,
         rawResponse: undefined,
@@ -824,7 +826,7 @@ export function createPromptStudioStore(opts: PromptStudioStoreOptions) {
     }
     const result = applyPromptProjectPatch({ ...base, source }, patch, getDomain(base, opts.domains))
     const input = hasImages
-      ? '参考图已更新，请重新分析图片并继续确认创作需求。'
+      ? '参考图已更新，请重新分析图片并继续��认创作需求。'
       : '参考图已移除，请根据当前素材继续确认创作需求。'
     const next = withUi({ ...result.project, phase: 'interview' }, {
       questions: [],

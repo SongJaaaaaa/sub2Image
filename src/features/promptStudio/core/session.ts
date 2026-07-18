@@ -14,7 +14,7 @@ import {
   isPromptBriefComplete,
   mergePromptBrief,
 } from './brief'
-import { assertPromptQuestions } from './questions'
+import { assertPromptQuestions, sanitizePromptQuestions } from './questions'
 import {
   addPromptVersion,
   buildPromptOptimizationContext,
@@ -91,13 +91,16 @@ function applyPromptReply(
   const result = mergePromptBrief(project.brief, reply.briefPatch, domain, now)
   const pending = mergePromptConflicts(project.pendingConflicts, result.conflicts)
   const phase = getInterviewPhase(result, domain, pending)
-  assertPromptQuestions(reply.questions, result.brief, domain, phase)
+  const questions = phase === 'review'
+    ? []
+    : sanitizePromptQuestions(reply.questions, result.brief, domain)
+  assertPromptQuestions(questions, result.brief, domain, phase)
 
   const msg = {
     id: opts?.messageId ?? `prompt-message-${now}-${project.messages.length + 1}`,
     role: 'assistant' as const,
     content: reply.message,
-    questionIds: reply.questions.map((question) => question.id),
+    questionIds: questions.map((question) => question.id),
     createdAt: now,
   }
 

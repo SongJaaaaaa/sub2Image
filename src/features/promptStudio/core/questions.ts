@@ -69,3 +69,29 @@ export function limitPromptQuestions(questions: readonly PromptQuestion[]) {
     return true
   })
 }
+
+/**
+ * 过滤掉模型偶发返回的非法问题（未知/不适用字段、重复 ID 或字段、选项数量不符合领域约束），
+ * 让面试流程保持健壮，而不是因为单个坏问题直接抛错中断。
+ */
+export function sanitizePromptQuestions(
+  questions: readonly PromptQuestion[],
+  brief: PromptBrief,
+  domain: PromptDomainDefinition,
+): PromptQuestion[] {
+  const ids = new Set<string>()
+  const fields = new Set<string>()
+  return questions.filter((question) => {
+    if (ids.has(question.id) || fields.has(question.field)) return false
+    const field = domain.fields.find((item) => item.id === question.field)
+    if (!field || !isPromptFieldApplicable(brief, field)) return false
+    if (domain.id === 'image' && (question.input !== 'single' || question.options.length < 2 || question.options.length > 3)) {
+      return false
+    }
+    if ((question.input === 'single' || question.input === 'multiple') && question.options.length < 2) return false
+    if ((question.input === 'text' || question.input === 'number') && question.options.length) return false
+    ids.add(question.id)
+    fields.add(question.field)
+    return true
+  })
+}

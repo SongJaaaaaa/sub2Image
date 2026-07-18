@@ -228,7 +228,7 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
               {loading && !items.length ? (
                 <div className="flex h-56 items-center justify-center text-sm text-gray-400">正在读取提示词...</div>
               ) : filtered.length ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                   {pageItems.map((item) => (
                     <PromptCard key={item.id} prompt={item} onClick={() => setSelected(item)} />
                   ))}
@@ -295,14 +295,13 @@ export default function PromptLibraryModal({ open, onClose, onUse }: PromptLibra
 }
 
 function PromptCard({ prompt, onClick }: { prompt: RemotePrompt; onClick: () => void }) {
-  const source = getPromptSource(prompt.source)
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group overflow-hidden rounded-2xl border border-gray-200/80 bg-white text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg dark:border-white/[0.08] dark:bg-gray-900 dark:hover:border-blue-500/40"
+      className="group overflow-hidden rounded-xl border border-gray-200/80 bg-white text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg dark:border-white/[0.08] dark:bg-gray-900 dark:hover:border-blue-500/40"
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/40 dark:to-purple-950/40">
+      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/40 dark:to-purple-950/40">
         {prompt.coverUrl ? (
           <img
             src={prompt.coverUrl}
@@ -312,17 +311,13 @@ function PromptCard({ prompt, onClick }: { prompt: RemotePrompt; onClick: () => 
             onError={(event) => { event.currentTarget.style.display = 'none' }}
           />
         ) : null}
-        <div className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+        <div className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[9px] font-medium text-white backdrop-blur-sm">
           {prompt.model}
         </div>
       </div>
-      <div className="p-4">
-        <h3 className="line-clamp-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{prompt.title}</h3>
-        <p className="mt-2 line-clamp-3 text-xs leading-5 text-gray-500 dark:text-gray-400">{prompt.prompt}</p>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="min-w-0 truncate text-[11px] text-gray-400 dark:text-gray-500">{source?.label || prompt.source}</span>
-          <span className="shrink-0 text-[11px] font-medium text-blue-500">查看详情</span>
-        </div>
+      <div className="p-2.5">
+        <h3 className="line-clamp-1 text-xs font-semibold text-gray-900 dark:text-gray-100">{prompt.title}</h3>
+        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{prompt.prompt}</p>
       </div>
     </button>
   )

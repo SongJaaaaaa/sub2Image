@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import type { PromptQuestion, PromptScalar } from '../../features/promptStudio'
 import type { PromptQuestionAnswer, PromptStudioToolBundle } from '../../features/promptStudio'
-import { SettingsIcon } from '../../components/icons'
+import { ChevronLeftIcon, ChevronRightIcon } from '../../components/icons'
 
 type Props = {
   conversationId: string
@@ -12,7 +12,7 @@ type Props = {
 
 const sameValue = (a: PromptScalar, b: PromptScalar) => typeof a === typeof b && a === b
 
-export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClose, onOpenSettings }: Props) {
+export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClose }: Props) {
   const subscribe = useMemo(
     () => (fn: () => void) => bundle.store.subscribe(conversationId, fn),
     [bundle.store, conversationId],
@@ -99,13 +99,30 @@ export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClo
           <strong>图片提示词 Agent</strong>
           <span>{snapshot.running ? '正在分析并生成下一步' : snapshot.project?.title || '正在建立项目'}</span>
         </div>
+        {question && !snapshot.running && snapshot.project?.phase !== 'error' && (
+          <div className="ps-agent-nav" role="group" aria-label="切换问题">
+            <button
+              type="button"
+              className="ps-agent-nav-btn"
+              aria-label="上一个问题"
+              disabled={index === 0}
+              onClick={() => bundle.store.setCurrentQuestion(conversationId, snapshot.questions[index - 1]!.id)}
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="ps-agent-nav-btn"
+              aria-label="下一个问题"
+              disabled={index >= snapshot.questions.length - 1}
+              onClick={() => bundle.store.setCurrentQuestion(conversationId, snapshot.questions[index + 1]!.id)}
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         {snapshot.running && (
           <button type="button" className="ps-agent-stop" onClick={() => bundle.store.stop(conversationId)}>停止</button>
-        )}
-        {onOpenSettings && (
-          <button type="button" className="ps-agent-close" aria-label="图片设置" onClick={onOpenSettings}>
-            <SettingsIcon className="h-4 w-4" />
-          </button>
         )}
         <button type="button" className="ps-agent-close" aria-label="暂停并关闭提示词 Agent" onClick={close}>关闭</button>
       </header>
@@ -154,14 +171,7 @@ export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClo
         && snapshot.project?.phase !== 'error'
         && (
           <footer className="ps-agent-footer">
-            <button
-              type="button"
-              className="ps-agent-back"
-              disabled={index === 0}
-              onClick={() => bundle.store.setCurrentQuestion(conversationId, snapshot.questions[index - 1]!.id)}
-            >
-              返回
-            </button>
+            <span className="ps-agent-footer-hint">回车确认 · 或从上方选择</span>
             <button
               type="button"
               className="ps-agent-skip"
@@ -199,6 +209,9 @@ function Question({
   const selected = answer?.mode === 'answer'
     ? Array.isArray(answer.value) ? answer.value : answer.value == null ? [] : [answer.value]
     : []
+  const uniqueOptions = question.options.filter(
+    (option, i, arr) => arr.findIndex((item) => sameValue(item.value, option.value)) === i,
+  )
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter' && e.key !== 'ArrowRight') return
     e.preventDefault()
@@ -209,13 +222,13 @@ function Question({
     <div className="ps-agent-question">
       <span className="ps-agent-question-count">问题 {index + 1} / {total}</span>
       <h3>{question.text}</h3>
-      {question.options.length > 0 && (
+      {uniqueOptions.length > 0 && (
         <div className="ps-agent-options">
-          {question.options.map((option, optionIndex) => {
+          {uniqueOptions.map((option, optionIndex) => {
             const active = selected.some((item) => sameValue(item, option.value))
             return (
               <button
-                key={`${question.id}-${String(option.value)}`}
+                key={`${question.id}-opt-${optionIndex}`}
                 type="button"
                 className={`ps-agent-option${active ? ' is-active' : ''}`}
                 aria-pressed={active}
@@ -224,8 +237,10 @@ function Question({
                   : onAnswer({ mode: 'answer', value: option.value })}
               >
                 <span className="ps-agent-option-index" aria-hidden="true">{optionIndex + 1}</span>
-                <span>{option.label}</span>
-                <span aria-hidden="true">→</span>
+                <span className="ps-agent-option-label">{option.label}</span>
+                <span className="ps-agent-option-arrow" aria-hidden="true">
+                  <ChevronRightIcon className="h-3.5 w-3.5" />
+                </span>
               </button>
             )
           })}
