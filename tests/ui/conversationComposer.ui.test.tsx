@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   addImageFromFile: vi.fn(async () => undefined),
   submitAgentMessage: vi.fn(async (_options?: { signal?: AbortSignal; draft?: unknown; conversationId?: string; editingRoundId?: string | null }) => undefined),
+  submitAgentDirectImage: vi.fn(async (_options?: { signal?: AbortSignal; draft?: unknown; conversationId?: string }) => undefined),
   submitTask: vi.fn(async (_options?: { signal?: AbortSignal; draft?: unknown }) => undefined),
   stopAgentResponse: vi.fn(),
 }))
@@ -16,6 +17,7 @@ vi.mock('../../src/store', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../src/store')>(),
   addImageFromFile: mocks.addImageFromFile,
   submitAgentMessage: mocks.submitAgentMessage,
+  submitAgentDirectImage: mocks.submitAgentDirectImage,
   submitTask: mocks.submitTask,
   stopAgentResponse: mocks.stopAgentResponse,
 }))

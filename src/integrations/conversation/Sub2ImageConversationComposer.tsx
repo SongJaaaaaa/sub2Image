@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
-import { getActiveAgentRounds, loadComposerDraft, useStore } from '../../store'
+import { getActiveAgentRounds, loadComposerDraft, submitAgentDirectImage, useStore } from '../../store'
 import { formatImageRatio } from '../../lib/size'
 import { collectAgentRoundOutputImageSlots } from '../../lib/agentImageReferences'
 import { getAtImageQuery, getPromptMentionParts, getSelectedImageMentionLabel, imageMentionMatches, insertImageMentionAtVisibleRange, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, restoreImageMentionMarkers, stripImageMentionMarkers } from '../../lib/promptImageMentions'
@@ -247,7 +247,7 @@ export default function Sub2ImageConversationComposer() {
 
   useEffect(() => {
     if (appMode !== 'agent') return
-    setPromptAgentSelected(false)
+    // 工作台模式下关闭画廊的提示词问答卡，但保留 Agent 按钮的选中状态
     if (promptOpen && promptBundle) promptBundle.store.pause(PROMPT_CONVERSATION_ID)
     if (promptOpen) setPromptOpen(false)
   }, [appMode, promptBundle, promptOpen])
@@ -257,7 +257,11 @@ export default function Sub2ImageConversationComposer() {
     attachments: inputImages.map((image, index) => ({ id: image.id, type: 'image', name: `参考图${index + 1}` })),
     params: { ...params },
   }), [inputImages, params, prompt])
-  const composerState = runtime.getToolComposerState({ ...scope, input: submitInput })
+  const rawComposerState = runtime.getToolComposerState({ ...scope, input: submitInput })
+  // 工作台模式未选中 Agent 时走"直接生成图片"，不受 Agent 文本模型配置限制
+  const composerState = appMode === 'agent' && !promptAgentSelected
+    ? { ...rawComposerState, validationError: null, placeholder: '描述你想生成的图片...' }
+    : rawComposerState
   const promptProject = promptBundle?.store.getSnapshot(PROMPT_CONVERSATION_ID).project
   const promptAgentCanSubmit = composerState.canSubmit || Boolean(promptProject && promptProject.phase !== 'ready')
   const activeConversation = appMode === 'agent'
@@ -364,6 +368,21 @@ export default function Sub2ImageConversationComposer() {
     }
   }
 
+  // 工作台"直接生成"：不经过 Agent 分析，直接生成图片并挂到当前对话
+  const submitDirect = async () => {
+    const draft = loadComposerDraft()
+    const state = useStore.getState()
+    const targetConversationId = state.activeAgentConversationId ?? state.createAgentConversation()
+    refreshRuntime()
+    try {
+      await submitAgentDirectImage({ draft, conversationId: targetConversationId })
+    } catch (err) {
+      if (!(err instanceof Error && err.name === 'AbortError')) showToast(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      refreshRuntime()
+    }
+  }
+
   const openPromptAgent = async () => {
     if (promptStarting) return
     setPromptStarting(true)
@@ -423,6 +442,8 @@ export default function Sub2ImageConversationComposer() {
 
     setPromptAgentSelected(true)
     window.requestAnimationFrame(() => editorRef.current?.focus())
+    // 工作台模式选中 Agent 走对话分析流程，无需预载画廊的提示词问答工具
+    if (appMode === 'agent') return
     try {
       const bundle = promptBundle ?? await loadSub2ImagePromptStudio()
       await bundle.store.load(PROMPT_CONVERSATION_ID)
@@ -531,7 +552,7 @@ export default function Sub2ImageConversationComposer() {
                   }}
                 />
               )}
-              toolSlot={appMode === 'gallery' ? (
+              toolSlot={(
                 promptAgentSelected ? (
                   <AiLiquidButton
                     size="sm"
@@ -552,7 +573,7 @@ export default function Sub2ImageConversationComposer() {
                     Agent
                   </button>
                 )
-              ) : undefined}
+              )}
               paramsSlot={(
                 <button
                   type="button"
@@ -575,6 +596,10 @@ export default function Sub2ImageConversationComposer() {
               onSubmit={() => {
                 if (appMode === 'gallery' && promptAgentSelected) {
                   void openPromptAgent()
+                  return
+                }
+                if (appMode === 'agent' && !promptAgentSelected) {
+                  void submitDirect()
                   return
                 }
                 void submit()

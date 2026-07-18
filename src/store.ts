@@ -2151,7 +2151,7 @@ async function completeRecoveredFalTask(task: TaskRecord, result: Awaited<Return
     elapsed: Date.now() - task.createdAt,
   })
   useStore.getState().showToast(`fal.ai 任务已恢复，共 ${outputIds.length} 张图片`, 'success')
-  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `fal.ai 任务已恢复，共 ${outputIds.length} 张图片。`)
+  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `fal.ai 任务已恢复��共 ${outputIds.length} 张图片。`)
   else void continueRecoveredAgentRound(task.id)
 }
 
@@ -3771,6 +3771,190 @@ export async function submitAgentMessage(options: { signal?: AbortSignal; draft?
   }
 
   await executeAgentRound(conversation.id, roundId, normalizedParams, requestSettings, activeProfile, imageProfile, undefined, options.signal)
+}
+
+/**
+ * 工作台"直接生成"：不经过 Agent 文本模型分析，直接用当前图片 API 配置生成图片，
+ * 并把结果作为一轮对话（round + 任务卡）挂到 Agent 对话流中。
+ */
+export async function submitAgentDirectImage(options: { signal?: AbortSignal; draft?: ComposerDraft; conversationId?: string } = {}) {
+  const state = useStore.getState()
+  const { showToast } = state
+  const draft = options.draft ?? loadComposerDraft()
+  const { prompt, inputImages, maskDraft } = draft
+  const params = { ...state.params, ...draft.params }
+  const normalizedSettings = normalizeSettings(state.settings)
+  options.signal?.throwIfAborted()
+
+  const profile = getActiveApiProfile(normalizedSettings)
+  const profileError = validateApiProfile(profile)
+  if (profileError) {
+    showToast(`请求 API 配置不完整：${profileError}`, 'error')
+    state.setShowSettings(true)
+    return
+  }
+
+  const trimmedPrompt = prompt.trim()
+  if (!trimmedPrompt) {
+    showToast('请输入提示词', 'error')
+    return
+  }
+
+  const conversation = options.conversationId
+    ? state.agentConversations.find((item) => item.id === options.conversationId)
+    : getActiveAgentConversation()
+  if (!conversation) {
+    showToast('找不到要提交的 Agent 对话', 'error')
+    return
+  }
+  if (conversation.rounds.some((round) => round.status === 'running')) {
+    showToast('请等待生成完成，或先停止生成', 'info')
+    return
+  }
+
+  let orderedInputImages = inputImages
+  let maskImageId: string | null = null
+  let maskTargetImageId: string | null = null
+  if (maskDraft) {
+    try {
+      orderedInputImages = orderInputImagesForMask(inputImages, maskDraft.targetImageId)
+      await validateMaskMatchesImage(maskDraft.maskDataUrl, orderedInputImages[0].dataUrl)
+      options.signal?.throwIfAborted()
+      maskImageId = await storeImage(maskDraft.maskDataUrl, 'mask')
+      cacheImage(maskImageId, maskDraft.maskDataUrl)
+      maskTargetImageId = maskDraft.targetImageId
+    } catch (err) {
+      if (options.signal?.aborted) throw err
+      if (!inputImages.some((img) => img.id === maskDraft.targetImageId)) state.clearMaskDraft()
+      showToast(err instanceof Error ? err.message : String(err), 'error')
+      return
+    }
+  }
+
+  const inputImageIds = uniqueIds(orderedInputImages.map((image) => image.id))
+  for (const image of orderedInputImages) {
+    await storeImage(image.dataUrl)
+    options.signal?.throwIfAborted()
+  }
+
+  const requestSettings = createSettingsForApiProfile(normalizedSettings, profile)
+  const normalizedParams = normalizeParamsForSettings(params, requestSettings, { hasInputImages: inputImageIds.length > 0 })
+  const now = Date.now()
+  const roundId = genId()
+  const userMessageId = genId()
+  const assistantMessageId = genId()
+  const activeRounds = getActiveAgentRounds(conversation)
+  const parentRoundId = activeRounds[activeRounds.length - 1]?.id ?? null
+  const parentPath = parentRoundId ? getAgentRoundPath(conversation, parentRoundId) : []
+
+  const task: TaskRecord = {
+    id: genId(),
+    prompt: trimmedPrompt,
+    params: normalizedParams,
+    apiProvider: profile.provider,
+    apiProfileId: profile.id,
+    apiProfileName: profile.name,
+    apiMode: profile.apiMode,
+    apiModel: profile.model,
+    inputImageIds,
+    maskTargetImageId,
+    maskImageId,
+    outputImages: [],
+    status: 'running',
+    error: null,
+    createdAt: now,
+    finishedAt: null,
+    elapsed: null,
+    sourceMode: 'agent',
+    agentConversationId: conversation.id,
+    agentRoundId: roundId,
+    agentMessageId: assistantMessageId,
+  }
+
+  const round: AgentRound = {
+    id: roundId,
+    index: parentPath.length + 1,
+    parentRoundId,
+    userMessageId,
+    assistantMessageId,
+    prompt: trimmedPrompt,
+    inputImageIds,
+    maskTargetImageId,
+    maskImageId,
+    outputTaskIds: [task.id],
+    status: 'running',
+    error: null,
+    createdAt: now,
+    finishedAt: null,
+  }
+  const userMessage: AgentMessage = {
+    id: userMessageId,
+    role: 'user',
+    content: trimmedPrompt,
+    roundId,
+    inputImageIds,
+    maskTargetImageId,
+    maskImageId,
+    createdAt: now,
+  }
+  const assistantMessage: AgentMessage = {
+    id: assistantMessageId,
+    role: 'assistant',
+    content: '',
+    roundId,
+    outputTaskIds: [task.id],
+    createdAt: now,
+  }
+
+  updateAgentConversation(conversation.id, (current) => ({
+    ...current,
+    title: current.rounds.length === 0 ? createAgentConversationTitle(trimmedPrompt, current.title) : current.title,
+    activeRoundId: roundId,
+    updatedAt: now,
+    rounds: [...current.rounds, round],
+    messages: [...current.messages, userMessage, assistantMessage],
+  }))
+
+  useStore.setState((current) => {
+    const active = current.appMode === 'agent' && current.activeAgentConversationId === conversation.id
+    if (active) {
+      if (!composerDraftMatches(current, draft)) return current
+      for (const img of current.inputImages) imageCache.delete(img.id)
+      return {
+        ...syncActiveInputDraft(current, clearInputDraftState()),
+        agentEditingRoundId: null,
+      }
+    }
+    const saved = current.agentInputDrafts[conversation.id]
+    if (!saved || !composerDraftMatches(saved, draft)) return current
+    const agentInputDrafts = { ...current.agentInputDrafts }
+    delete agentInputDrafts[conversation.id]
+    return { agentInputDrafts }
+  })
+
+  useStore.getState().setTasks([task, ...useStore.getState().tasks])
+  await putTask(task)
+
+  try {
+    await executeTask(task.id, options.signal)
+  } finally {
+    const finished = useStore.getState().tasks.find((item) => item.id === task.id)
+    const finishedAt = Date.now()
+    updateAgentConversation(conversation.id, (current) => ({
+      ...current,
+      updatedAt: finishedAt,
+      rounds: current.rounds.map((item) =>
+        item.id === roundId
+          ? {
+              ...item,
+              status: finished?.status === 'error' ? 'error' : 'done',
+              error: finished?.status === 'error' ? finished.error ?? null : null,
+              finishedAt,
+            }
+          : item,
+      ),
+    }))
+  }
 }
 
 export async function regenerateAgentAssistantMessage(conversationId: string, roundId: string) {
