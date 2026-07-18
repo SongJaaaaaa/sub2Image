@@ -33,6 +33,23 @@
   letter-spacing: 0;
 }
 
+.dark .ps-agent-card {
+  --ps-bg: #131517;
+  --ps-panel: #1a1d1f;
+  --ps-panel-soft: #24282b;
+  --ps-text: #e8eaeb;
+  --ps-text-soft: #b6bcc1;
+  --ps-muted: #8b9298;
+  --ps-line: #33383c;
+  --ps-line-strong: #4a5157;
+  --ps-focus: #35c2c9;
+  --ps-ai-ink: #a9f0e6;
+  --ps-danger: #f08c8c;
+  --ps-danger-soft: #3a2020;
+  --ps-metal-black: #e8eaeb;
+  --ps-metal-mid: #9aa1a7;
+}
+
 .ps-agent-card *,
 .ps-agent-card *::before,
 .ps-agent-card *::after {

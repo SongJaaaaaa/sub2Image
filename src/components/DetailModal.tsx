@@ -4,7 +4,7 @@ import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { useTooltip } from '../hooks/useTooltip'
 import { formatImageRatio } from '../lib/size'
-import { ActualValueBadge, DetailParamValue } from '../lib/paramDisplay'
+import { DetailParamValue } from '../lib/paramDisplay'
 import { copyImageSourceToClipboard, copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
@@ -383,7 +383,7 @@ export default function DetailModal() {
       }
     } catch (err) {
       console.error(err)
-      showToast('下载失败', 'error')
+      showToast('下载失��', 'error')
     }
   }
 
@@ -883,15 +883,6 @@ export default function DetailModal() {
                 {task.prompt || '(无提示词)'}
               </p>
             )}
-            {showRevisedPrompt && currentRevisedPrompt && (
-              <div className="mb-4">
-                <ActualValueBadge
-                  value={currentRevisedPrompt}
-                  className="max-w-full rounded px-2 py-1 text-left text-xs leading-relaxed whitespace-pre-wrap"
-                />
-              </div>
-            )}
-
             {/* 参考图 */}
             {showReferenceSection && (
               <div className="mb-4">

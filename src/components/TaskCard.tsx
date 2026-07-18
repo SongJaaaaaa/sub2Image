@@ -66,9 +66,10 @@ export default function TaskCard({
   isSelected,
   disableSwipe,
 }: Props) {
-  const [thumbSrc, setThumbSrc] = useState<string>('')
-  const [coverRatio, setCoverRatio] = useState<string>('')
-  const [coverSize, setCoverSize] = useState<string>('')
+  const [thumbs, setThumbs] = useState<Record<string, { src: string; ratio: string; size: string }>>({})
+  const [thumbIndex, setThumbIndex] = useState(0)
+  const [justRevealed, setJustRevealed] = useState(false)
+  const prevStatusRef = useRef(task.status)
   const [now, setNow] = useState(Date.now())
   const [isSwiping, setIsSwiping] = useState(false)
   const [swipeStartedSelected, setSwipeStartedSelected] = useState(false)
@@ -245,40 +246,51 @@ export default function TaskCard({
     return () => clearInterval(id)
   }, [task.customRecoverable, task.falRecoverable, task.status])
 
-  // 加载缩略图
+  // 加载所有输出图片的缩略图（支持叠放轮播）
   useEffect(() => {
-    setCoverRatio('')
-    setCoverSize('')
-    setThumbSrc('')
+    setThumbs({})
+    setThumbIndex(0)
 
     let cancelled = false
-    const imageId = task.outputImages?.[0]
-    let unsubscribe: (() => void) | undefined
+    const imageIds = task.outputImages ?? []
+    const unsubscribes: Array<() => void> = []
 
-    const applyThumbnail = (thumbnail: { dataUrl: string; width?: number; height?: number }) => {
-      if (cancelled) return
-      setThumbSrc(thumbnail.dataUrl)
-      if (thumbnail.width && thumbnail.height) {
-        setCoverRatio(formatImageRatio(thumbnail.width, thumbnail.height))
-        setCoverSize(`${thumbnail.width}×${thumbnail.height}`)
+    for (const imageId of imageIds) {
+      const applyThumbnail = (thumbnail: { dataUrl: string; width?: number; height?: number }) => {
+        if (cancelled) return
+        setThumbs((prev) => ({
+          ...prev,
+          [imageId]: {
+            src: thumbnail.dataUrl,
+            ratio: thumbnail.width && thumbnail.height ? formatImageRatio(thumbnail.width, thumbnail.height) : '',
+            size: thumbnail.width && thumbnail.height ? `${thumbnail.width}×${thumbnail.height}` : '',
+          },
+        }))
       }
-    }
 
-    if (imageId) {
-      unsubscribe = subscribeImageThumbnail(imageId, applyThumbnail)
+      unsubscribes.push(subscribeImageThumbnail(imageId, applyThumbnail))
       ensureImageThumbnailCached(imageId).then((thumbnail) => {
         if (cancelled || !thumbnail) return
         applyThumbnail(thumbnail)
-      }).catch(() => {
-        if (!cancelled) setThumbSrc('')
-      })
+      }).catch(() => {})
     }
 
     return () => {
       cancelled = true
-      unsubscribe?.()
+      unsubscribes.forEach((fn) => fn())
     }
   }, [task.outputImages])
+
+  // 从运行中变为完成时，播放揭示特效
+  useEffect(() => {
+    if (prevStatusRef.current === 'running' && task.status === 'done') {
+      setJustRevealed(true)
+      const timer = window.setTimeout(() => setJustRevealed(false), 1400)
+      prevStatusRef.current = task.status
+      return () => window.clearTimeout(timer)
+    }
+    prevStatusRef.current = task.status
+  }, [task.status])
 
   const duration = (() => {
     let seconds: number
@@ -321,6 +333,18 @@ export default function TaskCard({
   const outputSuccessCount = task.outputImages?.length ?? 0
   const requestedOutputCount = Math.max(task.params.n, outputSuccessCount + outputErrorCount)
   const hasPartialOutputFailure = task.status === 'done' && outputErrorCount > 0
+
+  const outputImages = task.outputImages ?? []
+  const currentImageId = outputImages[thumbIndex] || outputImages[0] || ''
+  const currentThumb = currentImageId ? thumbs[currentImageId] : undefined
+  const thumbSrc = currentThumb?.src || ''
+  const coverRatio = currentThumb?.ratio || ''
+  const coverSize = currentThumb?.size || ''
+  const canCycleThumbs = task.status === 'done' && outputImages.length > 1
+  const cycleThumb = (delta: number) => {
+    if (!outputImages.length) return
+    setThumbIndex((i) => (i + delta + outputImages.length) % outputImages.length)
+  }
 
   const defaultModelForProvider = task.apiProvider === 'fal' ? DEFAULT_FAL_MODEL : DEFAULT_IMAGES_MODEL
   const showModel = task.apiModel && task.apiModel !== defaultModelForProvider
@@ -418,28 +442,7 @@ export default function TaskCard({
             </>
           )}
           {task.status === 'running' && (!streamPreviewSrc || !streamPreviewLoaded) && (
-            <div className="flex flex-col items-center gap-2">
-              <svg
-                className="w-8 h-8 text-blue-400 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              <span className="text-xs text-gray-400 dark:text-gray-500">生成中...</span>
-            </div>
+            <div className="task-gen-placeholder absolute inset-0" role="status" aria-label="生成中" />
           )}
           {task.status === 'error' && isFalReconnecting && (
             <div className="flex flex-col items-center gap-1 px-2">
@@ -482,21 +485,77 @@ export default function TaskCard({
             </div>
           )}
           {task.status === 'done' && thumbSrc && (
-            <>
-              <img
-                src={thumbSrc}
-                data-image-id={task.outputImages[0]}
-                data-output-image-ids={task.outputImages.join(',')}
-                className="saveable-image w-full h-full object-cover"
-                loading="lazy"
-                alt=""
-              />
-              {(hasPartialOutputFailure || task.outputImages.length > 1) && (
-                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
-                  {hasPartialOutputFailure ? <>{requestedOutputCount} | <span className="font-semibold text-yellow-300">{outputSuccessCount}</span></> : task.outputImages.length}
+            <div className={`group/deck absolute inset-0 ${justRevealed ? 'task-reveal' : ''}`}>
+              {canCycleThumbs && (
+                <>
+                  {/* 叠放层：露出后续图片的边缘 */}
+                  {outputImages.length > 2 && (
+                    <div className="absolute inset-x-4 top-0 h-3 overflow-hidden rounded-t-md opacity-50">
+                      {thumbs[outputImages[(thumbIndex + 2) % outputImages.length]]?.src ? (
+                        <img src={thumbs[outputImages[(thumbIndex + 2) % outputImages.length]]!.src} className="h-8 w-full object-cover" alt="" aria-hidden="true" />
+                      ) : (
+                        <div className="h-full w-full bg-gray-300 dark:bg-gray-600" />
+                      )}
+                    </div>
+                  )}
+                  <div className="absolute inset-x-2 top-[5px] h-4 overflow-hidden rounded-t-md opacity-75">
+                    {thumbs[outputImages[(thumbIndex + 1) % outputImages.length]]?.src ? (
+                      <img src={thumbs[outputImages[(thumbIndex + 1) % outputImages.length]]!.src} className="h-10 w-full object-cover" alt="" aria-hidden="true" />
+                    ) : (
+                      <div className="h-full w-full bg-gray-300 dark:bg-gray-600" />
+                    )}
+                  </div>
+                </>
+              )}
+              <div className={`absolute inset-x-0 bottom-0 overflow-hidden ${canCycleThumbs ? 'top-[10px] rounded-t-lg shadow-[0_-2px_8px_rgba(0,0,0,0.25)]' : 'top-0'}`}>
+                <img
+                  key={currentImageId}
+                  src={thumbSrc}
+                  data-image-id={currentImageId}
+                  data-output-image-ids={task.outputImages.join(',')}
+                  className="saveable-image task-deck-img h-full w-full object-cover"
+                  loading="lazy"
+                  alt=""
+                />
+              </div>
+              {canCycleThumbs && (
+                <>
+                  <button
+                    type="button"
+                    className="absolute left-1 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 backdrop-blur-sm transition hover:bg-black/70 group-hover/deck:opacity-100 focus-visible:opacity-100"
+                    aria-label="上一张图片"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      cycleThumb(-1)
+                    }}
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 backdrop-blur-sm transition hover:bg-black/70 group-hover/deck:opacity-100 focus-visible:opacity-100"
+                    aria-label="下一张图片"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      cycleThumb(1)
+                    }}
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </>
+              )}
+              {(hasPartialOutputFailure || outputImages.length > 1) && (
+                <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
+                  {hasPartialOutputFailure
+                    ? <>{requestedOutputCount} | <span className="font-semibold text-yellow-300">{outputSuccessCount}</span></>
+                    : `${thumbIndex + 1}/${outputImages.length}`}
                 </span>
               )}
-            </>
+            </div>
           )}
           {task.status === 'done' && !thumbSrc && (
             <svg
