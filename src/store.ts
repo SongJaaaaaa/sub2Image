@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { migratePromptProject, type PromptProject } from './features/promptStudio'
 import type {
   AgentConversation,
   AgentMessage,
@@ -8,6 +9,7 @@ import type {
   ApiProfile,
   AppSettings,
   AppMode,
+  ComposerDraft,
   TaskParams,
   InputImage,
   MaskDraft,
@@ -37,9 +39,11 @@ import {
   putImage,
   putImageThumbnail,
   deleteImage,
-  clearImages,
   storeImage,
   storeImageWithSize,
+  getAllPromptProjects,
+  putPromptProject,
+  clearPromptProjects,
 } from './lib/db'
 import { callImageApi } from './lib/api'
 import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle, parseBatchImageCallArguments, type AgentApiResultImage } from './lib/agentApi'
@@ -55,6 +59,7 @@ import { createTransparentOutputMeta, getTransparentRequestParams, removeKeyedBa
 import { blobToDataUrl, fileToDataUrl } from './lib/dataUrl'
 import { formatExportFileTime } from './lib/exportFileName'
 import { buildExportZip, readExportZip, readExportZipFileAsDataUrl } from './lib/exportZip'
+import { addAgentImageReferences, addPromptProjectImageReferences, addTaskImageReferences, collectReferencedImageIds } from './lib/imageReferences'
 import { createSub2PlaceholderProfile, SUB2_ONLY_VERSION } from './lib/sub2Profiles'
 
 export const ALL_FAVORITES_COLLECTION_ID = '__all_favorites__'
@@ -171,6 +176,14 @@ function cacheImage(id: string, dataUrl: string) {
     if (oldestKey == null) break
     imageCache.delete(oldestKey)
   }
+}
+
+function clearImageRuntimeCache(id: string) {
+  imageCache.delete(id)
+  thumbnailCache.delete(id)
+  thumbnailBackfillIds.delete(id)
+  thumbnailBackfillRunningIds.delete(id)
+  thumbnailSubscribers.delete(id)
 }
 
 function getCachedThumbnail(id: string) {
@@ -962,41 +975,12 @@ interface AppState {
   setConfirmDialog: (d: AppState['confirmDialog']) => void
 }
 
-function isImageReferencedByState(state: AppState, imageId: string) {
-  if (state.inputImages.some((img) => img.id === imageId)) return true
-  if (state.galleryInputDraft?.inputImages.some((img) => img.id === imageId)) return true
-  if (Object.values(state.agentInputDrafts).some((draft) => draft.inputImages.some((img) => img.id === imageId))) return true
-  if (state.tasks.some((task) =>
-    task.inputImageIds.includes(imageId) ||
-    task.outputImages.includes(imageId) ||
-    task.transparentOriginalImages?.includes(imageId) ||
-    task.streamPartialImageIds?.includes(imageId) ||
-    task.maskTargetImageId === imageId ||
-    task.maskImageId === imageId
-  )) return true
-  return state.agentConversations.some((conversation) =>
-    conversation.rounds.some((round) =>
-      round.inputImageIds.includes(imageId) ||
-      round.maskTargetImageId === imageId ||
-      round.maskImageId === imageId
-    ) ||
-    conversation.messages.some((message) =>
-      message.inputImageIds?.includes(imageId) ||
-      message.maskTargetImageId === imageId ||
-      message.maskImageId === imageId
-    ),
-  )
-}
-
 export async function deleteImageIfUnreferenced(imageId: string) {
-  imageCache.delete(imageId)
-  thumbnailCache.delete(imageId)
-  thumbnailBackfillIds.delete(imageId)
-  thumbnailBackfillRunningIds.delete(imageId)
-  thumbnailSubscribers.delete(imageId)
-  if (isImageReferencedByState(useStore.getState(), imageId)) return
   try {
+    const referencedIds = await collectReferencedImageIds(useStore.getState())
+    if (referencedIds.has(imageId)) return
     await deleteImage(imageId)
+    clearImageRuntimeCache(imageId)
   } catch {
     // 清理是内存/存储优化，失败不影响替换结果。
   }
@@ -1665,6 +1649,50 @@ export const useStore = create<AppState>()(
   ),
 )
 
+export function loadComposerDraft(): ComposerDraft {
+  const state = useStore.getState()
+  return {
+    prompt: state.prompt,
+    inputImages: state.inputImages.map((img) => ({ ...img })),
+    maskDraft: state.maskDraft ? { ...state.maskDraft } : null,
+    maskEditorImageId: state.maskEditorImageId,
+    params: { ...state.params },
+  }
+}
+
+function composerDraftMatches(
+  current: Pick<ComposerDraft, 'prompt' | 'inputImages' | 'maskDraft'>,
+  draft: ComposerDraft,
+) {
+  return current.prompt === draft.prompt
+    && current.inputImages.length === draft.inputImages.length
+    && current.inputImages.every((img, index) => img.id === draft.inputImages[index]?.id)
+    && current.maskDraft?.targetImageId === draft.maskDraft?.targetImageId
+    && current.maskDraft?.maskDataUrl === draft.maskDraft?.maskDataUrl
+}
+
+export function applyComposerDraft(draft: ComposerDraft) {
+  const sourceImages = draft.inputImages.map((img) => ({ ...img }))
+  const maskDraft = draft.maskDraft && sourceImages.some((img) => img.id === draft.maskDraft?.targetImageId)
+    ? { ...draft.maskDraft }
+    : null
+  const inputImages = orderImagesWithMaskFirst(sourceImages, maskDraft?.targetImageId)
+  const prompt = remapImageMentionsForOrder(draft.prompt, sourceImages, inputImages)
+  const maskEditorImageId = draft.maskEditorImageId && inputImages.some((img) => img.id === draft.maskEditorImageId)
+    ? draft.maskEditorImageId
+    : null
+
+  useStore.setState((state) => ({
+    ...syncActiveInputDraft(state, {
+      prompt,
+      inputImages,
+      maskDraft,
+      maskEditorImageId,
+    }),
+    ...(draft.params ? { params: { ...state.params, ...draft.params } } : {}),
+  }))
+}
+
 let lastStoredAgentConversations = useStore.getState().agentConversations
 let agentConversationPersistRunning = false
 let agentConversationPersistQueued = false
@@ -2143,6 +2171,11 @@ async function recoverFalTask(taskId: string) {
     await completeRecoveredFalTask(task, result)
     return
   } catch (err) {
+    const latest = useStore.getState().tasks.find((item) => item.id === taskId)
+    if (!latest || latest.status === 'done' || latest.error === AGENT_STOPPED_MESSAGE || (latest.status !== 'running' && !latest.falRecoverable)) {
+      clearFalRecoveryTimer(taskId)
+      return
+    }
     if (isNetworkRecoverableError(err)) {
       scheduleFalRecovery(taskId)
       return
@@ -2232,28 +2265,11 @@ export async function initStore() {
     }
   }
 
-  // 收集所有任务引用的图片 id
-  const referencedIds = new Set<string>()
   const state = useStore.getState()
   const persistedInputImages = state.inputImages
   const galleryInputDraft = state.galleryInputDraft
-  const agentConversations = state.agentConversations
   const agentInputDrafts = state.agentInputDrafts
-  for (const img of persistedInputImages) referencedIds.add(img.id)
-  if (galleryInputDraft) {
-    for (const img of galleryInputDraft.inputImages) referencedIds.add(img.id)
-  }
-  for (const draft of Object.values(agentInputDrafts)) {
-    for (const img of draft.inputImages) referencedIds.add(img.id)
-  }
-  for (const conversation of agentConversations) {
-    for (const round of conversation.rounds) {
-      for (const id of round.inputImageIds) referencedIds.add(id)
-    }
-  }
-  for (const t of tasks) {
-    addTaskReferencedImageIds(referencedIds, t)
-  }
+  const referencedIds = await collectReferencedImageIds({ ...state, tasks })
 
   // 只枚举 key 清理孤立图片，避免启动时把所有 4K 原图读进内存。
   const imageIds = await getAllImageIds()
@@ -2365,10 +2381,59 @@ export async function initStore() {
   }
 }
 
+function waitForTaskConfirmation(
+  signal: AbortSignal,
+  dialog: NonNullable<AppState['confirmDialog']>,
+  action: () => Promise<void>,
+) {
+  return new Promise<void>((resolve, reject) => {
+    let unsubscribe: () => void = () => undefined
+    const abort = () => {
+      unsubscribe()
+      signal.removeEventListener('abort', abort)
+      if (useStore.getState().confirmDialog === pending) {
+        useStore.setState({ confirmDialog: null })
+      }
+      reject(signal.reason ?? new DOMException('请求已停止', 'AbortError'))
+    }
+    const cleanup = () => {
+      unsubscribe()
+      signal.removeEventListener('abort', abort)
+    }
+    const pending = {
+      ...dialog,
+      action: () => {
+        cleanup()
+        void action().then(resolve, reject)
+      },
+      cancelAction: () => {
+        cleanup()
+        resolve()
+      },
+    }
+
+    unsubscribe = useStore.subscribe((state, previous) => {
+      if (previous.confirmDialog !== pending || state.confirmDialog) return
+      cleanup()
+      resolve()
+    })
+    if (signal.aborted) {
+      abort()
+      return
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    useStore.setState({ confirmDialog: pending })
+  })
+}
+
 /** 提交新任务 */
-export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean } = {}) {
-  const { settings, prompt, inputImages, maskDraft, params, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, showToast, setConfirmDialog } =
-    useStore.getState()
+export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean; signal?: AbortSignal; draft?: ComposerDraft } = {}) {
+  const state = useStore.getState()
+  const { settings, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, showToast, setConfirmDialog } = state
+  const draft = options.draft ?? loadComposerDraft()
+  const { prompt, inputImages, maskDraft } = draft
+  const params = { ...state.params, ...draft.params }
+  options.signal?.throwIfAborted()
 
   const normalizedSettings = normalizeSettings(settings)
   let activeProfile = getActiveApiProfile(settings)
@@ -2379,15 +2444,20 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
       if (options.useCurrentApiProfileWhenReusedMissing) {
         useStore.getState().setReusedTaskApiProfile(null)
       } else {
-        setConfirmDialog({
+        const dialog = {
           title: '找不到 API 配置',
-      message: `找不到复用任务所使用的 API 配置「${reusedTaskApiProfileName || '未知配置'}」，要使用当前的 API 配置「${activeProfile.name}」提交任务吗？`,
-      confirmText: '使用当前配置提交',
-      cancelText: '放弃提交',
-      action: () => {
-        void submitTask({ ...options, useCurrentApiProfileWhenReusedMissing: true })
-      },
+          message: `找不到复用任务所使用的 API 配置「${reusedTaskApiProfileName || '未知配置'}」，要使用当前的 API 配置「${activeProfile.name}」提交任务吗？`,
+          confirmText: '使用当前配置提交',
+          cancelText: '放弃提交',
+        }
+        const submitWithCurrentProfile = () => submitTask({
+          allowFullMask: options.allowFullMask,
+          useCurrentApiProfileWhenReusedMissing: true,
+          signal: options.signal,
+          draft,
         })
+        if (options.signal) return waitForTaskConfirmation(options.signal, dialog, submitWithCurrentProfile)
+        setConfirmDialog({ ...dialog, action: () => { void submitWithCurrentProfile() } })
         return
       }
     } else {
@@ -2415,22 +2485,24 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
     try {
       orderedInputImages = orderInputImagesForMask(inputImages, maskDraft.targetImageId)
       const coverage = await validateMaskMatchesImage(maskDraft.maskDataUrl, orderedInputImages[0].dataUrl)
+      options.signal?.throwIfAborted()
       if (coverage === 'full' && !options.allowFullMask) {
-        setConfirmDialog({
+        const dialog = {
           title: '确认编辑整张图片？',
           message: '当前遮罩覆盖了整张图片，提交后可能会重绘全部内容。是否继续？',
           confirmText: '继续提交',
-          tone: 'warning',
-          action: () => {
-            void submitTask({ allowFullMask: true })
-          },
-        })
+          tone: 'warning' as const,
+        }
+        const submitFullMask = () => submitTask({ ...options, allowFullMask: true })
+        if (options.signal) return waitForTaskConfirmation(options.signal, dialog, submitFullMask)
+        setConfirmDialog({ ...dialog, action: () => { void submitFullMask() } })
         return
       }
       maskImageId = await storeImage(maskDraft.maskDataUrl, 'mask')
       cacheImage(maskImageId, maskDraft.maskDataUrl)
       maskTargetImageId = maskDraft.targetImageId
     } catch (err) {
+      if (options.signal?.aborted) throw err
       if (!inputImages.some((img) => img.id === maskDraft.targetImageId)) {
         useStore.getState().clearMaskDraft()
       }
@@ -2442,6 +2514,7 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   // 持久化输入图片到 IndexedDB（此前只在内存缓存中）
   for (const img of orderedInputImages) {
     await storeImage(img.dataUrl)
+    options.signal?.throwIfAborted()
   }
 
   const normalizedParams = normalizeParamsForSettings(params, requestSettings, { hasInputImages: orderedInputImages.length > 0 })
@@ -2486,13 +2559,19 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   useStore.getState().showToast('任务已提交', 'success')
 
   if (settings.clearInputAfterSubmit) {
-    useStore.getState().setPrompt('')
-    useStore.getState().clearInputImages()
+    useStore.setState((state) => {
+      if (state.appMode === 'gallery') {
+        if (!composerDraftMatches(state, draft)) return state
+        for (const img of state.inputImages) imageCache.delete(img.id)
+        return syncActiveInputDraft(state, clearInputDraftState())
+      }
+      if (!state.galleryInputDraft || !composerDraftMatches(state.galleryInputDraft, draft)) return state
+      return { galleryInputDraft: null }
+    })
   }
   useStore.getState().setReusedTaskApiProfile(null)
 
-  // 异步调用 API
-  executeTask(taskId)
+  await executeTask(taskId, options.signal)
 }
 
 function getActiveAgentConversation(): AgentConversation {
@@ -2655,18 +2734,22 @@ async function generateAgentConversationTitle(
   requestSettings: AppSettings,
   activeProfile: ApiProfile,
   fallbackTitle: string,
+  signal?: AbortSignal,
 ) {
   useStore.setState((state) => {
     const next = { ...state.agentGeneratingTitleIds, [conversationId]: true as const }
     return { agentGeneratingTitleIds: next }
   })
   try {
+    signal?.throwIfAborted()
     const imageDataUrls = await readAgentImageDataUrls(inputImageIds)
+    signal?.throwIfAborted()
     const title = await callAgentConversationTitleApi({
       settings: requestSettings,
       profile: activeProfile,
       prompt,
       imageDataUrls,
+      signal,
     })
     if (!title || title === fallbackTitle) return
 
@@ -2851,36 +2934,6 @@ export function getAgentConversationTaskIds(conversation: AgentConversation | nu
   ]).filter((taskId) => existingTaskIds.has(taskId))
 }
 
-function addAgentReferencedImageIds(target: Set<string>, conversations = useStore.getState().agentConversations, inputDrafts = useStore.getState().agentInputDrafts) {
-  for (const conversation of conversations) {
-    for (const round of conversation.rounds) {
-      for (const id of round.inputImageIds) target.add(id)
-      if (round.maskImageId) target.add(round.maskImageId)
-    }
-    for (const message of conversation.messages) {
-      if (message.maskImageId) target.add(message.maskImageId)
-    }
-  }
-  for (const draft of Object.values(inputDrafts)) {
-    for (const img of draft.inputImages) target.add(img.id)
-  }
-}
-
-function addInputDraftReferencedImageIds(target: Set<string>, draft: AgentInputDraft | null) {
-  if (!draft) return
-  for (const img of draft.inputImages) target.add(img.id)
-}
-
-function addTaskReferencedImageIds(target: Set<string>, task: TaskRecord) {
-  for (const id of task.inputImageIds || []) target.add(id)
-  if (task.maskImageId) target.add(task.maskImageId)
-  for (const id of task.outputImages || []) target.add(id)
-  for (const id of task.transparentOriginalImages || []) {
-    if (id) target.add(id)
-  }
-  for (const id of task.streamPartialImageIds || []) target.add(id)
-}
-
 async function storeTaskOutputImages(task: TaskRecord, images: string[]) {
   const outputIds: string[] = []
   const outputDataUrls: string[] = []
@@ -2933,18 +2986,12 @@ async function deleteUnreferencedImageIds(imageIds: Iterable<string>) {
   const candidates = Array.from(new Set(Array.from(imageIds).filter(Boolean)))
   if (candidates.length === 0) return
 
-  const { tasks, inputImages, galleryInputDraft } = useStore.getState()
-  const stillUsed = new Set<string>()
-  for (const task of tasks) addTaskReferencedImageIds(stillUsed, task)
-  addAgentReferencedImageIds(stillUsed)
-  addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
-  for (const img of inputImages) stillUsed.add(img.id)
+  const stillUsed = await collectReferencedImageIds(useStore.getState())
 
   for (const imgId of candidates) {
     if (stillUsed.has(imgId)) continue
     await deleteImage(imgId)
-    imageCache.delete(imgId)
-    thumbnailCache.delete(imgId)
+    clearImageRuntimeCache(imgId)
   }
 }
 
@@ -2954,7 +3001,7 @@ async function persistTaskStreamPartialImage(taskId: string, dataUrl: string) {
     cacheImage(imgId, dataUrl)
 
     const latestTask = useStore.getState().tasks.find((task) => task.id === taskId)
-    if (!latestTask || latestTask.status === 'done') {
+    if (!latestTask || latestTask.status !== 'running') {
       await deleteUnreferencedImageIds([imgId])
       return
     }
@@ -3549,10 +3596,14 @@ async function continueRecoveredAgentRound(taskId: string) {
   }
 }
 
-export async function submitAgentMessage() {
+export async function submitAgentMessage(options: { signal?: AbortSignal; draft?: ComposerDraft; conversationId?: string; editingRoundId?: string | null } = {}) {
   const state = useStore.getState()
-  const { settings, prompt, inputImages, maskDraft, params, showToast } = state
+  const { settings, showToast } = state
+  const draft = options.draft ?? loadComposerDraft()
+  const { prompt, inputImages, maskDraft } = draft
+  const params = { ...state.params, ...draft.params }
   const normalizedSettings = normalizeSettings(settings)
+  options.signal?.throwIfAborted()
 
   const agentValidationError = getAgentProfileValidationError(normalizedSettings)
   if (agentValidationError) {
@@ -3570,7 +3621,13 @@ export async function submitAgentMessage() {
     return
   }
 
-  const conversation = getActiveAgentConversation()
+  const conversation = options.conversationId
+    ? state.agentConversations.find((item) => item.id === options.conversationId)
+    : getActiveAgentConversation()
+  if (!conversation) {
+    showToast('找不到要提交的 Agent 对话', 'error')
+    return
+  }
   if (conversation.rounds.some((round) => round.status === 'running')) {
     showToast('请等待生成完成，或先停止生成', 'info')
     return
@@ -3584,10 +3641,12 @@ export async function submitAgentMessage() {
     try {
       orderedInputImages = orderInputImagesForMask(inputImages, maskDraft.targetImageId)
       await validateMaskMatchesImage(maskDraft.maskDataUrl, orderedInputImages[0].dataUrl)
+      options.signal?.throwIfAborted()
       maskImageId = await storeImage(maskDraft.maskDataUrl, 'mask')
       cacheImage(maskImageId, maskDraft.maskDataUrl)
       maskTargetImageId = maskDraft.targetImageId
     } catch (err) {
+      if (options.signal?.aborted) throw err
       if (!inputImages.some((img) => img.id === maskDraft.targetImageId)) {
         state.clearMaskDraft()
       }
@@ -3600,12 +3659,14 @@ export async function submitAgentMessage() {
 
   for (const image of orderedInputImages) {
     await storeImage(image.dataUrl)
+    options.signal?.throwIfAborted()
   }
 
   const requestSettings = createSettingsForApiProfile(normalizedSettings, activeProfile)
   const now = Date.now()
-  const editingRound = state.agentEditingRoundId
-    ? conversation.rounds.find((item) => item.id === state.agentEditingRoundId) ?? null
+  const editingRoundId = options.editingRoundId !== undefined ? options.editingRoundId : state.agentEditingRoundId
+  const editingRound = editingRoundId
+    ? conversation.rounds.find((item) => item.id === editingRoundId) ?? null
     : null
   const editingRoundAssistantMessage = editingRound?.assistantMessageId
     ? conversation.messages.find((message) => message.id === editingRound.assistantMessageId) ?? null
@@ -3686,16 +3747,29 @@ export async function submitAgentMessage() {
     }
   })
 
-  state.setPrompt('')
-  state.clearInputImages()
-  state.clearMaskDraft()
-  state.setAgentEditingRoundId(null)
+  useStore.setState((state) => {
+    const active = state.appMode === 'agent' && state.activeAgentConversationId === conversation.id
+    if (active) {
+      if (!composerDraftMatches(state, draft)) return state
+      for (const img of state.inputImages) imageCache.delete(img.id)
+      return {
+        ...syncActiveInputDraft(state, clearInputDraftState()),
+        agentEditingRoundId: null,
+      }
+    }
+
+    const saved = state.agentInputDrafts[conversation.id]
+    if (!saved || !composerDraftMatches(saved, draft)) return state
+    const agentInputDrafts = { ...state.agentInputDrafts }
+    delete agentInputDrafts[conversation.id]
+    return { agentInputDrafts }
+  })
 
   if (fallbackTitle) {
-    void generateAgentConversationTitle(conversation.id, trimmedPrompt, inputImageIds, requestSettings, activeProfile, fallbackTitle)
+    void generateAgentConversationTitle(conversation.id, trimmedPrompt, inputImageIds, requestSettings, activeProfile, fallbackTitle, options.signal)
   }
 
-  void executeAgentRound(conversation.id, roundId, normalizedParams, requestSettings, activeProfile, imageProfile)
+  await executeAgentRound(conversation.id, roundId, normalizedParams, requestSettings, activeProfile, imageProfile, undefined, options.signal)
 }
 
 export async function regenerateAgentAssistantMessage(conversationId: string, roundId: string) {
@@ -3814,9 +3888,13 @@ async function executeAgentRound(
   activeProfile: ApiProfile,
   imageProfile: ApiProfile,
   resume?: { responseOutput: ResponsesOutputItem[]; recoveredTaskIds: string[]; toolCallsUsed: number },
+  externalSignal?: AbortSignal,
 ) {
   const startedAt = Date.now()
   const controller = new AbortController()
+  const abortFromCaller = () => controller.abort(externalSignal?.reason)
+  if (externalSignal?.aborted) abortFromCaller()
+  else externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
   const controllerKey = getAgentRoundControllerKey(conversationId, roundId)
   agentRoundControllers.set(controllerKey, controller)
   try {
@@ -4093,6 +4171,7 @@ async function executeAgentRound(
         prompt: replaceImageMentionsForApi(opts.prompt, opts.referenceImageDataUrls.length),
         params: opts.taskParams,
         inputImageDataUrls: opts.referenceImageDataUrls,
+        signal: opts.signal,
         onPartialImage: opts.onPartialImage
           ? (partial) => {
               void opts.onPartialImage?.({ image: partial.image, partialImageIndex: partial.partialImageIndex ?? partial.requestIndex })
@@ -4684,13 +4763,14 @@ async function executeAgentRound(
     })
     useStore.getState().showToast(`Agent 请求失败：${message}`, 'error')
   } finally {
+    externalSignal?.removeEventListener('abort', abortFromCaller)
     if (agentRoundControllers.get(controllerKey) === controller) {
       agentRoundControllers.delete(controllerKey)
     }
   }
 }
 
-async function executeTask(taskId: string) {
+async function executeTask(taskId: string, signal?: AbortSignal) {
   const { settings } = useStore.getState()
   const task = useStore.getState().tasks.find((t) => t.id === taskId)
   if (!task) return
@@ -4725,17 +4805,20 @@ async function executeTask(taskId: string) {
   }
 
   try {
+    signal?.throwIfAborted()
     // 获取输入图片 data URLs
     const inputDataUrls: string[] = []
     for (const imgId of task.inputImageIds) {
       const dataUrl = await ensureImageCached(imgId)
       if (!dataUrl) throw new Error('输入图片已不存在')
       inputDataUrls.push(dataUrl)
+      signal?.throwIfAborted()
     }
     let maskDataUrl: string | undefined
     if (task.maskImageId) {
       maskDataUrl = await ensureImageCached(task.maskImageId)
       if (!maskDataUrl) throw new Error('遮罩图片已不存在')
+      signal?.throwIfAborted()
     }
 
     const requestPrompt = task.transparentOutput && task.transparentPrompt
@@ -4748,7 +4831,9 @@ async function executeTask(taskId: string) {
       params: task.params,
       inputImageDataUrls: inputDataUrls,
       maskDataUrl,
+      signal,
       onFalRequestEnqueued: (request) => {
+        if (signal?.aborted) return
         falRequestInfo = request
         updateTaskInStore(taskId, {
           falRequestId: request.requestId,
@@ -4757,6 +4842,7 @@ async function executeTask(taskId: string) {
         })
       },
       onCustomTaskEnqueued: (request) => {
+        if (signal?.aborted) return
         customTaskInfo = request
         updateTaskInStore(taskId, {
           customTaskId: request.taskId,
@@ -4764,10 +4850,14 @@ async function executeTask(taskId: string) {
         })
       },
       onPartialImage: (partial) => {
+        if (signal?.aborted) return
+        const current = useStore.getState().tasks.find((item) => item.id === taskId)
+        if (current?.status !== 'running') return
         useStore.getState().setTaskStreamPreview(taskId, partial.image, partial.requestIndex)
         void persistTaskStreamPartialImage(taskId, partial.image)
       },
     })
+    signal?.throwIfAborted()
 
     const latestBeforeSuccess = useStore.getState().tasks.find((t) => t.id === taskId)
     if (!latestBeforeSuccess || latestBeforeSuccess.status !== 'running') {
@@ -4777,12 +4867,20 @@ async function executeTask(taskId: string) {
 
     // 存储输出图片
     const { outputIds, outputDataUrls, outputImageSizes, transparentOriginalImageIds } = await storeTaskOutputImages(task, result.images)
+    if (signal?.aborted) {
+      await deleteUnreferencedImageIds([...outputIds, ...(transparentOriginalImageIds ?? [])])
+      signal.throwIfAborted()
+    }
     const isAsyncCustomTask = taskProvider !== 'fal' && taskProvider !== 'openai' && Boolean(customTaskInfo)
     const actualParamsList = await resolveImageSizeParamsList(
       outputDataUrls,
       isAsyncCustomTask ? undefined : result.actualParamsList,
       outputImageSizes,
     )
+    if (signal?.aborted) {
+      await deleteUnreferencedImageIds([...outputIds, ...(transparentOriginalImageIds ?? [])])
+      signal.throwIfAborted()
+    }
     const actualParams = (() => {
       if (taskProvider === 'fal') return firstActualParams(actualParamsList)
       if (isAsyncCustomTask) return firstActualParams(actualParamsList)
@@ -4816,6 +4914,7 @@ async function executeTask(taskId: string) {
     const latestBeforeUpdate = useStore.getState().tasks.find((t) => t.id === taskId)
     if (!latestBeforeUpdate || latestBeforeUpdate.status !== 'running') {
       useStore.getState().setTaskStreamPreview(taskId)
+      await deleteUnreferencedImageIds([...outputIds, ...(transparentOriginalImageIds ?? [])])
       return
     }
     const partialImageIdsToClean = latestBeforeUpdate.streamPartialImageIds || []
@@ -4856,6 +4955,23 @@ async function executeTask(taskId: string) {
   } catch (err) {
     clearOpenAIWatchdogTimer(taskId)
     const latestTask = useStore.getState().tasks.find((t) => t.id === taskId) ?? task
+    if (signal?.aborted) {
+      clearFalRecoveryTimer(taskId)
+      clearCustomRecoveryTimer(taskId)
+      useStore.getState().setTaskStreamPreview(taskId)
+      if (latestTask.status === 'running') {
+        updateTaskInStore(taskId, {
+          status: 'error',
+          error: '已停止生成。',
+          falRecoverable: false,
+          customRecoverable: false,
+          finishedAt: Date.now(),
+          elapsed: Date.now() - task.createdAt,
+        })
+        useStore.getState().showToast('已停止生成', 'info')
+      }
+      return
+    }
     if (latestTask.status !== 'running') return
     useStore.getState().setTaskStreamPreview(taskId)
     const latestFalRequestInfo = falRequestInfo ?? (latestTask.falRequestId && latestTask.falEndpoint
@@ -5144,9 +5260,13 @@ export async function retryTask(task: TaskRecord) {
   executeTask(taskId)
 }
 
+let reuseConfigSeq = 0
+
 /** 复用配置 */
 export async function reuseConfig(task: TaskRecord) {
-  const { settings, setPrompt, setParams, setInputImages, setMaskDraft, clearMaskDraft, showToast, setConfirmDialog, setReusedTaskApiProfile } = useStore.getState()
+  const seq = ++reuseConfigSeq
+  const start = useStore.getState()
+  const { settings, showToast, setConfirmDialog, setReusedTaskApiProfile } = start
   const normalizedSettings = normalizeSettings(settings)
   const currentProfile = getActiveApiProfile(settings)
   const matchedProfile = normalizedSettings.reuseTaskApiProfileTemporarily ? getTaskApiProfile(normalizedSettings, task) : null
@@ -5154,14 +5274,7 @@ export async function reuseConfig(task: TaskRecord) {
   const missingReusedProfile = normalizedSettings.reuseTaskApiProfileTemporarily && !matchedProfile
   const taskProfileName = matchedProfile?.name ?? getTaskApiProfileName(task)
   const paramsSettings = shouldTemporarilyReuseProfile && matchedProfile ? createSettingsForApiProfile(normalizedSettings, matchedProfile) : normalizedSettings
-
-  setParams(normalizeParamsForSettings(task.params, paramsSettings, { hasInputImages: task.inputImageIds.length > 0 }))
-  setReusedTaskApiProfile(
-    shouldTemporarilyReuseProfile && matchedProfile ? matchedProfile.id : null,
-    missingReusedProfile,
-    taskProfileName,
-  )
-  clearMaskDraft()
+  const params = normalizeParamsForSettings(task.params, paramsSettings, { hasInputImages: task.inputImageIds.length > 0 })
 
   // 恢复输入图片
   const imgs: InputImage[] = []
@@ -5171,23 +5284,38 @@ export async function reuseConfig(task: TaskRecord) {
       imgs.push({ id: imgId, dataUrl })
     }
   }
-  setInputImages(imgs)
-  setPrompt(task.prompt)
   const maskTargetImageId = task.maskTargetImageId ?? (task.maskImageId ? task.inputImageIds[0] : null)
+  let maskDraft: MaskDraft | null = null
   if (maskTargetImageId && task.maskImageId && imgs.some((img) => img.id === maskTargetImageId)) {
     const maskDataUrl = await ensureImageCached(task.maskImageId)
     if (maskDataUrl) {
-      setMaskDraft({
+      maskDraft = {
         targetImageId: maskTargetImageId,
         maskDataUrl,
         updatedAt: Date.now(),
-      })
-    } else {
-      clearMaskDraft()
+      }
     }
-  } else {
-    clearMaskDraft()
   }
+  const current = useStore.getState()
+  if (
+    seq !== reuseConfigSeq ||
+    current.appMode !== start.appMode ||
+    current.activeAgentConversationId !== start.activeAgentConversationId ||
+    current.settings !== start.settings ||
+    current.prompt !== start.prompt ||
+    current.inputImages !== start.inputImages ||
+    current.maskDraft !== start.maskDraft ||
+    current.params !== start.params
+  ) return
+
+  const sourceImages = task.inputImageIds.map((id) => ({ id, dataUrl: '' }))
+  const prompt = remapImageMentionsForOrder(task.prompt, sourceImages, imgs)
+  setReusedTaskApiProfile(
+    shouldTemporarilyReuseProfile && matchedProfile ? matchedProfile.id : null,
+    missingReusedProfile,
+    taskProfileName,
+  )
+  applyComposerDraft({ prompt, inputImages: imgs, maskDraft, params })
   if (missingReusedProfile) {
     setConfirmDialog({
       title: '找不到 API 配置',
@@ -5228,7 +5356,7 @@ export async function editOutputs(task: TaskRecord) {
 
 /** 删除多条任务 */
 export async function removeMultipleTasks(taskIds: string[]) {
-  const { tasks, setTasks, inputImages, galleryInputDraft, showToast, selectedTaskIds } = useStore.getState()
+  const { tasks, setTasks, showToast, selectedTaskIds } = useStore.getState()
   
   if (!taskIds.length) return
 
@@ -5240,7 +5368,7 @@ export async function removeMultipleTasks(taskIds: string[]) {
   const deletedImageIds = new Set<string>()
   for (const t of tasks) {
     if (toDelete.has(t.id)) {
-      addTaskReferencedImageIds(deletedImageIds, t)
+      addTaskImageReferences(deletedImageIds, t)
     }
   }
 
@@ -5249,23 +5377,7 @@ export async function removeMultipleTasks(taskIds: string[]) {
     await dbDeleteTask(id)
   }
 
-  // 找出其他任务仍引用的图片
-  const stillUsed = new Set<string>()
-  for (const t of remaining) {
-    addTaskReferencedImageIds(stillUsed, t)
-  }
-  addAgentReferencedImageIds(stillUsed)
-  addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
-  for (const img of inputImages) stillUsed.add(img.id)
-
-  // 删除孤立图片
-  for (const imgId of deletedImageIds) {
-    if (!stillUsed.has(imgId)) {
-      await deleteImage(imgId)
-      imageCache.delete(imgId)
-      thumbnailCache.delete(imgId)
-    }
-  }
+  await deleteUnreferencedImageIds(deletedImageIds)
 
   // 如果删除的任务在选中列表中，则移除
   const newSelection = selectedTaskIds.filter(id => !toDelete.has(id))
@@ -5304,39 +5416,17 @@ export async function clearFailedTasks(taskIds?: string[]) {
 
 /** 删除单条任务 */
 export async function removeTask(task: TaskRecord) {
-  const { tasks, setTasks, inputImages, galleryInputDraft, showToast } = useStore.getState()
+  const { tasks, setTasks, showToast } = useStore.getState()
 
-  // 收集此任务关联的图片
-  const taskImageIds = new Set([
-    ...(task.inputImageIds || []),
-    ...(task.maskImageId ? [task.maskImageId] : []),
-    ...(task.outputImages || []),
-    ...(task.transparentOriginalImages || []),
-    ...(task.streamPartialImageIds || []),
-  ])
+  const taskImageIds = new Set<string>()
+  addTaskImageReferences(taskImageIds, task)
 
   // 从列表移除
   const remaining = await scrubAgentOutputPayloadsForDeletedTasks([task], tasks.filter((t) => t.id !== task.id))
   setTasks(remaining)
   await dbDeleteTask(task.id)
 
-  // 找出其他任务仍引用的图片
-  const stillUsed = new Set<string>()
-  for (const t of remaining) {
-    addTaskReferencedImageIds(stillUsed, t)
-  }
-  addAgentReferencedImageIds(stillUsed)
-  addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
-  for (const img of inputImages) stillUsed.add(img.id)
-
-  // 删除孤立图片
-  for (const imgId of taskImageIds) {
-    if (!stillUsed.has(imgId)) {
-      await deleteImage(imgId)
-      imageCache.delete(imgId)
-      thumbnailCache.delete(imgId)
-    }
-  }
+  await deleteUnreferencedImageIds(taskImageIds)
 
   showToast('任务已删除', 'success')
 }
@@ -5345,29 +5435,38 @@ export async function removeTask(task: TaskRecord) {
 export interface ClearOptions {
   clearConfig?: boolean
   clearTasks?: boolean
+  clearPromptProjects?: boolean
 }
 
 /** 清空数据 */
-export async function clearData(options: ClearOptions = { clearConfig: true, clearTasks: true }) {
+export async function clearData(options: ClearOptions = { clearConfig: true, clearTasks: true, clearPromptProjects: true }) {
   const { setTasks, clearInputImages, clearMaskDraft, setSettings, setParams, showToast } = useStore.getState()
+  const imageIds = new Set<string>()
+
+  if (options.clearPromptProjects) {
+    const projects = await getAllPromptProjects()
+    addPromptProjectImageReferences(imageIds, projects)
+    await clearPromptProjects()
+  }
 
   if (options.clearTasks) {
+    for (const id of await getAllImageIds()) imageIds.add(id)
     await dbClearTasks()
     await dbClearAgentConversations()
-    await clearImages()
-    imageCache.clear()
-    thumbnailCache.clear()
-    thumbnailBackfillIds.clear()
     setTasks([])
+    clearInputImages()
+    clearMaskDraft()
     useStore.setState({
       agentConversations: [],
       activeAgentConversationId: null,
+      agentInputDrafts: {},
+      galleryInputDraft: null,
       supportPromptOpen: false,
       supportPromptSkippedForImportedData: false,
     })
-    clearInputImages()
-    clearMaskDraft()
   }
+
+  await deleteUnreferencedImageIds(imageIds)
 
   if (options.clearConfig) {
     useStore.setState({ dismissedCodexCliPrompts: [], supportPromptDismissed: false })
@@ -5426,6 +5525,8 @@ async function recoverCustomTask(taskId: string) {
     await completeRecoveredCustomTask(task, result)
   } catch (err) {
     clearCustomRecoveryTimer(taskId)
+    const latest = useStore.getState().tasks.find((item) => item.id === taskId)
+    if (!latest || latest.status === 'done' || latest.error === AGENT_STOPPED_MESSAGE || (latest.status !== 'running' && !latest.customRecoverable)) return
     updateTaskInStore(taskId, {
       status: 'error',
       error: err instanceof Error ? err.message : String(err),
@@ -5442,18 +5543,27 @@ async function recoverCustomTask(taskId: string) {
 export interface ExportOptions {
   exportConfig?: boolean
   exportTasks?: boolean
+  exportPromptProjects?: boolean
 }
 
 /** 导出数据为 ZIP */
-export async function exportData(options: ExportOptions = { exportConfig: true, exportTasks: true }) {
+export async function exportData(options: ExportOptions = { exportConfig: true, exportTasks: true, exportPromptProjects: true }) {
   try {
     const tasks = options.exportTasks ? await getAllTasks() : []
-    const images = options.exportTasks ? await getAllImages() : []
+    const promptProjects = options.exportPromptProjects ? await getAllPromptProjects() : []
     const { settings, agentConversations, favoriteCollections, defaultFavoriteCollectionId } = useStore.getState()
+    const exportedAgentConversations = options.exportTasks ? getPersistableAgentConversations(agentConversations) : []
+    const imageIds = new Set<string>()
+    for (const task of tasks) addTaskImageReferences(imageIds, task)
+    addAgentImageReferences(imageIds, exportedAgentConversations)
+    addPromptProjectImageReferences(imageIds, promptProjects)
+    const images = options.exportTasks || options.exportPromptProjects
+      ? (await getAllImages()).filter((image) => imageIds.has(image.id))
+      : []
     const exportedAt = Date.now()
     const thumbnailsByImageId = new Map<string, NonNullable<Awaited<ReturnType<typeof getImageThumbnail>>>>()
 
-    if (options.exportTasks) {
+    if (options.exportTasks || options.exportPromptProjects) {
       for (const img of images) {
         const thumbnail = await getImageThumbnail(img.id)
         if (thumbnail?.thumbnailDataUrl) {
@@ -5477,7 +5587,8 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
       thumbnailsByImageId,
       favoriteCollections,
       defaultFavoriteCollectionId,
-      agentConversations: getPersistableAgentConversations(agentConversations),
+      agentConversations: exportedAgentConversations,
+      promptProjects,
     })
     const blob = new Blob([zipped.buffer as ArrayBuffer], { type: 'application/zip' })
     const url = URL.createObjectURL(blob)
@@ -5497,22 +5608,50 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
   }
 }
 
+function mergeImportedPromptProjects(imported: PromptProject[], existing: PromptProject[]) {
+  const usedIds = new Set(existing.map((project) => project.id))
+  const idMap = new Map<string, string>()
+  const projects = imported.map((project) => {
+    const id = usedIds.has(project.id) ? `${project.id}-imported-${genId()}` : project.id
+    usedIds.add(id)
+    if (!idMap.has(project.id)) idMap.set(project.id, id)
+    return id === project.id ? project : { ...project, id }
+  })
+
+  return projects.map((project) => {
+    if (project.source.type !== 'project' || !project.source.id) return project
+    const sourceId = idMap.get(project.source.id)
+    if (!sourceId || sourceId === project.source.id) return project
+    return { ...project, source: { ...project.source, id: sourceId } }
+  })
+}
+
 /** 导入选项 */
 export interface ImportOptions {
   importConfig?: boolean
   importTasks?: boolean
+  importPromptProjects?: boolean
 }
 
 /** 导入 ZIP 数据 */
-export async function importData(file: File, options: ImportOptions = { importConfig: true, importTasks: true }): Promise<boolean> {
+export async function importData(file: File, options: ImportOptions = { importConfig: true, importTasks: true, importPromptProjects: true }): Promise<boolean> {
   try {
     const buffer = await file.arrayBuffer()
     const { manifest: data, files } = readExportZip(new Uint8Array(buffer))
+    const importedPromptProjects = options.importPromptProjects && data.promptProjects
+      ? mergeImportedPromptProjects(data.promptProjects.map(migratePromptProject), await getAllPromptProjects())
+      : []
+    const imageIds = new Set<string>()
+    if (options.importTasks) {
+      for (const task of data.tasks || []) addTaskImageReferences(imageIds, task)
+      addAgentImageReferences(imageIds, data.agentConversations || [])
+    }
+    addPromptProjectImageReferences(imageIds, importedPromptProjects)
 
     const importedImageIds: string[] = []
-    if (options.importTasks && data.tasks && data.imageFiles) {
-      // 还原图片
+    if (data.imageFiles) {
       for (const [id, info] of Object.entries(data.imageFiles)) {
+        if (!imageIds.has(id)) continue
         const dataUrl = readExportZipFileAsDataUrl(files, info.path)
         if (!dataUrl) continue
         await putImage({
@@ -5528,6 +5667,7 @@ export async function importData(file: File, options: ImportOptions = { importCo
       }
 
       for (const [id, info] of Object.entries(data.thumbnailFiles ?? {})) {
+        if (!imageIds.has(id)) continue
         const thumbnailDataUrl = readExportZipFileAsDataUrl(files, info.path)
         if (!thumbnailDataUrl) continue
         await putImageThumbnail({
@@ -5544,7 +5684,9 @@ export async function importData(file: File, options: ImportOptions = { importCo
           thumbnailVersion: info.thumbnailVersion,
         })
       }
+    }
 
+    if (options.importTasks && data.tasks) {
       for (const task of data.tasks) {
         await putTask(task)
       }
@@ -5579,20 +5721,25 @@ export async function importData(file: File, options: ImportOptions = { importCo
       })
       await replaceStoredAgentConversations(useStore.getState().agentConversations)
       skipSupportPromptForImportedData(tasks)
-      scheduleThumbnailBackfill(importedImageIds)
     }
+
+    for (const project of importedPromptProjects) await putPromptProject(project)
+    scheduleThumbnailBackfill(importedImageIds)
 
     if (options.importConfig && data.settings) {
       const state = useStore.getState()
       state.setSettings(mergeImportedSettings(state.settings, data.settings))
     }
 
-    let msg = '数据已成功导入'
-    if (options.importTasks && data.tasks) {
-      msg = `已导入 ${data.tasks.length} 个任务`
-    } else if (options.importConfig && data.settings) {
-      msg = '配置已成功导入'
-    }
+    const imported = [
+      ...(options.importTasks && data.tasks ? [`${data.tasks.length} 个任务`] : []),
+      ...(options.importPromptProjects && data.promptProjects ? [`${importedPromptProjects.length} 个提示词项目`] : []),
+    ]
+    const msg = imported.length
+      ? `已导入 ${imported.join('、')}`
+      : options.importConfig && data.settings
+      ? '配置已成功导入'
+      : '数据已成功导入'
 
     useStore.getState().showToast(msg, 'success')
     return true

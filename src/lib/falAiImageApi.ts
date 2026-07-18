@@ -96,6 +96,7 @@ async function parseFalImageResults(payload: FalApiResponse, fallbackMime: strin
   actualParams?: Partial<TaskParams>
   rawImageUrl?: string
 }>> {
+  signal?.throwIfAborted()
   const candidates: unknown[] = []
   if (Array.isArray(payload.images)) candidates.push(...payload.images)
   if (payload.image) candidates.push(payload.image)
@@ -105,6 +106,7 @@ async function parseFalImageResults(payload: FalApiResponse, fallbackMime: strin
   const rawImageUrls: string[] = []
   try {
     for (const candidate of candidates) {
+      signal?.throwIfAborted()
       const value = readFalImageValue(candidate, fallbackMime)
       if (!value) continue
       if (isHttpUrl(value)) rawImageUrls.push(value)
@@ -132,10 +134,12 @@ async function parseFalImageResults(payload: FalApiResponse, fallbackMime: strin
     }
     throw err
   }
+  signal?.throwIfAborted()
   return results
 }
 
 async function parseFalResult(payload: FalApiResponse, params: TaskParams, customBaseUrlLabel: string | null, signal?: AbortSignal): Promise<CallApiResult> {
+  signal?.throwIfAborted()
   const mime = MIME_MAP[params.output_format] || 'image/png'
   const imageResults = await parseFalImageResults(payload, mime, customBaseUrlLabel, signal)
   const actualParams = mergeActualParams(imageResults[0]?.actualParams)
@@ -185,15 +189,20 @@ export async function getFalQueuedImageResult(
   endpoint: string,
   requestId: string,
   params: TaskParams,
+  signal?: AbortSignal,
 ): Promise<CallApiResult> {
+  signal?.throwIfAborted()
   configureFal(profile)
-  await fal.queue.subscribeToStatus(endpoint, { requestId, logs: true })
-  const result = await fal.queue.result(endpoint, { requestId })
-  return parseFalResult(result.data as FalApiResponse, params, getFalCustomBaseUrlLabel(profile))
+  await fal.queue.subscribeToStatus(endpoint, { requestId, logs: true, abortSignal: signal })
+  signal?.throwIfAborted()
+  const result = await fal.queue.result(endpoint, { requestId, abortSignal: signal })
+  signal?.throwIfAborted()
+  return parseFalResult(result.data as FalApiResponse, params, getFalCustomBaseUrlLabel(profile), signal)
 }
 
 export async function callFalAiImageApi(opts: CallApiOptions, profile: ApiProfile): Promise<CallApiResult> {
   try {
+    opts.signal?.throwIfAborted()
     if (opts.maskDataUrl) {
       assertMaskEditFileSize('遮罩主图文件', getDataUrlDecodedByteSize(opts.inputImageDataUrls[0] ?? ''))
       assertMaskEditFileSize('遮罩文件', getDataUrlDecodedByteSize(opts.maskDataUrl))
@@ -209,17 +218,21 @@ export async function callFalAiImageApi(opts: CallApiOptions, profile: ApiProfil
     const isEdit = opts.inputImageDataUrls.length > 0
     const endpoint = mapFalEndpoint(profile.model, isEdit)
     const input = await createFalRequestInput(opts)
+    opts.signal?.throwIfAborted()
     const result = await fal.subscribe(endpoint, {
       input,
       logs: true,
+      abortSignal: opts.signal,
       onEnqueue: (requestId) => {
         opts.onFalRequestEnqueued?.({ requestId, endpoint })
       },
     })
+    opts.signal?.throwIfAborted()
     const payload = result.data as FalApiResponse
     opts.onFalRequestEnqueued?.({ requestId: result.requestId, endpoint })
-    return parseFalResult(payload, opts.params, getFalCustomBaseUrlLabel(profile))
+    return parseFalResult(payload, opts.params, getFalCustomBaseUrlLabel(profile), opts.signal)
   } catch (err) {
+    opts.signal?.throwIfAborted()
     const falMessage = getFalErrorMessage(err)
     if (falMessage) throw new Error(falMessage)
     throw err

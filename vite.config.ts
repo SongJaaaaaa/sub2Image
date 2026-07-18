@@ -24,9 +24,16 @@ function createSub2Proxy(target: string, prefix: string, upstream: string): Prox
     secure: true,
     rewrite: (path) => `${upstream}${path.slice(prefix.length)}`,
     configure: (proxy) => {
-      proxy.on('proxyReq', (req) => {
-        req.removeHeader('origin')
-        req.removeHeader('referer')
+      proxy.on('proxyReq', (proxyReq, req) => {
+        proxyReq.removeHeader('origin')
+        proxyReq.removeHeader('referer')
+        console.info(`[Sub2API Proxy] ${req.method} ${req.url} -> ${target}${proxyReq.path}`)
+      })
+      proxy.on('proxyRes', (proxyRes, req) => {
+        console.info(`[Sub2API Proxy] ${req.method} ${req.url} <- ${proxyRes.statusCode}`)
+      })
+      proxy.on('error', (err, req) => {
+        console.error(`[Sub2API Proxy] ${req.method} ${req.url} !! ${err.message}`)
       })
     },
   }

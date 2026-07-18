@@ -1,14 +1,17 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 
+import type { PromptProject } from '../features/promptStudio'
 import type { AgentConversation, AppSettings, ExportData, FavoriteCollection, StoredImage, StoredImageThumbnail, TaskRecord } from '../types'
 import { bytesToDataUrl, dataUrlToBytes } from './dataUrl'
 import { getNumberedFileNameBase, sanitizeFileNamePart } from './exportFileName'
+import { addAgentImageReferences, addPromptProjectImageReferences, addTaskImageReferences } from './imageReferences'
 
 type ZipFiles = Record<string, Uint8Array | [Uint8Array, { mtime: Date }]>
 
 export interface BuildExportZipOptions {
   exportConfig?: boolean
   exportTasks?: boolean
+  exportPromptProjects?: boolean
 }
 
 export interface BuildExportZipParams {
@@ -21,6 +24,7 @@ export interface BuildExportZipParams {
   favoriteCollections: FavoriteCollection[]
   defaultFavoriteCollectionId: string | null
   agentConversations: AgentConversation[]
+  promptProjects: PromptProject[]
 }
 
 export interface ExportZipContents {
@@ -30,15 +34,20 @@ export interface ExportZipContents {
 
 export function buildExportZip(params: BuildExportZipParams) {
   const exportedAtDate = new Date(params.exportedAt)
-  const imageCreatedAtFallback = getImageCreatedAtFallback(params.options.exportTasks ? params.tasks : [])
-  const imageFileNameBases = getImageFileNameBases(params.options.exportTasks ? params.tasks : [])
+  const exportedTasks = params.options.exportTasks ? params.tasks : []
+  const exportedConversations = params.options.exportTasks ? params.agentConversations : []
+  const exportedProjects = params.options.exportPromptProjects ? params.promptProjects : []
+  const imageIds = getExportImageIds(exportedTasks, exportedConversations, exportedProjects)
+  const imageCreatedAtFallback = getImageCreatedAtFallback(exportedTasks, exportedProjects)
+  const imageFileNameBases = getImageFileNameBases(exportedTasks, exportedProjects)
   const imageFiles: ExportData['imageFiles'] = {}
   const thumbnailFiles: NonNullable<ExportData['thumbnailFiles']> = {}
   const zipFiles: ZipFiles = {}
   const usedImagePaths = new Set<string>()
 
-  if (params.options.exportTasks) {
+  if (params.options.exportTasks || params.options.exportPromptProjects) {
     for (const img of params.images) {
+      if (!imageIds.has(img.id)) continue
       const { ext, bytes } = dataUrlToBytes(img.dataUrl)
       const path = getUniqueImagePath(imageFileNameBases.get(img.id) || `image-${img.id}`, ext, usedImagePaths)
       const pathBase = path.slice('images/'.length, -(ext.length + 1))
@@ -70,7 +79,7 @@ export function buildExportZip(params: BuildExportZipParams) {
   }
 
   const manifest: ExportData = {
-    version: 3,
+    version: 4,
     exportedAt: exportedAtDate.toISOString(),
   }
 
@@ -80,6 +89,11 @@ export function buildExportZip(params: BuildExportZipParams) {
     manifest.favoriteCollections = params.favoriteCollections
     manifest.defaultFavoriteCollectionId = params.defaultFavoriteCollectionId
     manifest.agentConversations = params.agentConversations
+    manifest.imageFiles = imageFiles
+    manifest.thumbnailFiles = thumbnailFiles
+  }
+  if (params.options.exportPromptProjects) {
+    manifest.promptProjects = params.promptProjects
     manifest.imageFiles = imageFiles
     manifest.thumbnailFiles = thumbnailFiles
   }
@@ -109,7 +123,7 @@ export function readExportZipFileAsDataUrl(files: Record<string, Uint8Array>, pa
   return bytesToDataUrl(bytes, path)
 }
 
-function getImageCreatedAtFallback(tasks: TaskRecord[]) {
+function getImageCreatedAtFallback(tasks: TaskRecord[], projects: PromptProject[]) {
   const imageCreatedAtFallback = new Map<string, number>()
 
   for (const task of tasks) {
@@ -126,10 +140,17 @@ function getImageCreatedAtFallback(tasks: TaskRecord[]) {
     }
   }
 
+  for (const project of projects) {
+    for (const asset of project.source.assets || []) {
+      const prev = imageCreatedAtFallback.get(asset.id)
+      if (prev == null || project.createdAt < prev) imageCreatedAtFallback.set(asset.id, project.createdAt)
+    }
+  }
+
   return imageCreatedAtFallback
 }
 
-function getImageFileNameBases(tasks: TaskRecord[]) {
+function getImageFileNameBases(tasks: TaskRecord[], projects: PromptProject[]) {
   const bases = new Map<string, string>()
 
   for (const task of tasks) addImageFileNameBases(bases, task.outputImages || [], `task-${task.id}`)
@@ -139,8 +160,25 @@ function getImageFileNameBases(tasks: TaskRecord[]) {
   for (const task of tasks) {
     if (task.maskImageId && !bases.has(task.maskImageId)) bases.set(task.maskImageId, `task-${task.id}-mask`)
   }
+  for (const project of projects) {
+    const assets = project.source.assets || []
+    for (let index = 0; index < assets.length; index++) {
+      const asset = assets[index]
+      if (bases.has(asset.id)) continue
+      const label = asset.label || `asset-${index + 1}`
+      bases.set(asset.id, `prompt-${project.id}-${label}`)
+    }
+  }
 
   return bases
+}
+
+function getExportImageIds(tasks: TaskRecord[], conversations: AgentConversation[], projects: PromptProject[]) {
+  const ids = new Set<string>()
+  for (const task of tasks) addTaskImageReferences(ids, task)
+  addAgentImageReferences(ids, conversations)
+  addPromptProjectImageReferences(ids, projects)
+  return ids
 }
 
 function addImageFileNameBases(bases: Map<string, string>, imageIds: string[], fileNameBase: string) {

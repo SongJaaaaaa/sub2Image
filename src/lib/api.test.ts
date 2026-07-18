@@ -124,10 +124,33 @@ describe('callImageApi', () => {
       inputImageDataUrls: [],
     })
 
-    const [, init] = fetchMock.mock.calls[0]
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/sub2api-v1/images/generations')
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
       model: 'grok-imagine',
       prompt: 'prompt',
+    })
+  })
+
+  it('sends the configured size and explicit single-image count to Images API', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      data: [{ b64_json: 'aW1hZ2U=' }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await callImageApi({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS, size: '2560x1440', n: 1 },
+      inputImageDataUrls: [],
+    })
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      size: '2560x1440',
+      n: 1,
     })
   })
 
@@ -1037,5 +1060,243 @@ describe('callImageApi', () => {
     await expect(promise).resolves.toEqual({
       images: ['data:image/png;base64,aW1hZ2U='],
     })
+  })
+
+  it.each([
+    ['Images API generation', 'images', []],
+    ['Images API edit', 'images', ['data:image/png;base64,aW1hZ2U=']],
+    ['Responses API', 'responses', []],
+  ] as const)('passes caller abort through %s to the network request', async (_label, apiMode, inputImageDataUrls) => {
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      if (String(input).startsWith('data:')) return originalFetch(input, init)
+
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal
+        if (!signal) {
+          reject(new Error('missing signal'))
+          return
+        }
+        const abort = () => reject(signal.reason)
+        if (signal.aborted) abort()
+        else signal.addEventListener('abort', abort, { once: true })
+      })
+    })
+    const controller = new AbortController()
+    const reason = new DOMException('用户停止', 'AbortError')
+    const promise = callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        apiKey: 'test-key',
+        apiMode,
+        profiles: DEFAULT_SETTINGS.profiles.map((profile) => ({ ...profile, apiKey: 'test-key', apiMode })),
+      },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS },
+      inputImageDataUrls: [...inputImageDataUrls],
+      signal: controller.signal,
+    })
+    const result = promise.then(() => null, (err) => err)
+
+    await vi.waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input]) => !String(input).startsWith('data:'))).toBe(true)
+    })
+    const request = fetchMock.mock.calls.find(([input]) => !String(input).startsWith('data:'))
+    const requestSignal = request?.[1]?.signal
+    expect(requestSignal).toBeInstanceOf(AbortSignal)
+    expect(requestSignal).not.toBe(controller.signal)
+
+    controller.abort(reason)
+
+    expect(await result).toBe(reason)
+    expect(requestSignal?.aborted).toBe(true)
+    expect(requestSignal?.reason).toBe(reason)
+  })
+
+  it('stops stream parsing immediately after caller abort', async () => {
+    const streamBody = [
+      'data: {"type":"image_generation.partial_image","partial_image_index":0,"b64_json":"cGFydGlhbA=="}',
+      '',
+      'data: {"type":"image_generation.completed","b64_json":"ZmluYWw="}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(streamBody, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    }))
+    const controller = new AbortController()
+    const reason = new DOMException('用户停止', 'AbortError')
+    const partial = vi.fn(() => controller.abort(reason))
+    const promise = callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        apiKey: 'test-key',
+        streamImages: true,
+        profiles: DEFAULT_SETTINGS.profiles.map((profile) => ({ ...profile, apiKey: 'test-key', streamImages: true })),
+      },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS },
+      inputImageDataUrls: [],
+      onPartialImage: partial,
+      signal: controller.signal,
+    })
+
+    await expect(promise).rejects.toBe(reason)
+    expect(partial).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports request timeout separately from caller abort', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal
+      if (!signal) {
+        reject(new Error('missing signal'))
+        return
+      }
+      const abort = () => reject(signal.reason)
+      if (signal.aborted) abort()
+      else signal.addEventListener('abort', abort, { once: true })
+    }))
+    const controller = new AbortController()
+    const promise = callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        apiKey: 'test-key',
+        timeout: 1,
+        profiles: DEFAULT_SETTINGS.profiles.map((profile) => ({ ...profile, apiKey: 'test-key', timeout: 1 })),
+      },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS },
+      inputImageDataUrls: [],
+      signal: controller.signal,
+    })
+    const rejected = expect(promise).rejects.toMatchObject({ name: 'TimeoutError', message: '请求超时' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    await rejected
+    expect(controller.signal.aborted).toBe(false)
+  })
+
+  it('aborts custom async polling while waiting for the next poll', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task_id: 'task-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { status: 'IN_PROGRESS' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+    const controller = new AbortController()
+    const reason = new DOMException('用户停止', 'AbortError')
+    const promise = callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        baseUrl: 'https://api.example.com/v1',
+        customProviders: [{
+          id: 'custom-async-abort',
+          name: 'Custom Async Abort',
+          submit: {
+            path: 'images/generations',
+            body: { prompt: '$prompt' },
+            taskIdPath: 'task_id',
+          },
+          poll: {
+            path: 'images/tasks/{task_id}',
+            intervalSeconds: 30,
+            statusPath: 'data.status',
+            successValues: ['SUCCESS'],
+            failureValues: ['FAILURE'],
+            result: { b64JsonPaths: ['data.data.*.b64_json'] },
+          },
+        }],
+        profiles: [{
+          ...DEFAULT_SETTINGS.profiles[0],
+          id: 'profile-custom-async-abort',
+          provider: 'custom-async-abort',
+          baseUrl: 'https://api.example.com/v1',
+          apiKey: 'test-key',
+          model: 'model',
+        }],
+        activeProfileId: 'profile-custom-async-abort',
+      },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS },
+      inputImageDataUrls: [],
+      signal: controller.signal,
+    })
+    const result = promise.then(() => null, (err) => err)
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const submitSignal = fetchMock.mock.calls[0][1]?.signal
+    const pollSignal = fetchMock.mock.calls[1][1]?.signal
+    expect(pollSignal).toBe(submitSignal)
+
+    controller.abort(reason)
+    expect(pollSignal?.aborted).toBe(true)
+
+    expect(await result).toBe(reason)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(pollSignal?.reason).toBe(reason)
+  })
+
+  it('passes caller abort to custom provider result image downloads', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ url: 'https://cdn.example.com/image.png' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockImplementationOnce((_input, init) => new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal
+        if (!signal) {
+          reject(new Error('missing signal'))
+          return
+        }
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      }))
+    const controller = new AbortController()
+    const reason = new DOMException('用户停止', 'AbortError')
+    const promise = callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        customProviders: [{
+          id: 'custom-download-abort',
+          name: 'Custom Download Abort',
+          submit: {
+            path: 'images/generations',
+            body: { prompt: '$prompt' },
+            result: { imageUrlPaths: ['data.*.url'] },
+          },
+        }],
+        profiles: [{
+          ...DEFAULT_SETTINGS.profiles[0],
+          id: 'profile-custom-download-abort',
+          provider: 'custom-download-abort',
+          baseUrl: 'https://api.example.com/v1',
+          apiKey: 'test-key',
+          model: 'model',
+        }],
+        activeProfileId: 'profile-custom-download-abort',
+      },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS },
+      inputImageDataUrls: [],
+      signal: controller.signal,
+    })
+    const result = promise.then(() => null, (err) => err)
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const downloadSignal = fetchMock.mock.calls[1][1]?.signal
+    controller.abort(reason)
+    expect(downloadSignal?.aborted).toBe(true)
+
+    expect(await result).toBe(reason)
+    expect(downloadSignal?.reason).toBe(reason)
   })
 })

@@ -5,6 +5,7 @@ import {
   assertImageInputPayloadSize,
   assertMaskEditFileSize,
   appendStreamingFormatHint,
+  createRequestAbortScope,
   maybeAppendStreamingHint,
   type CallApiOptions,
   type CallApiResult,
@@ -293,6 +294,7 @@ function getResponsesImageResultBase64(result: ResponsesOutputItem['result']): s
 }
 
 async function parseImagesApiResponse(payload: ImageApiResponse, mime: string, signal?: AbortSignal): Promise<CallApiResult> {
+  signal?.throwIfAborted()
   const data = payload.data
   if (!Array.isArray(data) || !data.length) {
     const err = new Error('接口没有返回图片数据，请查看原始响应内容确认服务商实际返回的数据结构。如果使用的是中转或兼容接口，建议创建并使用「自定义服务商」配置。')
@@ -358,11 +360,14 @@ async function parseImagesApiStreamResponse(
   response: Response,
   mime: string,
   onPartialImage?: CallApiOptions['onPartialImage'],
+  signal?: AbortSignal,
 ): Promise<CallApiResult> {
+  signal?.throwIfAborted()
   const completedItems: ImageResponseItem[] = []
   let resultPayload: ImageApiResponse | null = null
 
   await readJsonServerSentEvents(response, (event) => {
+    signal?.throwIfAborted()
     const type = getStringValue(event, 'type')
     const object = getStringValue(event, 'object')
     if (type === 'image_generation.partial_image' || type === 'image_edit.partial_image') {
@@ -385,9 +390,10 @@ async function parseImagesApiStreamResponse(
       completedItems.push(eventToImageResponseItem(event))
     }
   })
+  signal?.throwIfAborted()
 
   if (resultPayload) {
-    return parseImagesApiResponse(resultPayload, mime)
+    return parseImagesApiResponse(resultPayload, mime, signal)
   }
 
   if (!completedItems.length) {
@@ -429,11 +435,14 @@ async function parseResponsesApiStreamResponse(
   response: Response,
   mime: string,
   onPartialImage?: CallApiOptions['onPartialImage'],
+  signal?: AbortSignal,
 ): Promise<CallApiResult> {
+  signal?.throwIfAborted()
   let completedPayload: ResponsesApiResponse | null = null
   const outputItems: ResponsesOutputItem[] = []
 
   await readJsonServerSentEvents(response, (event) => {
+    signal?.throwIfAborted()
     const type = getStringValue(event, 'type')
     if (type === 'response.image_generation_call.partial_image') {
       const b64 = getStringValue(event, 'partial_image_b64')
@@ -456,6 +465,7 @@ async function parseResponsesApiStreamResponse(
 
     completedPayload = payload
   })
+  signal?.throwIfAborted()
 
   const payload = completedPayload ?? (outputItems.length ? { output: outputItems } : null)
   if (!payload) throw new Error('流式接口未返回最终图片数据')
@@ -478,6 +488,7 @@ async function parseResponsesApiStreamResponse(
 }
 
 export async function callOpenAICompatibleImageApi(opts: CallApiOptions, profile: ApiProfile, customProvider?: CustomProviderDefinition | null): Promise<CallApiResult> {
+  opts.signal?.throwIfAborted()
   if (customProvider) {
     return callCustomHttpImageApi(opts, profile, customProvider)
   }
@@ -497,11 +508,12 @@ async function callImagesApi(opts: CallApiOptions, profile: ApiProfile): Promise
 }
 
 async function callImagesApiConcurrent(opts: CallApiOptions, profile: ApiProfile, n: number): Promise<CallApiResult> {
+  opts.signal?.throwIfAborted()
   const singleOpts = {
     ...opts,
     params: {
       ...opts.params,
-      n: 1,
+      n: 0,
       ...(profile.codexCli ? { quality: 'auto' as const } : {}),
     },
   }
@@ -513,6 +525,7 @@ async function callImagesApiConcurrent(opts: CallApiOptions, profile: ApiProfile
         : undefined,
     }, profile)),
   )
+  opts.signal?.throwIfAborted()
 
   const successfulResults = results
     .filter((r): r is PromiseFulfilledResult<CallApiResult> => r.status === 'fulfilled')
@@ -569,10 +582,10 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
   const requestHeaders = createRequestHeaders(profile)
   const paths = createOpenAICompatiblePaths()
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
+  const request = createRequestAbortScope(opts.signal, profile.timeout * 1000)
 
   try {
+    request.signal.throwIfAborted()
     let response: Response
 
     if (isEdit) {
@@ -617,6 +630,7 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       assertImageInputPayloadSize(
         imageBlobs.reduce((sum, blob) => sum + blob.size, 0) + (maskBlob?.size ?? 0),
       )
+      request.signal.throwIfAborted()
 
       for (let i = 0; i < imageBlobs.length; i++) {
         const blob = imageBlobs[i]
@@ -633,7 +647,7 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
         headers: requestHeaders,
         cache: 'no-store',
         body: formData,
-        signal: controller.signal,
+        signal: request.signal,
       })
     } else {
       const body: Record<string, unknown> = {
@@ -650,9 +664,7 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
           body.output_compression = params.output_compression
         }
       }
-      if (params.n > 1) {
-        body.n = params.n
-      }
+      if (!isGrok && params.n === 1) body.n = params.n
       if (profile.responseFormatB64Json) {
         body.response_format = 'b64_json'
       }
@@ -669,7 +681,7 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
         },
         cache: 'no-store',
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: request.signal,
       })
     }
 
@@ -679,26 +691,31 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
     }
 
     if (profile.streamImages && isEventStreamResponse(response)) {
-      return parseImagesApiStreamResponse(response, mime, opts.onPartialImage)
+      return await parseImagesApiStreamResponse(response, mime, opts.onPartialImage, request.signal)
     }
 
-    return parseImagesApiResponse(await response.json() as ImageApiResponse, mime, controller.signal)
+    return await parseImagesApiResponse(await response.json() as ImageApiResponse, mime, request.signal)
   } finally {
-    clearTimeout(timeoutId)
+    request.dispose()
   }
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'))
+      reject(signal.reason ?? new DOMException('请求已停止', 'AbortError'))
       return
     }
-    const timer = setTimeout(resolve, ms)
-    signal.addEventListener('abort', () => {
+
+    const abort = () => {
       clearTimeout(timer)
-      reject(new DOMException('Aborted', 'AbortError'))
-    }, { once: true })
+      reject(signal.reason ?? new DOMException('请求已停止', 'AbortError'))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort)
+      resolve()
+    }, ms)
+    signal.addEventListener('abort', abort, { once: true })
   })
 }
 
@@ -766,7 +783,8 @@ function renderQuery(query: Record<string, string> | undefined, context: Record<
   return entries.length ? Object.fromEntries(entries) : undefined
 }
 
-async function createCustomMultipartBody(mapping: CustomProviderSubmitMapping, opts: CallApiOptions, context: Record<string, unknown>): Promise<FormData> {
+async function createCustomMultipartBody(mapping: CustomProviderSubmitMapping, opts: CallApiOptions, context: Record<string, unknown>, signal: AbortSignal): Promise<FormData> {
+  signal.throwIfAborted()
   const formData = new FormData()
   const body = resolveTemplateValue(mapping.body ?? {}, context)
   if (body && typeof body === 'object' && !Array.isArray(body)) {
@@ -809,10 +827,12 @@ async function createCustomMultipartBody(mapping: CustomProviderSubmitMapping, o
     }
   }
 
+  signal.throwIfAborted()
   return formData
 }
 
 async function extractCustomImages(payload: unknown, result: CustomProviderResultMapping, mime: string, signal?: AbortSignal): Promise<CallApiResult> {
+  signal?.throwIfAborted()
   const images: string[] = []
   const imageUrls = (result.imageUrlPaths ?? []).flatMap((path) =>
     getAllByPath(payload, path).filter((value): value is string => isHttpUrl(value) || isDataUrl(value)),
@@ -839,10 +859,12 @@ async function extractCustomImages(payload: unknown, result: CustomProviderResul
     ;(err as any).rawResponsePayload = JSON.stringify(payload, null, 2)
     throw err
   }
+  signal?.throwIfAborted()
   return { images, ...(rawImageUrls.length ? { rawImageUrls } : {}) }
 }
 
-async function submitCustomRequest(mapping: CustomProviderSubmitMapping, opts: CallApiOptions, profile: ApiProfile, controller: AbortController, proxyConfig: ReturnType<typeof readClientDevProxyConfig>, useApiProxy: boolean): Promise<unknown> {
+async function submitCustomRequest(mapping: CustomProviderSubmitMapping, opts: CallApiOptions, profile: ApiProfile, signal: AbortSignal, proxyConfig: ReturnType<typeof readClientDevProxyConfig>, useApiProxy: boolean): Promise<unknown> {
+  signal.throwIfAborted()
   const requestHeaders = createRequestHeaders(profile)
   const context = createCustomProviderContext(opts, profile)
   const method = mapping.method ?? 'POST'
@@ -853,7 +875,7 @@ async function submitCustomRequest(mapping: CustomProviderSubmitMapping, opts: C
 
   if (method !== 'GET') {
     if (contentType === 'multipart') {
-      const formData = await createCustomMultipartBody(mapping, opts, context)
+      const formData = await createCustomMultipartBody(mapping, opts, context, signal)
       if (profile.responseFormatB64Json) {
         formData.append('response_format', 'b64_json')
       }
@@ -871,17 +893,20 @@ async function submitCustomRequest(mapping: CustomProviderSubmitMapping, opts: C
       body = JSON.stringify(resolved)
     }
   }
+  signal.throwIfAborted()
 
   const response = await fetch(buildApiUrl(profile.baseUrl, path, proxyConfig, useApiProxy), {
     method,
     headers,
     cache: 'no-store',
     body,
-    signal: controller.signal,
+    signal,
   })
 
   if (!response.ok) throw new Error(await getApiErrorMessage(response))
-  return response.json()
+  const payload = await response.json()
+  signal.throwIfAborted()
+  return payload
 }
 
 async function pollCustomTaskResult(
@@ -891,6 +916,7 @@ async function pollCustomTaskResult(
   mime: string,
   signal?: AbortSignal,
 ): Promise<CallApiResult> {
+  signal?.throwIfAborted()
   const proxyConfig = readClientDevProxyConfig()
   const requestHeaders = createRequestHeaders(profile)
   let isFirstPoll = true
@@ -920,6 +946,7 @@ async function pollCustomTaskResult(
       }
 
       taskPayload = await taskResponse.json()
+      signal?.throwIfAborted()
     } catch (err) {
       if (!signal?.aborted && isRecoverablePollingError(err)) continue
       throw err
@@ -946,20 +973,21 @@ export async function getCustomQueuedImageResult(
   customProvider: CustomProviderDefinition,
   taskId: string,
   params: TaskParams,
+  signal?: AbortSignal,
 ): Promise<CallApiResult> {
   if (!customProvider.poll) throw new Error('自定义异步任务缺少 poll 配置')
   const mime = MIME_MAP[params.output_format] || 'image/png'
-  return pollCustomTaskResult(profile, customProvider.poll, taskId, mime)
+  return pollCustomTaskResult(profile, customProvider.poll, taskId, mime, signal)
 }
 
 async function callCustomHttpImageApi(opts: CallApiOptions, profile: ApiProfile, customProvider: CustomProviderDefinition): Promise<CallApiResult> {
   const { params, inputImageDataUrls } = opts
   const isEdit = inputImageDataUrls.length > 0
   const mime = MIME_MAP[params.output_format] || 'image/png'
-  const controller = new AbortController()
-  let timeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => controller.abort(), profile.timeout * 1000)
+  const request = createRequestAbortScope(opts.signal, profile.timeout * 1000)
 
   try {
+    request.signal.throwIfAborted()
     const proxyConfig = readClientDevProxyConfig()
     const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
     const submitMapping = isEdit && customProvider.editSubmit ? customProvider.editSubmit : customProvider.submit
@@ -969,7 +997,7 @@ async function callCustomHttpImageApi(opts: CallApiOptions, profile: ApiProfile,
     if (useApiProxy && (submitMapping.taskIdPath || customProvider.poll)) {
       throw new Error('API 代理暂不支持使用异步任务的自定义服务商。请关闭 API 代理，或改用同步返回图片的自定义服务商配置。')
     }
-    const submitPayload = await submitCustomRequest(submitMapping, opts, profile, controller, proxyConfig, useApiProxy)
+    const submitPayload = await submitCustomRequest(submitMapping, opts, profile, request.signal, proxyConfig, useApiProxy)
     const taskIdValue = submitMapping.taskIdPath ? getByPath(submitPayload, submitMapping.taskIdPath) : undefined
     const taskId = typeof taskIdValue === 'string' ? taskIdValue.trim() : String(taskIdValue ?? '').trim()
     if (submitMapping.taskIdPath && !taskId) {
@@ -977,16 +1005,13 @@ async function callCustomHttpImageApi(opts: CallApiOptions, profile: ApiProfile,
       ;(err as any).rawResponsePayload = JSON.stringify(submitPayload, null, 2)
       throw err
     }
-    if (!taskId) return extractCustomImages(submitPayload, submitMapping.result ?? {}, mime, controller.signal)
+    if (!taskId) return await extractCustomImages(submitPayload, submitMapping.result ?? {}, mime, request.signal)
     if (!customProvider.poll) throw new Error('异步接口返回了 task_id，但服务商配置缺少 poll')
     opts.onCustomTaskEnqueued?.({ taskId })
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-      timeoutId = null
-    }
-    return pollCustomTaskResult(profile, customProvider.poll, taskId, mime, controller.signal)
+    request.clearTimeout()
+    return await pollCustomTaskResult(profile, customProvider.poll, taskId, mime, request.signal)
   } finally {
-    if (timeoutId) clearTimeout(timeoutId)
+    request.dispose()
   }
 }
 
@@ -1003,6 +1028,7 @@ async function callResponsesImageApi(opts: CallApiOptions, profile: ApiProfile):
       : undefined,
   }, profile))
   const results = await Promise.allSettled(promises)
+  opts.signal?.throwIfAborted()
   
   const successfulResults = results
     .filter((r): r is PromiseFulfilledResult<CallApiResult> => r.status === 'fulfilled')
@@ -1046,10 +1072,10 @@ async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiPro
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const requestHeaders = createRequestHeaders(profile)
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
+  const request = createRequestAbortScope(opts.signal, profile.timeout * 1000)
 
   try {
+    request.signal.throwIfAborted()
     if (opts.maskDataUrl) {
       assertMaskEditFileSize('遮罩主图文件', getDataUrlDecodedByteSize(inputImageDataUrls[0] ?? ''))
       assertMaskEditFileSize('遮罩文件', getDataUrlDecodedByteSize(opts.maskDataUrl))
@@ -1077,7 +1103,7 @@ async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiPro
       },
       cache: 'no-store',
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: request.signal,
     })
 
     if (!response.ok) {
@@ -1086,10 +1112,11 @@ async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiPro
     }
 
     if (profile.streamImages && isEventStreamResponse(response)) {
-      return parseResponsesApiStreamResponse(response, mime, opts.onPartialImage)
+      return await parseResponsesApiStreamResponse(response, mime, opts.onPartialImage, request.signal)
     }
 
     const payload = await response.json() as ResponsesApiResponse
+    request.signal.throwIfAborted()
     const imageResults = parseResponsesImageResults(payload, mime)
     const actualParams = mergeActualParams(
       imageResults[0]?.actualParams ?? {},
@@ -1103,6 +1130,6 @@ async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiPro
       revisedPrompts: imageResults.map((result) => result.revisedPrompt),
     }
   } finally {
-    clearTimeout(timeoutId)
+    request.dispose()
   }
 }

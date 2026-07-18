@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { InputImage } from '../types'
-import { getAtImageQuery, getPromptMentionParts, getSelectedImageMentionLabel, getSelectedTextMentionLabel, insertImageMention, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, remapImageMentionsForOrder, replaceImageMentionsForApi } from './promptImageMentions'
+import { getAtImageQuery, getPromptMentionParts, getSelectedImageMentionLabel, getSelectedTextMentionLabel, insertImageMention, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, remapImageMentionsForOrder, replaceImageMentionsForApi, restoreImageMentionMarkers } from './promptImageMentions'
 
 const images: InputImage[] = [
   { id: 'image-a', dataUrl: 'data:image/png;base64,a' },
@@ -59,6 +59,18 @@ describe('prompt image mentions', () => {
     expect(getPromptMentionParts('用@图2的方式生成', images)).toEqual([
       { type: 'text', text: '用@图2的方式生成' },
     ])
+  })
+
+  it('restores model image mentions for current attachments', () => {
+    expect(restoreImageMentionMarkers('参考 @图1 和 @图2，忽略 @图3', images.length)).toBe(
+      `参考 ${getSelectedImageMentionLabel(0)} 和 ${getSelectedImageMentionLabel(1)}，忽略 @图3`,
+    )
+  })
+
+  it('does not double-wrap selected image mentions', () => {
+    expect(restoreImageMentionMarkers(`参考 ${getSelectedImageMentionLabel(0)}`, images.length)).toBe(
+      `参考 ${getSelectedImageMentionLabel(0)}`,
+    )
   })
 
   it('splits selected agent round image mentions for tag rendering', () => {

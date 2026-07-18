@@ -37,6 +37,7 @@ export default function Header() {
   const [hintVisible, setHintVisible] = useState(false)
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('up')
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const headerRef = useRef<HTMLElement>(null)
   const historyButtonRef = useRef<HTMLButtonElement>(null)
   const createConversation = useStore((s) => s.createAgentConversation)
 
@@ -78,6 +79,32 @@ export default function Header() {
         setHintVisible(false)
       }, 1500)
       return () => clearTimeout(timer)
+    }
+  }, [appMode, agentMobileHeaderVisible])
+
+  useEffect(() => {
+    const header = headerRef.current
+    if (!header) return
+    const root = document.documentElement
+    let frame = 0
+    const update = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const hidden = appMode === 'agent'
+          && !agentMobileHeaderVisible
+          && window.matchMedia('(max-width: 639px)').matches
+        root.style.setProperty('--app-header-height', `${hidden ? 0 : Math.ceil(header.getBoundingClientRect().height)}px`)
+      })
+    }
+    const observer = new ResizeObserver(update)
+    observer.observe(header)
+    window.addEventListener('resize', update)
+    update()
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+      root.style.removeProperty('--app-header-height')
     }
   }, [appMode, agentMobileHeaderVisible])
 
@@ -144,7 +171,7 @@ export default function Header() {
 
   return (
     <>
-      <header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08] transition-transform duration-300 ease-in-out ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
+      <header ref={headerRef} data-app-header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08] transition-transform duration-300 ease-in-out ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between relative">
           <div className="flex-1 min-w-0 pr-2 flex items-center gap-2">
             <h1 className="inline-flex min-w-0 items-start relative mr-2">

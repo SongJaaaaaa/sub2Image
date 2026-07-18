@@ -42,15 +42,15 @@
 | 工作包 | 状态 | 验证证据 |
 |---|---|---|
 | WP0 测试基线 | 已完成 | 2026-07-16：`npm run test:ci` 通过（build 590 modules；Vitest 23 files / 255 tests；E2E 10/10）；`npm run test:ui` 1 file / 2 tests；截图与 metrics：`docs/assets/prompt-studio-wp0/` |
-| WP1 移出非 Composer 业务 | 待开始 | - |
-| WP2 Tool Runtime | 待开始 | - |
-| WP3 Composer 抽取 | 待开始 | - |
-| WP4 Agent/Image Tool | 待开始 | - |
-| WP5 Message Registry | 待开始 | - |
-| WP6 Prompt Core | 待开始 | - |
-| WP7 TextModelPort | 待开始 | - |
-| WP8 Persistence/Assets | 待开始 | - |
-| WP9 Prompt Tool UI | 待开始 | - |
+| WP1 移出非 Composer 业务 | 已完成 | 2026-07-16：`npm run build` 通过（591 modules）；`npm test` 24 files / 261 tests；`npm run test:ui` 2 files / 8 tests；Playwright desktop/mobile 10/10；截图：`docs/assets/prompt-studio-wp1/` |
+| WP2 Tool Runtime | 已完成 | 2026-07-16：`npm run build` 通过（591 modules）；`npm test` 28 files / 277 tests；`npm run test:ui` 2 files / 8 tests；Playwright desktop/mobile 10/10 |
+| WP3 Composer 抽取 | 已完成 | 2026-07-16：`npm run build` 通过（602 modules）；`npm test` 29 files / 286 tests；`npm run test:ui` 3 files / 17 tests；Playwright desktop/mobile 13 passed / 1 skipped，覆盖新旧单次提交、折叠稳定几何、最后内容避让、Gallery 批量栏回位和移动端 16 图展开；Playwright CLI 桌面/移动截图与 console 检查通过（0 errors / 0 warnings） |
+| WP4 Agent/Image Tool | 已完成 | 2026-07-16：`npm run build` 通过（606 modules）；`npm test` 30 files / 320 tests；`npm run test:ui` 3 files / 20 tests；`$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:4174'; npm run test:e2e -- --reporter=line` 13 passed / 1 skipped，覆盖新旧单次提交、Agent 闭环、停止和 mention；Playwright CLI 桌面/移动截图 `output/playwright/wp4-*-final.png` 与 console 检查通过（0 errors / 0 warnings） |
+| WP5 Message Registry | 已完成 | 2026-07-16：`npm run build` 通过（611 modules）；`npm test` 34 files / 341 tests；`npm run test:ui` 4 files / 29 tests；`$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:4175'; npm run test:e2e -- --reporter=line` 15 passed / 1 skipped（仅既有桌面横屏几何跳过移动端），WP5 分支 renderer 在桌面和移动端均通过；Playwright CLI 截图 `output/playwright/wp5-message-registry-*.png` 与 console 检查通过（0 errors / 0 warnings） |
+| WP6 Prompt Core | 已完成 | 2026-07-17：`npm run build` 通过（611 modules）；Prompt Core Node Vitest 8 files / 44 tests；`npm test` 42 files / 385 tests；`npm run test:ui` 4 files / 29 tests；桌面/移动 E2E 15 passed / 1 skipped。完成来源快照、Brief/锁定/依赖/冲突门禁、2～5 问、消歧、版本恢复、稳定 strict Schema、开放领域注册和图片领域 v1 |
+| WP7 TextModelPort | 已完成 | 2026-07-17：`npm run build` 通过（611 modules）；WP7 专项 3 files / 25 tests；`npm test` 44 files / 409 tests；`npm run test:ui` 4 files / 29 tests；Playwright 桌面/移动端 15 passed / 1 skipped。完成独立 TextModelPort、固定 strict Responses schema、无 tools/store:false 请求、素材 ID 解析、Profile/代理接入、原始异常响应和真实中止/超时 |
+| WP8 Persistence/Assets | 已完成 | 2026-07-17：`npm run build` 通过（630 modules）；WP8 专项 8 files / 128 tests；`npm test` 50 files / 451 tests；`npm run test:ui` 5 files / 31 tests；Playwright 桌面/移动端 15 passed / 1 skipped。完成 DB v4→v5、Prompt Project CRUD/迁移/刷新恢复、400ms 合并写与迟到响应门禁、默认及 sub2Image Storage/Assets、统一图片引用清理、ZIP v4 往返和清空范围选择；E2E 固定屏蔽远程字体 CSS，消除 4.3MB 字体下载导致的 30s 假超时。 |
+| WP9 Prompt Tool UI | 已完成 | 2026-07-17：`npm run build` 通过（647 modules，Prompt CSS/JS 独立 chunk 33.37 kB / 63.16 kB）；`npm test` 52 files / 472 tests；`npm run test:ui` 6 files / 37 tests；Playwright desktop/mobile 17 passed / 1 skipped。完成真实 Question/Review/Result/History 消息、独立工作区、AI 液态状态、黑银 3D 金属关键操作、编辑/优化/版本恢复、失败/中止/迟到响应门禁、正式 Agent 会话 scope、mention/mask/参数应用、移动 Header 与 844×390 双 Composer 可用布局。截图：`output/playwright/wp9-desktop-question.png`、`wp9-desktop-result.png`、`wp9-desktop-history.png`、`wp9-desktop-dark.png`、`wp9-mobile-question.png`、`wp9-mobile-result.png`、`wp9-mobile-history.png`、`wp9-landscape-result.png` |
 | WP10 当前来源与图片闭环 | 待开始 | - |
 | WP11 性能与发布收尾 | 待开始 | - |
 
@@ -94,6 +94,7 @@
 | 视频 | 当前不开发；未来作为独立 Tool 接入同一个 Composer |
 | API 设计 | 当前使用 Text/Image 两个端口，不使用万能 `callApi(type)`；未来可新增 Video 端口 |
 | 代码边界 | 通用 Composer、独立 Tool、项目接入适配器分层 |
+| 开发期迁移 | 新 Composer 固定开发在旧 `InputBar` 上方，新旧同时可用；完整验收且用户明确确认后才移除旧输入框 |
 
 ## 4. 计划默认值
 
@@ -262,9 +263,10 @@ src/
 1. 先补行为基线和测试设施。
 2. 先把明显不属于输入框的批量操作移走。
 3. 创建 Tool 协议，但仍调用原有提交函数。
-4. 把现有 InputBar 包装成受控 Composer，保持 UI 和状态来源不变。
-5. 普通 Agent 和图片生成通过 Tool 适配器运行稳定后，再加入提示词 Tool。
-6. 最后完成图片提示词闭环、性能和发布收尾；历史来源、全局项目列表和视频留作后续工作包。
+4. 在旧 `InputBar` 正上方挂载受控 Composer 验收区，保持旧输入框原位置、原功能和原提交路径不变。
+5. 普通 Agent 和图片生成通过新 Composer 的 Tool 适配器运行，同时保留旧输入框用于逐项对照和回退。
+6. 新 Composer 稳定后再加入提示词 Tool；迁移期间禁止两个输入框响应同一次粘贴、拖放、快捷键或提交。
+7. 最后完成图片提示词闭环、性能和发布收尾；全部门禁通过并取得用户明确验收后，才用独立改动移除旧 `InputBar`。历史来源、全局项目列表和视频留作后续工作包。
 
 每个工作包必须满足：
 
@@ -402,18 +404,20 @@ Runtime 可以在纯测试环境中运行普通文本、模拟图片和任意 du
 
 ### 12.1 目标
 
-将蓝框 UI 抽成纯 props 组件，但第一轮仍使用现有 Zustand 草稿和现有提交路径，确保零行为变化。
+将蓝框 UI 抽成纯 props 组件，并在旧 `InputBar` 正上方并行挂载。第一轮仍使用现有 Zustand 草稿和现有提交路径，旧输入框保持完整可用，确保可以逐项对照和随时回退。
 
 ### 12.2 开发任务
 
 - 从 `InputBar` 抽取 `ConversationComposer` 外壳。
 - 抽取 `ComposerEditor`，保留当前 contentEditable、光标和中文输入法行为。
 - 建立附件槽、Tool 模式槽、参数控件槽和提交按钮槽。
-- 暂时由 `InputBar` 适配现有 `prompt / inputImages / maskDraft / params`。
+- 通过独立接入适配器让新 Composer 使用现有 `prompt / inputImages / maskDraft / params`；旧 `InputBar` 不改为新 Composer 的内部包装层。
+- 在 `App.tsx` 中把新 Composer 验收区挂载到旧 `InputBar` 正上方，两个输入框同时显示且都可操作。
 - 当前 `@图N`、Agent 轮次图片 mention、遮罩和排序逻辑仍留在 integration。
-- 将全局 paste/drop 监听限制到明确的活动 Composer，避免未来多个 Composer 抢事件。
+- 将全局 paste/drop、快捷键和焦点监听限制到明确的活动 Composer，避免新旧两个输入框抢同一事件。
 - Composer DOM 在 Tool 切换时不卸载，保留焦点、光标和草稿。
 - 样式先保持现状，不在该工作包重做视觉设计。
+- 底部内容避让按新旧输入框总高度计算，不能遮挡最后一条消息或任务卡。
 
 ### 12.3 通用与业务边界
 
@@ -440,12 +444,15 @@ integration 保留：
 - 上传、粘贴、拖放、替换、排序图片行为一致。
 - `@图N` 选择、移动和删除后映射正确。
 - mask 第一张图片和替换规则保持不变。
+- 新旧输入框显示同一草稿、附件和参数快照；在任一输入框编辑后，另一侧不会显示过期状态。
+- 分别点击新旧发送按钮时，每次只产生一次提交和一次网络请求。
+- 旧 `InputBar` 的原有提交、附件和参数操作继续可用。
 - 桌面、移动端和横屏截图无变化或只有已批准差异。
 - `npm run build`、`npm test`、Composer E2E 通过。
 
 ### 12.5 回滚点
 
-保留原 `InputBar` 适配层。出现问题时可以让它继续渲染旧内部结构，不影响 Tool Runtime。
+原 `InputBar` 在整个工作包中保持挂载和可用。出现问题时只移除上方新 Composer 验收区即可回滚，不需要恢复旧结构，也不影响 Tool Runtime。
 
 ## 13. 工作包 4：接入现有 Agent 与图片 Tool
 
@@ -521,9 +528,13 @@ video-generation/result
 
 - 现有 Agent 文本、搜索、单图、批量图、失败、停止显示一致。
 - 分支切换只渲染激活路径。
-- 删除或重试轮次不会留下孤立 Prompt 消息。
+- 删除或重试引起消息列表替换时，`ConversationView` 不会缓存或留下孤立 Prompt 消息。
 - 未知消息不会导致整个对话崩溃。
 - 新 renderer 注册不修改通用消息列表源码。
+
+### 14.5 交付边界
+
+WP5 完成 renderer registry、现有 Agent 消息迁移和 Prompt 模拟消息验证。真实 Prompt 消息的创建、持久化、删除和重试随 WP9 接入后复验；`image-generation/result` 已具备 renderer，图片 Tool 将新结果追加到共享消息流的生产闭环属于 WP9/WP10。
 
 ## 15. 工作包 6：Prompt Studio 纯核心
 
@@ -702,6 +713,8 @@ video-generation/result
 - `PromptResultMessage`：可编辑完整提示词、负面提示词和参数。
 - `PromptHistoryMessage`：版本列表、对比和恢复。
 - 图片缩略图显示稳定标签和用途。
+- 视觉使用项目现有玻璃层与扫光节奏：AI 液态高光只用于 Tool 激活、运行和答案选中状态，黑银 3D 金属只用于结果标题与关键操作，其余内容保持中性、紧凑和高可读。
+- Prompt Studio 样式保留在功能目录内，提供深色和 `prefers-reduced-motion` 回退，不依赖宿主全局样式。
 
 ### 18.4 交互规则
 
@@ -846,7 +859,8 @@ Playwright 视口至少覆盖：
 
 ### 21.4 发布任务
 
-- 清理迁移期间的旧路径和临时开关。
+- 保持新旧输入框并行到用户完成最终验收；收到明确移除确认后，用独立改动删除旧 `InputBar` 路径和双轨临时布局，再重跑全部门禁。
+- 如果尚未取得移除确认，发布收尾不得自行隐藏、禁用或删除旧输入框。
 - 更新 README、用户帮助和设置说明。
 - 更新导出格式版本说明。
 - 检查 Vite chunk，确认 Tool 拆包生效。
@@ -908,7 +922,7 @@ npm run test:e2e
 
 | 风险 | 严重度 | 控制方式 |
 |---|---|---|
-| 一次性重写 InputBar | 高 | 受控外壳渐进抽取，保留旧适配层 |
+| 一次性重写 InputBar | 高 | 新 Composer 在旧输入框上方双轨挂载，验收前不替换、不隐藏旧路径 |
 | 模式切换丢草稿/mask/mention | 高 | 原子草稿命令和现有 store 特征测试 |
 | Prompt Project 图片被孤儿清理误删 | 高 | 启动前加载项目引用，统一引用收集器 |
 | DB v5 被旧标签阻塞 | 高 | blocked/versionchange 和真实升级测试 |
@@ -924,7 +938,7 @@ npm run test:e2e
 
 ### 26.1 Composer 迁移
 
-在 PR 05 完成前保留旧 `InputBar` 渲染路径。若 Composer E2E 出现回归，可切回旧路径，不回滚 Tool Runtime 纯模块。
+旧 `InputBar` 在开发和验收期始终保留在页面底部，新 Composer 位于其上方。若 Composer E2E 出现回归，只卸载新 Composer 验收区，不回滚 Tool Runtime 纯模块。即使自动化全部通过，也必须取得用户明确验收后，才能在发布收尾阶段以独立改动删除旧输入框。
 
 ### 26.2 Prompt Studio
 
@@ -948,6 +962,8 @@ IndexedDB 版本只能向前。v5 上线后回滚 UI 也不能降回 v4，因此
 - 未启用 Tool 懒加载生效。
 - 性能结构性验收全部通过。
 - 桌面、移动端、横屏和软键盘场景通过。
+- 新旧输入框并行阶段无双重提交、事件争抢或内容遮挡，并已由用户完成实际验收。
+- 用户明确确认移除旧 `InputBar` 后，独立清理改动的全部回归再次通过。
 - `npm run build`、全部 Vitest、UI 测试和 E2E 全绿。
 - 没有未解释的 console error、未捕获 Promise 或重复网络请求。
 - 设计文档、开发计划和用户帮助与实际实现一致。
@@ -992,3 +1008,43 @@ IndexedDB 版本只能向前。v5 上线后回滚 UI 也不能降回 v4，因此
 5. 视频：不在当前范围。当前只保证 Tool 和领域协议没有写死图片，未来可以独立接入视频。
 
 后续如果增加历史任务、全局项目列表或视频，应创建新的范围文档和验收条件，不把它们偷偷并入当前 PR。
+
+## 30. WP9-R：单 Composer 图片提示词 Agent 修订
+
+WP9-R 是对 WP9 Prompt Tool UI 的产品修订。第 12～29 节保留为历史设计与实施记录；当其与本节冲突时，以 WP9-R 为准。
+
+### 30.1 覆盖范围
+
+- 删除 `InputBar` 与新 Composer 的双轨挂载，应用全局只保留一个底部 Composer。
+- 删除“画廊 / 提示词工作台 / Agent”三段 Tool 选择器。顶部“画廊 / Agent”继续负责页面模式：画廊提交图片生成，Agent 页面提交普通对话。
+- 画廊 Composer 左下角的 Agent 按钮只启动图片提示词问答，不切换页面模式。
+- 删除独立 Prompt Studio workspace。问题、冲突、停止、错误、重试和生成进度全部进入同一张内联问答卡。
+- 每批模型请求仍返回 2～5 题，界面逐题展示；新图片题必须带 2～3 个推荐答案，同时保留自定义输入。
+- 最终 artifact 只写回当前 Composer 文本，保留素材，不自动提交图片生成。
+- 图片设置改为临时草稿抽屉；只有“保存”提交，返回、关闭和遮罩点击均取消。
+
+### 30.2 状态与兼容
+
+- `promptStudioUi` 持久化 `currentQuestionId` 与 `paused`，旧项目缺少字段时按当前首个未答问题和未暂停归一化。
+- `PromptStudioStorage`、IndexedDB store 与 schema 版本保持不变。
+- `start()` 继续为同一 `conversationId` 创建新项目，`getByConversationId()` 继续恢复最近项目。
+- 旧项目中的 `text`、`number`、`multiple` 问题继续兼容渲染；新图片问答统一使用单选推荐加自定义答案。
+- 旧 WP9 的 Prompt Core、文本模型、存储、历史版本和素材适配层继续保留。
+
+### 30.3 回滚策略修订
+
+旧 WP9 的“双 Composer 并行到验收后再删除”策略已经完成使命，不再作为当前回滚路径。WP9-R 回滚以单 Composer 为边界：
+
+1. 若图片提示词 Agent 出现问题，只隐藏画廊 Agent 入口并保留图片直发与 Agent 页面普通聊天。
+2. 不重新挂载旧 `InputBar`，不恢复双输入事件所有权。
+3. 不删除 Prompt Project 数据，不降低 IndexedDB 版本；修复后仍可从最近项目恢复。
+4. 设置抽屉可独立回滚为只读参数摘要，但不得恢复会即时写入全局参数的半提交状态。
+
+### 30.4 验收门禁
+
+- 页面内始终只有一个 `[data-conversation-composer]` 或一个内联 Agent 卡，不允许双 Composer。
+- 覆盖图片直发、普通 Agent 对话、逐题推进、自定义回答、返回改答、智能跳过、暂停/刷新恢复、冲突与重试。
+- 覆盖设置保存/取消、中文选项、问答中打开设置、生成后只写回不自动发图。
+- 覆盖拖放、粘贴、预览、删除、排序、40×40px 缩略图和 400px 最大高度。
+- 验证桌面、390px 竖屏和 844×390 横屏无重叠、溢出和遮挡。
+- 最终执行 `npm run build`、`npm test`、`npm run test:ui` 与 `npm run test:e2e`，保留关键状态截图。

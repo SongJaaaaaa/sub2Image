@@ -334,10 +334,13 @@ export default function SettingsModal() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('sub2api')
   const [exportConfig, setExportConfig] = useState(true)
   const [exportTasks, setExportTasks] = useState(true)
+  const [exportPromptProjects, setExportPromptProjects] = useState(true)
   const [importConfig, setImportConfig] = useState(true)
   const [importTasks, setImportTasks] = useState(true)
+  const [importPromptProjects, setImportPromptProjects] = useState(true)
   const [clearConfig, setClearConfig] = useState(true)
   const [clearTasks, setClearTasks] = useState(true)
+  const [clearPromptProjects, setClearPromptProjects] = useState(true)
   const [isExportingData, setIsExportingData] = useState(false)
   const [isImportingData, setIsImportingData] = useState(false)
   const [isImportingJson, setIsImportingJson] = useState(false)
@@ -738,7 +741,7 @@ export default function SettingsModal() {
   const handleExport = async () => {
     setIsExportingData(true)
     try {
-      await exportData({ exportConfig, exportTasks })
+      await exportData({ exportConfig, exportTasks, exportPromptProjects })
     } finally {
       setIsExportingData(false)
     }
@@ -749,7 +752,7 @@ export default function SettingsModal() {
     if (file) {
       setIsImportingData(true)
       try {
-        const imported = await importData(file, { importConfig, importTasks })
+        const imported = await importData(file, { importConfig, importTasks, importPromptProjects })
         if (imported) {
           const nextDraft = normalizeSettings(useStore.getState().settings)
           setDraft(nextDraft)
@@ -764,7 +767,7 @@ export default function SettingsModal() {
   }
 
   const handleClearAllData = async () => {
-    await clearData({ clearConfig, clearTasks })
+    await clearData({ clearConfig, clearTasks, clearPromptProjects })
     const nextDraft = normalizeSettings(useStore.getState().settings)
     setDraft(nextDraft)
     setTimeoutInput(String(getActiveApiProfile(nextDraft).timeout))
@@ -1712,7 +1715,7 @@ export default function SettingsModal() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   <div className="text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">
-                    所有的配置、任务和生成的图片均仅保存在您的浏览器本地（除非您使用的服务商存储了它们）。如果您需要清理浏览器站点数据、重置浏览器或使用其他设备，请先导出备份。
+                    所有的配置、任务、提示词项目和生成的图片均仅保存在您的浏览器本地（除非您使用的服务商存储了它们）。如果您需要清理浏览器站点数据、重置浏览器或使用其他设备，请先导出备份。
                   </div>
                 </div>
 
@@ -1732,10 +1735,15 @@ export default function SettingsModal() {
                       onChange={setExportTasks}
                       label="包含任务和图片"
                     />
+                    <Checkbox
+                      checked={exportPromptProjects}
+                      onChange={setExportPromptProjects}
+                      label="包含提示词项目"
+                    />
                   </div>
                   <button
                     onClick={handleExport}
-                    disabled={(!exportConfig && !exportTasks) || isExportingData}
+                    disabled={(!exportConfig && !exportTasks && !exportPromptProjects) || isExportingData}
                     className="w-full rounded-xl bg-gray-100/80 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50 disabled:hover:bg-gray-100/80 disabled:hover:text-gray-700 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1] dark:hover:text-white dark:disabled:hover:bg-white/[0.06] dark:disabled:hover:text-gray-300 flex items-center justify-center gap-2"
                   >
                     {isExportingData ? (
@@ -1768,10 +1776,15 @@ export default function SettingsModal() {
                       onChange={setImportTasks}
                       label="包含任务和图片"
                     />
+                    <Checkbox
+                      checked={importPromptProjects}
+                      onChange={setImportPromptProjects}
+                      label="包含提示词项目"
+                    />
                   </div>
                   <button
                     onClick={() => importInputRef.current?.click()}
-                    disabled={(!importConfig && !importTasks) || isImportingData}
+                    disabled={(!importConfig && !importTasks && !importPromptProjects) || isImportingData}
                     className="w-full rounded-xl bg-gray-100/80 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50 disabled:hover:bg-gray-100/80 disabled:hover:text-gray-700 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1] dark:hover:text-white dark:disabled:hover:bg-white/[0.06] dark:disabled:hover:text-gray-300 flex items-center justify-center gap-2"
                   >
                     {isImportingData ? (
@@ -1813,16 +1826,24 @@ export default function SettingsModal() {
                       label="包含任务和图片"
                       tone="danger"
                     />
+                    <Checkbox
+                      checked={clearPromptProjects}
+                      onChange={setClearPromptProjects}
+                      label="包含提示词项目"
+                      tone="danger"
+                    />
                   </div>
                   <button
                     onClick={() =>
                       setConfirmDialog({
                         title: '清空所选数据',
-                        message: `确定要清空所选的数据吗？此操作不可恢复。`,
+                        message: clearPromptProjects
+                          ? '确定要清空所选的数据吗？本次包含提示词项目，此操作不可恢复。'
+                          : '确定要清空所选的数据吗？本次不包含提示词项目，此操作不可恢复。',
                         action: () => handleClearAllData(),
                       })
                     }
-                    disabled={!clearConfig && !clearTasks}
+                    disabled={!clearConfig && !clearTasks && !clearPromptProjects}
                     className="w-full rounded-xl border border-red-200/60 bg-red-50/50 px-4 py-2.5 text-sm font-medium text-red-500 transition-all hover:bg-red-50 hover:border-red-200 hover:text-red-600 disabled:opacity-50 disabled:hover:bg-red-50/50 disabled:hover:border-red-200/60 disabled:hover:text-red-500 dark:border-red-500/15 dark:bg-red-500/5 dark:text-red-400 dark:hover:bg-red-500/10 dark:hover:border-red-500/30 dark:hover:text-red-300 dark:disabled:hover:bg-red-500/5 dark:disabled:hover:border-red-500/15 dark:disabled:hover:text-red-400"
                   >
                     清空所选数据

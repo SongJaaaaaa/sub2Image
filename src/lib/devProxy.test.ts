@@ -36,4 +36,9 @@ describe('buildApiUrl', () => {
       'http://api.example.com/v1/responses',
     )
   })
+
+  it('keeps a same-origin Sub2API prefix and leaves versioning to Vite', () => {
+    expect(buildApiUrl('/sub2api-v1', 'responses')).toBe('/sub2api-v1/responses')
+    expect(buildApiUrl('/sub2api-v1/', 'images/generations')).toBe('/sub2api-v1/images/generations')
+  })
 })

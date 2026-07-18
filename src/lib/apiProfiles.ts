@@ -547,11 +547,15 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     streamImages: typeof record.streamImages === 'boolean' ? record.streamImages : undefined,
     streamPartialImages: normalizeStreamPartialImages(record.streamPartialImages),
   })
-  const profiles = Array.isArray(record.profiles) && record.profiles.length
-    ? record.profiles.map((profile) => normalizeApiProfile(profile, undefined, customProviderIds))
-    : [legacyProfile]
   const sub2OnlyVersion = typeof record.sub2OnlyVersion === 'number' ? record.sub2OnlyVersion : 0
   const sub2Configs = normalizeSub2Configs(record.sub2Configs)
+  const sub2ProfileIds = new Set(sub2Configs.map((config) => config.profileId))
+  const profiles = (Array.isArray(record.profiles) && record.profiles.length
+    ? record.profiles.map((profile) => normalizeApiProfile(profile, undefined, customProviderIds))
+    : [legacyProfile]
+  ).map((profile) => sub2ProfileIds.has(profile.id) || profile.id.startsWith('sub2api-')
+    ? { ...profile, baseUrl: '/sub2api-v1', apiProxy: false }
+    : profile)
   const activeProfileId = typeof record.activeProfileId === 'string' && profiles.some((p) => p.id === record.activeProfileId)
     ? record.activeProfileId
     : profiles[0].id

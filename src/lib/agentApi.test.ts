@@ -51,6 +51,35 @@ describe('callAgentResponsesApi', () => {
     })
   })
 
+  it('uses the selected Sub2API text model and same-origin Responses route', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      id: 'resp_sub2',
+      output: [{ type: 'message', content: [{ type: 'output_text', text: '完成' }] }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    const profile = createDefaultOpenAIProfile({
+      id: 'sub2api-text-8-model-one',
+      baseUrl: '/sub2api-v1',
+      apiKey: 'sub2-group-key',
+      model: 'model-from-system-config',
+      apiMode: 'responses',
+    })
+
+    await callAgentResponsesApi({
+      settings: DEFAULT_SETTINGS,
+      profile,
+      params: DEFAULT_PARAMS,
+      input: [{ role: 'user', content: [{ type: 'input_text', text: 'prompt' }] }],
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/sub2api-v1/responses')
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer sub2-group-key' })
+    expect(JSON.parse(String((init as RequestInit).body)).model).toBe('model-from-system-config')
+  })
+
   it('reports failed image output item without aborting the ongoing stream', async () => {
     const streamBody = [
       'data: {"type":"response.output_item.added","item":{"id":"ig_fail","type":"image_generation_call","status":"in_progress"},"output_index":0}',

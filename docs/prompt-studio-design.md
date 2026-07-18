@@ -109,6 +109,18 @@
 
 `ConversationComposer` 不包含提示词、图片或视频 API 调用。它只负责收集输入并把提交交给当前激活的 Tool。
 
+### 5.7 开发期双轨验收
+
+![新旧 Composer 并行验收位置](./assets/prompt-studio-parallel-composer-reference.png)
+
+开发和验收阶段不直接替换底部原 `InputBar`。新 `ConversationComposer` 挂载在参考图红框区域，也就是旧输入框正上方；旧输入框始终保留为可用回退路径。该双输入框布局只是迁移期形态，不是最终产品设计。
+
+- WP2 只开发 Runtime，不显示空壳或不可用占位框；从 WP3 开始，具备最小可操作能力后再挂载新 Composer。
+- 新旧输入框通过接入适配器读取同一份现有草稿、附件和参数，便于逐项对照；点击哪个输入框的发送按钮，就只执行该输入框对应的一次提交，禁止双重请求。
+- 全局 paste、drop、快捷键和焦点监听只归当前聚焦的 Composer，两个输入框不能同时响应同一事件。
+- 页面底部避让高度按新旧两个输入框及其间距的总高度计算，消息、任务卡和移动端软键盘不能被遮挡。
+- 在 Agent、图片生成、附件、mention、mask、桌面和移动端回归全部通过后，仍需用户明确验收；只有得到移除确认，才在发布收尾阶段删除旧 `InputBar`。
+
 ## 6. 总体架构
 
 ```mermaid
@@ -379,6 +391,7 @@ interface PromptProject {
   source: PromptStudioSourceSnapshot
   brief: PromptBrief
   messages: PromptStudioMessage[]
+  pendingConflicts: PromptFieldConflict[]
   versions: PromptVersion[]
   activeVersionId?: string
   phase: PromptStudioPhase
@@ -388,6 +401,13 @@ interface PromptProject {
 }
 
 type PromptDomain = string
+
+interface PromptFieldConflict {
+  field: string
+  current: PromptBriefField
+  next: PromptBriefPatchEntry
+  reason: 'locked-change' | 'dependency-change'
+}
 
 interface PromptStudioSourceSnapshot {
   type: 'text' | 'conversation' | 'task' | 'project'
@@ -417,7 +437,7 @@ type PromptStudioPhase =
   | 'error'
 ```
 
-`conversationId` 用于自动恢复当前业务对话关联的项目。`source` 保存启动时的快照，不持续引用原业务对象，避免源消息删除或修改后破坏提示词项目。持久化快照只保存素材 ID 和描述信息，不保存 `dataUrl`。`PromptDomain` 使用开放字符串，由领域注册表校验，核心不写死图片或视频联合类型。新建业务对话默认创建新项目，不自动混入其他对话的 Brief；全局项目列表后续再实现。
+`conversationId` 用于自动恢复当前业务对话关联的项目。`source` 保存启动时的快照，不持续引用原业务对象，避免源消息删除或修改后破坏提示词项目。持久化快照只保存素材 ID 和描述信息，不保存 `dataUrl`。`pendingConflicts` 保存尚未确认的锁定字段和依赖冲突；普通 patch 不能清除它们，进入生成前必须逐项确认。`PromptDomain` 使用开放字符串，由领域注册表校验，核心不写死图片或视频联合类型。新建业务对话默认创建新项目，不自动混入其他对话的 Brief；全局项目列表后续再实现。
 
 ### 9.2 Brief
 
@@ -428,12 +448,14 @@ interface PromptBrief {
 }
 
 interface PromptBriefField {
-  value: unknown
+  value: PromptValue
   status: 'missing' | 'answered' | 'delegated' | 'not-applicable'
   origin: 'source' | 'user' | 'model'
   locked: boolean
   updatedAt: number
 }
+
+type PromptValue = string | number | boolean | Array<string | number | boolean> | null
 ```
 
 字段状态说明：
@@ -479,6 +501,8 @@ interface PromptVersion {
 
 仅在文本框中输入但尚未保存时，不立即创建版本。
 
+恢复旧版本只切换 `activeVersionId`，不强制改变当前阶段。结构化需求已经被修改或重新出现缺口时，恢复旧文本不能绕过访谈和需求确认门禁。
+
 ## 10. 访谈状态机
 
 ```mermaid
@@ -491,6 +515,7 @@ stateDiagram-v2
   Review --> Interview: 用户修正需求
   Review --> Generating: 用户确认需求
   Generating --> Ready: 生成提示词版本
+  Generating --> Interview: 继续优化时出现新缺口或冲突
   Generating --> Error: 请求失败
   Error --> Generating: 重试
   Ready --> Interview: 修改结构化需求
@@ -566,7 +591,7 @@ stateDiagram-v2
 
 > 之前确认的是“夜晚雨景”，这次要求改成“正午阳光”。是否用新设定替换之前的时间和天气？
 
-用户确认后才更新锁定字段。客户端不能通过字符串判断冲突，冲突由模型结合 Brief 和新回答识别，但最终更新仍通过结构化 `briefPatch` 完成。
+用户确认后才更新锁定字段。客户端不能通过字符串判断语义冲突，冲突由模型结合 Brief 和新回答识别，但最终更新仍通过结构化 `briefPatch` 完成。客户端检测到锁定字段覆盖或锁定依赖失效时，把冲突保存到 `pendingConflicts`；后续普通回答不能清除，过期或目标字段不匹配的确认也不能应用。
 
 ### 10.6 模糊概念消歧与调整追问
 
@@ -596,7 +621,7 @@ stateDiagram-v2
 
 ### 10.7 需求确认
 
-必需字段都处于 `answered`、`delegated` 或 `not-applicable` 后，进入需求确认页，展示：
+必需字段都处于 `answered`、`delegated` 或 `not-applicable`，且 `pendingConflicts` 为空后，进入需求确认页，展示：
 
 - 用户已经明确决定的内容。
 - 从来源对话中提取的内容。
@@ -626,13 +651,16 @@ stateDiagram-v2
 interface PromptInterviewReply {
   phase: 'interview' | 'review'
   message: string
-  briefPatch: Record<string, {
-    value: unknown
-    status: 'answered' | 'delegated' | 'not-applicable'
-    origin: 'source' | 'user' | 'model'
-    locked: boolean
-  }>
+  briefPatch: PromptBriefPatchEntry[]
   questions: PromptQuestion[]
+}
+
+interface PromptBriefPatchEntry {
+  field: string
+  value: PromptValue
+  status: 'answered' | 'delegated' | 'not-applicable'
+  origin: 'source' | 'user' | 'model'
+  locked: boolean
 }
 ```
 
@@ -642,14 +670,15 @@ interface PromptInterviewReply {
 {
   "phase": "interview",
   "message": "主体已经明确，接下来确认构图和光线。",
-  "briefPatch": {
-    "subject": {
+  "briefPatch": [
+    {
+      "field": "subject",
       "value": "一名穿黑色风衣的成年女性",
       "status": "answered",
       "origin": "source",
       "locked": true
     }
-  },
+  ],
   "questions": [
     {
       "id": "composition-shot",
@@ -689,6 +718,8 @@ interface PromptShot {
 
 图片通常返回 `prompt + negativePrompt + params`；视频可以额外返回结构化 `shotList`。
 
+`PromptArtifact` 是核心和持久化使用的领域对象。固定 strict JSON Schema 的传输对象使用 `params: Array<{ name, value }>`，`negativePrompt` 和 `shotList` 使用 `null` 表达缺省，分镜的 `duration`、`audio` 同样使用 `null`；adapter 校验后再转换成上面的领域对象。这样 Schema 不随领域字段动态变化，所有对象都可以保持 `additionalProperties: false`。
+
 ### 11.3 协议校验
 
 客户端只做必要校验：
@@ -710,6 +741,7 @@ interface PromptDomainDefinition {
   id: PromptDomain
   label: string
   fields: PromptFieldDefinition[]
+  ambiguities?: PromptAmbiguityRule[]
   buildInstructions: (brief: PromptBrief) => string
   buildArtifactInstructions: (brief: PromptBrief) => string
   canInheritFrom: PromptDomain[]
@@ -721,6 +753,19 @@ interface PromptFieldDefinition {
   group: string
   required: boolean
   appliesWhen?: PromptFieldCondition
+  dependsOn?: string[]
+}
+
+type PromptFieldCondition =
+  | { field: string; op: 'equals' | 'not-equals' | 'includes'; value: PromptValue }
+  | { field: string; op: 'present' }
+  | { all: PromptFieldCondition[] }
+  | { any: PromptFieldCondition[] }
+
+interface PromptAmbiguityRule {
+  terms: string[]
+  fields?: string[]
+  question: string
 }
 ```
 
@@ -786,6 +831,8 @@ interface PromptFieldDefinition {
 
 ### 13.1 桌面布局
 
+下图描述最终验收通过后的单 Composer 布局。迁移期使用第 5.7 节的双轨布局：新 Composer 位于旧 `InputBar` 上方，旧输入框保持原位置和完整功能。
+
 ```text
 ┌────────────────────────── 对话消息区域 ──────────────────────────┐
 │ 模型：请确认构图和光线                                           │
@@ -850,6 +897,8 @@ interface PromptFieldDefinition {
 ### 14.1 应用顶层
 
 在 `src/App.tsx` 组合 `conversationTools`，将普通对话、提示词工作台和图片生成 Tool 注册给通用对话运行时。未来视频功能只需要追加视频 Tool。现有设置、确认框和其他弹窗不承担 Tool 内部状态。
+
+迁移期由 `App.tsx` 同时挂载新 Composer 验收区和旧 `InputBar`。新 Composer 不嵌进旧组件内部，也不改变旧组件的提交入口；两者只通过受控草稿适配器共享必要状态。最终移除旧输入框必须是独立改动，不能夹在 Tool 或提示词业务工作包中顺带完成。
 
 ### 14.2 图片输入框
 
@@ -1227,6 +1276,8 @@ const tools = [
 
 宿主可以覆盖变量调整视觉风格，但不覆盖也能正常显示。各功能包入口负责引入自己的样式，复制目录时不会漏掉必要样式。
 
+当前 Prompt Studio 采用中性工作界面作为主体，只在 Tool 激活、AI 运行和答案选中状态使用液态高光，在结果标题和关键操作使用黑银 3D 金属层次。两类效果都必须有深色模式和减少动态效果回退，不能牺牲正文对比度或造成移动端溢出。
+
 ### 18.7 默认实现与项目实现
 
 提示词 Tool 附带三个默认适配器，方便其他项目快速使用：
@@ -1246,7 +1297,7 @@ const tools = [
 在同一个项目接入新的对话框：
 
 1. 不复制功能包代码。
-2. 使用 `ConversationComposer` 替换该页面自己的输入框外壳。
+2. 先把 `ConversationComposer` 并行挂载在原输入框上方完成验收；验收通过并取得移除确认后，再替换原输入框外壳。
 3. 传入已注册的 Tool 数组和当前对话上下文。
 4. 为业务消息实现 append/update 适配。
 5. 提示词、图片和视频能力自动出现在同一个 Tool 选择器中。
@@ -1282,8 +1333,9 @@ const tools = [
 - 定义 Tool、ToolContext 和消息 renderer 协议。
 - 完成 Tool registry、动态加载、请求控制和作用域状态。
 - 将现有普通对话与图片提交通过适配器接回，行为保持不变。
+- 开发期把新 Composer 挂载在旧 `InputBar` 上方进行并行验收，不删除或禁用旧输入框。
 
-完成标准：普通对话和现有图片生成可以作为两个 Tool 使用同一个输入框，切换时不丢草稿和附件。
+完成标准：普通对话和现有图片生成可以作为两个 Tool 使用新 Composer，切换时不丢草稿和附件；旧 `InputBar` 仍可独立完成原有路径，两个输入框不会产生双重提交。
 
 ### 阶段二：提示词工作台 Tool
 

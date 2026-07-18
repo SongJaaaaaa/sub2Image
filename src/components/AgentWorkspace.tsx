@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import type { AgentConversation, AgentMessage, AgentRound, ResponsesOutputItem, TaskRecord } from '../types'
-import { deleteAgentRoundFromConversation, editOutputs, getActiveAgentRounds, getAgentBranchLeafId, getAgentRoundTaskIds, getAgentSiblingRounds, getCachedImage, ensureImageCached, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeMultipleTasks, removeTask, reuseConfig, useStore } from '../store'
-import { getPromptMentionParts } from '../lib/promptImageMentions'
+import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent as ReactMouseEvent } from 'react'
+import type { AgentConversation, AgentMessage, AgentRound, TaskRecord } from '../types'
+import { applyComposerDraft, deleteAgentRoundFromConversation, getActiveAgentRounds, getAgentBranchLeafId, getAgentRoundTaskIds, getAgentSiblingRounds, getCachedImage, ensureImageCached, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeMultipleTasks, useStore } from '../store'
 import { copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
-import { collectWebSearchCalls, getAgentRoundOutputItems, getWebSearchStatusForCalls, type AgentWebSearchStatus } from '../lib/agentWebSearch'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
-import TaskCard from './TaskCard'
-import MarkdownRenderer from './MarkdownRenderer'
+import { ConversationView } from '../features/conversationView'
+import { getAgentAssistantCopyContent, getAgentConversationMessages, type AgentConversationMessagePayload } from '../integrations/conversation/agentMessageBlocks'
+import { sub2ImageMessageRendererRegistry } from '../integrations/conversation/conversationMessageRenderers'
 import { TooltipButton as AgentActionButton } from './TooltipButton'
 import { TrashIcon, DownloadIcon, EditIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, SidebarLeftIcon, FavoriteIcon, CloseIcon, CopyIcon, RefreshIcon, ArrowDownIcon } from './icons'
 
@@ -64,181 +63,8 @@ function ChatImageThumb({ imageId, imageIndex, maskImageId }: { imageId: string;
   )
 }
 
-function AgentStreamingCursor() {
-  return (
-    <span
-      aria-label="正在生成"
-      className="ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500 align-baseline dark:bg-blue-400"
-    />
-  )
-}
-
-const AGENT_STOPPED_MESSAGE = '已停止生成。'
-
 function formatTime(value: number) {
   return new Date(value).toLocaleString()
-}
-
-function AgentWebSearchInlineStatus({ status }: { status: AgentWebSearchStatus }) {
-  return (
-    <span className="inline-flex text-sm font-medium text-gray-500 dark:text-gray-400">
-      <span className={status.completed ? undefined : 'agent-web-search-running-text'}>{status.text}</span>
-    </span>
-  )
-}
-
-function AgentWebSearchStatusLines({ statuses }: { statuses: AgentWebSearchStatus[] }) {
-  if (statuses.length === 0) return null
-  return (
-    <div className="mb-2 space-y-1">
-      {statuses.map((status, index) => (
-        <div key={`${status.text}-${index}`}>
-          <AgentWebSearchInlineStatus status={status} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-type AgentAssistantBlock =
-  | { type: 'web-search'; status: AgentWebSearchStatus; key: string }
-  | { type: 'batch-params'; status: AgentWebSearchStatus; key: string }
-  | { type: 'image-task'; task: TaskRecord; key: string }
-  | { type: 'deleted-image-task'; taskId: string; key: string }
-  | { type: 'text'; key: string; content?: string }
-
-interface AgentRoundTaskSlot {
-  taskId: string
-  task: TaskRecord | null
-}
-
-function isAgentRoundInterrupted(round: AgentRound | null) {
-  return round?.status === 'error' && round.error === AGENT_STOPPED_MESSAGE
-}
-
-function markToolStatusStopped(status: AgentWebSearchStatus): AgentWebSearchStatus {
-  if (status.completed) return status
-  return { text: status.text.replace(/^正在/, '已停止'), completed: true }
-}
-
-function getImageTaskForOutputItem(item: ResponsesOutputItem, tasksForRound: TaskRecord[]) {
-  if (item.type === 'image_generation_call') {
-    return tasksForRound.find((task) => task.agentToolCallId && task.agentToolCallId === item.id) ?? null
-  }
-  if (item.type === 'function_call' && item.name === 'generate_image' && item.call_id) {
-    return tasksForRound.find((task) => task.agentToolCallId === item.call_id) ?? null
-  }
-  return null
-}
-
-function getBatchImageTasksForOutputItem(item: ResponsesOutputItem, tasksForRound: TaskRecord[]) {
-  if (item.type !== 'function_call' || item.name !== 'generate_image_batch' || !item.call_id) return []
-  return tasksForRound.filter((task) => task.agentBatchCallId === item.call_id)
-}
-
-function getTextFromOutputItem(item: ResponsesOutputItem) {
-  if (item.type !== 'message') return ''
-  return (item.content ?? [])
-    .map((part) => typeof part.text === 'string' ? part.text : '')
-    .filter(Boolean)
-    .join('\n')
-    .trim()
-}
-
-function getAgentAssistantBlocks(round: AgentRound | null, taskSlots: AgentRoundTaskSlot[], allTasks: TaskRecord[], hasText: boolean): AgentAssistantBlock[] {
-  const outputItems = getAgentRoundOutputItems(round, allTasks)
-  const tasksForRound = taskSlots.map((slot) => slot.task).filter(Boolean) as TaskRecord[]
-  const roundInterrupted = isAgentRoundInterrupted(round)
-  if (outputItems.length === 0) {
-    return [
-      ...(hasText ? [{ type: 'text' as const, key: 'text:fallback' }] : []),
-      ...taskSlots.map((slot) => slot.task
-        ? ({ type: 'image-task' as const, task: slot.task, key: `image:${slot.task.id}` })
-        : ({ type: 'deleted-image-task' as const, taskId: slot.taskId, key: `deleted-image:${slot.taskId}` }),
-      ),
-    ]
-  }
-
-  const blocks: AgentAssistantBlock[] = []
-  const renderedTaskIds = new Set<string>()
-  let renderedTextBlocks = 0
-  let webSearchGroup: ResponsesOutputItem[] = []
-
-  const flushWebSearchGroup = () => {
-    if (webSearchGroup.length === 0) return
-    const status = getWebSearchStatusForCalls(collectWebSearchCalls(webSearchGroup))
-    if (status) blocks.push({ type: 'web-search', status: roundInterrupted ? markToolStatusStopped(status) : status, key: `web-search:${blocks.length}:${webSearchGroup.map((item) => item.id).join(':')}` })
-    webSearchGroup = []
-  }
-
-  for (const item of outputItems) {
-    if (item.type === 'web_search_call') {
-      webSearchGroup.push(item)
-      continue
-    }
-
-    flushWebSearchGroup()
-
-    const imageTask = getImageTaskForOutputItem(item, tasksForRound)
-    if (imageTask && !renderedTaskIds.has(imageTask.id)) {
-      renderedTaskIds.add(imageTask.id)
-      blocks.push({ type: 'image-task', task: imageTask, key: `image:${imageTask.id}` })
-      continue
-    }
-
-    const batchImageTasks = getBatchImageTasksForOutputItem(item, tasksForRound)
-    if (batchImageTasks.length > 0) {
-      for (const task of batchImageTasks) {
-        if (renderedTaskIds.has(task.id)) continue
-        renderedTaskIds.add(task.id)
-        blocks.push({ type: 'image-task', task, key: `image:${task.id}` })
-      }
-      continue
-    }
-
-    if ((round?.status === 'running' || roundInterrupted) && item.type === 'function_call' && item.name === 'generate_image_batch') {
-      blocks.push({
-        type: 'batch-params',
-        status: roundInterrupted
-          ? markToolStatusStopped({ text: '正在填写并发图像生成参数', completed: false })
-          : { text: '正在填写并发图像生成参数', completed: false },
-        key: `batch-params:${item.call_id ?? item.id ?? blocks.length}`,
-      })
-      continue
-    }
-
-    if (item.type === 'message') {
-      const content = getTextFromOutputItem(item)
-      if (content) {
-        renderedTextBlocks += 1
-        blocks.push({ type: 'text', key: `text:${item.id ?? blocks.length}`, content })
-      }
-    }
-  }
-
-  flushWebSearchGroup()
-
-  if (hasText && renderedTextBlocks === 0) blocks.push({ type: 'text', key: 'text:fallback' })
-  for (const slot of taskSlots) {
-    if (slot.task) {
-      if (!renderedTaskIds.has(slot.task.id)) blocks.push({ type: 'image-task', task: slot.task, key: `image:${slot.task.id}` })
-    } else {
-      blocks.push({ type: 'deleted-image-task', taskId: slot.taskId, key: `deleted-image:${slot.taskId}` })
-    }
-  }
-  return blocks
-}
-
-function getAgentAssistantCopyContent(fallbackContent: string, blocks: AgentAssistantBlock[]) {
-  if (!blocks.some((block) => block.type !== 'text')) return fallbackContent
-
-  const parts = blocks
-    .filter((block): block is Extract<AgentAssistantBlock, { type: 'text' }> => block.type === 'text')
-    .map((block) => block.content ?? '')
-    .map((content) => content.trim())
-    .filter(Boolean)
-
-  return parts.length > 0 ? parts.join('\n\n') : fallbackContent
 }
 
 function getConversationSearchText(conversation: AgentConversation) {
@@ -252,14 +78,6 @@ function getConversationSearchText(conversation: AgentConversation) {
 function getRoundTasks(round: AgentRound | null, tasks: TaskRecord[]) {
   if (!round) return []
   return round.outputTaskIds.map((taskId) => tasks.find((task) => task.id === taskId) ?? null)
-}
-
-function getRoundTaskSlots(round: AgentRound | null, tasks: TaskRecord[]): AgentRoundTaskSlot[] {
-  if (!round) return []
-  return round.outputTaskIds.map((taskId) => ({
-    taskId,
-    task: tasks.find((task) => task.id === taskId) ?? null,
-  }))
 }
 
 const MOBILE_HEADER_PULL_THRESHOLD = 24
@@ -285,12 +103,6 @@ export default function AgentWorkspace() {
   const appMode = useStore((s) => s.appMode)
   const tasks = useStore((s) => s.tasks)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
-  const setDetailTaskId = useStore((s) => s.setDetailTaskId)
-  const setPrompt = useStore((s) => s.setPrompt)
-  const setInputImages = useStore((s) => s.setInputImages)
-  const setMaskDraft = useStore((s) => s.setMaskDraft)
-  const clearMaskDraft = useStore((s) => s.clearMaskDraft)
-  const setAppMode = useStore((s) => s.setAppMode)
   const agentScrollToBottomAfterSubmit = useStore((s) => s.settings.agentScrollToBottomAfterSubmit)
   const agentEditingRoundId = useStore((s) => s.agentEditingRoundId)
   const agentEditingConversationId = useStore((s) => s.agentEditingConversationId)
@@ -315,7 +127,7 @@ export default function AgentWorkspace() {
   const touchStartY = useRef(-1)
   const conversationLongPressTimer = useRef<number | null>(null)
   const autoScrollStateRef = useRef<{ conversationId: string | null; lastUserMessageSignature: string | null }>({ conversationId: null, lastUserMessageSignature: null })
-  const errorCopyPointerDownRef = useRef<{ x: number; y: number } | null>(null)
+  const editDraftSeqRef = useRef(0)
 
   const updateIsScrolledToBottom = useCallback(() => {
     const sentinel = bottomSentinelRef.current
@@ -500,6 +312,11 @@ export default function AgentWorkspace() {
     }
     return messages
   }, [activeRounds, conversation])
+
+  const viewMessages = useMemo(
+    () => conversation ? getAgentConversationMessages(activeMessages, conversation, tasks) : [],
+    [activeMessages, conversation, tasks],
+  )
 
   useEffect(() => {
     const conversationId = conversation?.id ?? null
@@ -726,42 +543,29 @@ export default function AgentWorkspace() {
     })
   }
 
-  const handleReuse = (task: TaskRecord) => {
-    setConfirmDialog({
-      title: '切换到画廊模式？',
-      message: '复用参数会应用到画廊输入区。切换到画廊模式后，当前 Agent 对话仍会保留。',
-      confirmText: '切换并复用',
-      cancelText: '取消',
-      action: () => {
-        setAppMode('gallery')
-        void reuseConfig(task)
-      },
-    })
-  }
-
   const handleEditRoundMessage = async (round: AgentRound, content: string) => {
-    setAgentEditingRoundId(round.id)
-    clearMaskDraft()
-
+    const seq = ++editDraftSeqRef.current
+    const conversationId = conversation?.id ?? null
     const inputImages = await Promise.all(
       round.inputImageIds.map(async (id) => ({
         id,
         dataUrl: await ensureImageCached(id) || '',
       })),
     )
-    setInputImages(inputImages)
     const maskTargetImageId = round.maskTargetImageId ?? (round.maskImageId ? round.inputImageIds[0] : null)
-    if (maskTargetImageId && round.maskImageId && inputImages.some((img) => img.id === maskTargetImageId)) {
-      const maskDataUrl = await ensureImageCached(round.maskImageId)
-      if (maskDataUrl) {
-        setMaskDraft({
-          targetImageId: maskTargetImageId,
-          maskDataUrl,
-          updatedAt: Date.now(),
-        })
-      }
-    }
-    setPrompt(content)
+    const maskDataUrl = maskTargetImageId && round.maskImageId && inputImages.some((img) => img.id === maskTargetImageId)
+      ? await ensureImageCached(round.maskImageId)
+      : null
+    const state = useStore.getState()
+    if (seq !== editDraftSeqRef.current || state.appMode !== 'agent' || state.activeAgentConversationId !== conversationId) return
+    applyComposerDraft({
+      prompt: content,
+      inputImages,
+      maskDraft: maskTargetImageId && maskDataUrl
+        ? { targetImageId: maskTargetImageId, maskDataUrl, updatedAt: Date.now() }
+        : null,
+    })
+    setAgentEditingRoundId(round.id)
   }
 
   const handleCopyMessage = async (content: string, successMessage = '提示词已复制', failureMessage = '复制提示词失败') => {
@@ -771,26 +575,6 @@ export default function AgentWorkspace() {
     } catch (err) {
       showToast(getClipboardFailureMessage(failureMessage, err), 'error')
     }
-  }
-
-  const handleErrorCopyPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    errorCopyPointerDownRef.current = { x: e.clientX, y: e.clientY }
-  }
-
-  const handleErrorCopyClick = (e: ReactMouseEvent<HTMLDivElement>, content: string) => {
-    e.stopPropagation()
-
-    const pointerDown = errorCopyPointerDownRef.current
-    errorCopyPointerDownRef.current = null
-    if (pointerDown && Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y) > 4) return
-
-    const selection = window.getSelection()
-    if (selection && !selection.isCollapsed && selection.toString().trim()) {
-      const target = e.currentTarget
-      if ((selection.anchorNode && target.contains(selection.anchorNode)) || (selection.focusNode && target.contains(selection.focusNode))) return
-    }
-
-    void handleCopyMessage(content, '完整报错已复制', '复制完整报错失败')
   }
 
   return (
@@ -938,7 +722,7 @@ export default function AgentWorkspace() {
 
         <div 
           ref={scrollContainerRef}
-          className="flex-1 space-y-4 overflow-visible pb-[calc(var(--input-bar-clearance,12rem)+1.5rem)] px-1 lg:pt-14 lg:px-4"
+          className="flex-1 space-y-4 overflow-visible pb-[calc(var(--composer-stack-clearance,10rem)+1.5rem)] px-1 lg:pt-14 lg:px-4"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -959,24 +743,45 @@ export default function AgentWorkspace() {
                 )
               }
 
-              const renderedMessages = activeMessages.map((message) => {
-                const round = conversation.rounds.find((item) => item.id === message.roundId)
-                const isAssistant = message.role === 'assistant'
-                const isStreamingAssistant = isAssistant && round?.status === 'running'
-                const isEditing = !isAssistant && round?.id === agentEditingRoundId
-                const siblingRounds = !isAssistant && round ? getAgentSiblingRounds(conversation, round) : []
-                const siblingIndex = round ? siblingRounds.findIndex((item) => item.id === round.id) : -1
-                const hasBranches = siblingRounds.length > 1
-                const taskSlotsForRound = isAssistant ? getRoundTaskSlots(round ?? null, tasks) : []
-                const tasksForRound = taskSlotsForRound.map((slot) => slot.task).filter(Boolean) as TaskRecord[]
-                const favoriteTasksForRound = tasksForRound.filter((task) => (task.outputImages?.length ?? 0) > 0)
-                const hasRoundFavoriteTasks = favoriteTasksForRound.length > 0
-                const allRoundTasksFavorited = hasRoundFavoriteTasks && favoriteTasksForRound.every((task) => task.isFavorite)
-                const assistantBlocks = isAssistant ? getAgentAssistantBlocks(round ?? null, taskSlotsForRound, tasks, Boolean(message.content.trim())) : []
-                const inputImagesForRound = (round?.inputImageIds || []).map(id => ({ id, dataUrl: '' }))
-                const parts = getPromptMentionParts(message.content, inputImagesForRound)
-                return (
-                  <div key={message.id} className={`flex w-full mb-6 ${isAssistant ? 'justify-start' : 'justify-end'}`}>
+              const renderedMessages = (
+                <ConversationView
+                  messages={viewMessages}
+                  registry={sub2ImageMessageRendererRegistry}
+                  className="contents"
+                  renderMessage={(viewMessage, content) => {
+                    const payload = viewMessage.payload as AgentConversationMessagePayload | undefined
+                    if (payload?.type !== 'agent-message') {
+                      const isAssistant = viewMessage.role === 'assistant'
+                      return (
+                        <div data-conversation-message-kind={viewMessage.kind} className={`mb-6 flex w-full ${isAssistant ? 'justify-start' : 'justify-end'}`}>
+                          <article className={`flex min-w-[16rem] max-w-[95%] flex-col rounded-2xl p-4 md:max-w-[85%] lg:max-w-[75%] ${
+                            isAssistant
+                              ? 'rounded-tl-sm border border-gray-200 bg-white/70 dark:border-white/[0.08] dark:bg-white/[0.03]'
+                              : 'rounded-tr-sm bg-gray-100 dark:bg-[#2A2D31]'
+                          }`}>
+                            <div className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                              {isAssistant ? 'Agent' : '用户'}
+                            </div>
+                            {content}
+                          </article>
+                        </div>
+                      )
+                    }
+                    const message = payload.message
+                    const round = payload.round ?? undefined
+                    const isAssistant = message.role === 'assistant'
+                    const isStreamingAssistant = isAssistant && round?.status === 'running'
+                    const isEditing = !isAssistant && round?.id === agentEditingRoundId
+                    const siblingRounds = !isAssistant && round ? getAgentSiblingRounds(conversation, round) : []
+                    const siblingIndex = round ? siblingRounds.findIndex((item) => item.id === round.id) : -1
+                    const hasBranches = siblingRounds.length > 1
+                    const tasksForRound = isAssistant ? getRoundTasks(round ?? null, tasks).filter(Boolean) as TaskRecord[] : []
+                    const favoriteTasksForRound = tasksForRound.filter((task) => (task.outputImages?.length ?? 0) > 0)
+                    const hasRoundFavoriteTasks = favoriteTasksForRound.length > 0
+                    const allRoundTasksFavorited = hasRoundFavoriteTasks && favoriteTasksForRound.every((task) => task.isFavorite)
+                    const assistantBlocks = payload.blocks
+                    return (
+                  <div data-conversation-message-kind={viewMessage.kind} className={`flex w-full mb-6 ${isAssistant ? 'justify-start' : 'justify-end'}`}>
                     <div
                       ref={(node) => {
                         if (!isAssistant && node) messageRefs.current.set(message.roundId, node)
@@ -1010,83 +815,7 @@ export default function AgentWorkspace() {
                       </div>
                     )}
 
-                    {round?.status === 'error' && isAssistant && message.content.startsWith('请求失败：') ? (
-                      <div
-                        data-selectable-text
-                        className="-m-2 flex cursor-copy select-text flex-col rounded-xl p-2 transition-colors hover:bg-red-50/60 dark:hover:bg-red-500/5"
-                        title="点击复制完整报错"
-                        onPointerDown={handleErrorCopyPointerDown}
-                        onClick={(e) => handleErrorCopyClick(e, message.content)}
-                      >
-                        {(() => {
-                          const content = message.content.replace(/^请求失败：/, '');
-                          const [mainErr, ...hints] = content.split('\n提示：');
-                          return (
-                            <>
-                              <div className="flex items-start gap-2 text-red-500 dark:text-red-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-[18px] h-[18px] mt-[1.5px] flex-shrink-0">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                                </svg>
-                                <div className="whitespace-pre-wrap text-[14px] leading-relaxed break-words font-medium">
-                                  {mainErr}
-                                </div>
-                              </div>
-                              {hints.length > 0 && (
-                                <div className="pl-[26px] mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-gray-500 dark:text-gray-400 break-words opacity-90">
-                                  <span className="font-medium">提示：</span>{hints.join('\n提示：')}
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    ) : (
-                      <div data-selectable-text className={`text-[15px] leading-relaxed text-gray-800 dark:text-gray-100 ${!isAssistant ? 'select-text' : ''}`}>
-                        {isAssistant ? (
-                          <>
-                            {assistantBlocks.length > 0 ? assistantBlocks.map((block, index) => {
-                              if (block.type === 'web-search') return <AgentWebSearchStatusLines key={block.key} statuses={[block.status]} />
-                              if (block.type === 'text') return <div key={block.key} className={index > 0 ? 'mt-3' : undefined}><MarkdownRenderer content={block.content ?? message.content} streaming={isStreamingAssistant} /></div>
-                              if (block.type === 'batch-params') {
-                                return (
-                                  <div key={block.key} className={index > 0 ? 'mt-3' : undefined}>
-                                    <AgentWebSearchInlineStatus status={block.status} />
-                                  </div>
-                                )
-                              }
-                              if (block.type === 'deleted-image-task') {
-                                return (
-                                  <div key={block.key} className="mt-4 w-full min-w-[16rem] max-w-sm rounded-xl bg-gray-50/50 dark:bg-white/[0.02] border border-dashed border-gray-200 dark:border-white/[0.08] p-4 flex min-h-[120px] flex-col items-center justify-center text-gray-400 dark:text-gray-500" onClick={e => e.stopPropagation()}>
-                                    <TrashIcon className="w-6 h-6 mb-2 opacity-50" />
-                                    <span className="text-xs">[Image Removed]</span>
-                                  </div>
-                                )
-                              }
-                              return (
-                                <div key={block.key} className="mt-4 max-w-sm" onClick={e => e.stopPropagation()}>
-                                  <TaskCard
-                                    task={block.task}
-                                    disableSwipe={true}
-                                    onClick={() => setDetailTaskId(block.task.id)}
-                                    onReuse={() => handleReuse(block.task)}
-                                    onEditOutputs={() => editOutputs(block.task)}
-                                    onDelete={() => setConfirmDialog({ title: '删除任务', message: '确定要删除这个任务吗？', action: () => removeTask(block.task) })}
-                                  />
-                                </div>
-                              )
-                            }) : isStreamingAssistant ? <AgentStreamingCursor /> : null}
-                          </>
-                        ) : parts.some((part) => part.type === 'mention') ? (
-                          <div className="whitespace-pre-wrap break-words">
-                            {parts.map((part, i) =>
-                              part.type === 'text' ? <span key={i}>{part.text}</span> : <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-100/50 text-blue-700 dark:bg-blue-500/30 dark:text-blue-300 text-xs font-medium mx-0.5 align-baseline">{part.text}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <MarkdownRenderer content={parts[0]?.text ?? ''} />
-                        )}
-                      </div>
-                    )}
+                    {content}
 
                       </article>
 
@@ -1099,11 +828,10 @@ export default function AgentWorkspace() {
                               tooltip="取消编辑"
                               className="ml-1 -mr-1 p-0.5 rounded-full hover:bg-blue-200 dark:hover:bg-blue-500/40 transition-colors"
                               onClick={(e) => {
-                                e.stopPropagation();
-                                setPrompt('');
-                                setInputImages([]);
-                                clearMaskDraft();
-                                setAgentEditingRoundId(null);
+                                e.stopPropagation()
+                                editDraftSeqRef.current += 1
+                                applyComposerDraft({ prompt: '', inputImages: [], maskDraft: null })
+                                setAgentEditingRoundId(null)
                               }}
                             >
                               <CloseIcon className="w-3 h-3" />
@@ -1194,8 +922,10 @@ export default function AgentWorkspace() {
                     </div>}
                     </div>
                 </div>
-                )
-              })
+                    )
+                  }}
+                />
+              )
 
               const runningRounds = activeRounds.filter((round) =>
                 round.status === 'running' &&
@@ -1233,7 +963,7 @@ export default function AgentWorkspace() {
 
         <button
           onClick={scrollToAgentBottom}
-          className={`fixed bottom-[calc(var(--input-bar-clearance,12rem)+1.5rem)] left-1/2 -translate-x-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow-[0_2px_12px_rgba(0,0,0,0.1)] border border-gray-200/50 text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
+          className={`fixed bottom-[calc(var(--composer-stack-clearance,10rem)+1.5rem)] left-1/2 -translate-x-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow-[0_2px_12px_rgba(0,0,0,0.1)] border border-gray-200/50 text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
             !isScrolledToBottom && activeMessages.length > 0 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'
           }`}
           aria-label="滚动到底部"

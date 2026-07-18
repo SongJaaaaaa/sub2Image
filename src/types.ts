@@ -1,3 +1,5 @@
+import type { PromptProject } from './features/promptStudio'
+
 // ===== 设置 =====
 
 export type ApiMode = 'images' | 'responses'
@@ -167,6 +169,14 @@ export interface MaskDraft {
   targetImageId: string
   maskDataUrl: string
   updatedAt: number
+}
+
+export interface ComposerDraft {
+  prompt: string
+  inputImages: InputImage[]
+  maskDraft: MaskDraft | null
+  maskEditorImageId?: string | null
+  params?: Partial<TaskParams>
 }
 
 // ===== 远程提示词库 =====
@@ -460,6 +470,7 @@ export interface ExportData {
   favoriteCollections?: FavoriteCollection[]
   defaultFavoriteCollectionId?: string | null
   agentConversations?: AgentConversation[]
+  promptProjects?: PromptProject[]
   /** imageId → 图片信息 */
   imageFiles?: Record<string, {
     path: string

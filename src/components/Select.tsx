@@ -24,10 +24,11 @@ interface SelectProps {
   options: Option[]
   disabled?: boolean
   className?: string
+  ariaLabel?: string
   onOpenChange?: (isOpen: boolean) => void
 }
 
-export default function Select({ value, onChange, onReorder, options, disabled, className, onOpenChange }: SelectProps) {
+export default function Select({ value, onChange, onReorder, options, disabled, className, ariaLabel, onOpenChange }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [menuMaxHeight, setMenuMaxHeight] = useState(DEFAULT_DROPDOWN_MAX_HEIGHT)
   const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom')
@@ -182,10 +183,24 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
       <div
         ref={triggerRef}
         {...triggerTooltip.handlers}
+        role={ariaLabel ? 'combobox' : undefined}
+        aria-label={ariaLabel}
+        aria-expanded={ariaLabel ? isOpen : undefined}
+        tabIndex={ariaLabel && !disabled ? 0 : undefined}
         onClick={(e) => {
           triggerTooltip.handlers.onClick?.()
           handleToggle(e)
           triggerTooltip.dismiss()
+        }}
+        onKeyDown={(e) => {
+          if (!ariaLabel || disabled) return
+          if (e.key === 'Escape') {
+            setIsOpen(false)
+            return
+          }
+          if (e.key !== 'Enter' && e.key !== ' ') return
+          e.preventDefault()
+          setIsOpen((open) => !open)
         }}
         className={`flex items-center justify-between gap-1 w-full cursor-pointer select-none ${className ?? ''} ${
           disabled ? '!opacity-50 !cursor-not-allowed !bg-gray-100/50 dark:!bg-white/[0.05]' : ''
@@ -200,6 +215,8 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
 
       {isOpen && (
         <div
+          role={ariaLabel ? 'listbox' : undefined}
+          aria-label={ariaLabel ? `${ariaLabel}选项` : undefined}
           className={`absolute z-50 w-full overflow-hidden overflow-y-auto rounded-xl border border-gray-200/60 bg-white/95 py-1 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-black/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-gray-900/95 dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] dark:ring-white/10 custom-scrollbar ${
             placement === 'top' ? 'bottom-full mb-1.5 animate-dropdown-up' : 'top-full mt-1.5 animate-dropdown-down'
           }`}
@@ -209,6 +226,8 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
             <div
               key={option.value}
               data-option-value={String(option.value)}
+              role={ariaLabel ? 'option' : undefined}
+              aria-selected={ariaLabel ? option.value === value : undefined}
               draggable={option.draggable}
               onDragStart={(e) => {
                 if (!option.draggable) return

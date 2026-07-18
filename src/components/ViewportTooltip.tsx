@@ -120,7 +120,7 @@ export default function ViewportTooltip({ visible, children, className = '' }: V
             left: position?.left ?? 0,
             top: position?.top ?? 0,
             visibility: position ? 'visible' : 'hidden',
-            zIndex: 120,
+            zIndex: 200,
           }}
         >
           {children}

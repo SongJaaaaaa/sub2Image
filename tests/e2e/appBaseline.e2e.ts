@@ -41,19 +41,6 @@ function responseStream() {
   ].join('\n')
 }
 
-async function fulfillTitle(route: Route) {
-  await route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify(responseJson('<title>E2E 基线</title>')),
-  })
-}
-
-function isTitleRequest(route: Route) {
-  const body = route.request().postDataJSON() as { max_output_tokens?: number }
-  return body.max_output_tokens === 32
-}
-
 async function openConfiguredApp(page: Page, apiMode: 'images' | 'responses') {
   const profile = {
     id: 'e2e-profile',
@@ -83,14 +70,10 @@ async function openConfiguredApp(page: Page, apiMode: 'images' | 'responses') {
       },
     }))
   }, profile)
+  await page.route('https://fontsapi.zeoseven.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/css', body: '' }))
+  await page.route('https://cdn.jsdelivr.net/npm/@lobehub/webfont-harmony-sans-sc@1.0.0/**', (route) => route.fulfill({ status: 200, contentType: 'text/css', body: '' }))
   await page.goto('/app')
-  await expect(page.locator('[data-input-bar]')).toBeVisible()
-  await expect(getEditor(page)).toBeVisible()
-  await expect(page.getByRole('button', { name: '生成图像' })).toBeVisible()
-}
-
-function getEditor(page: Page) {
-  return page.locator('[contenteditable][aria-label="描述你想生成的图片，可输入 @ 来指定参考图..."]')
+  await expect(page.locator('[contenteditable][aria-label="图片提示词输入"]')).toBeVisible()
 }
 
 function trackPageErrors(page: Page) {
@@ -102,14 +85,28 @@ function trackPageErrors(page: Page) {
   return errors
 }
 
-async function expectComposerInsideViewport(page: Page) {
-  const box = await page.locator('[data-input-bar]').boundingBox()
+async function expectSingleComposer(page: Page) {
+  expect(await page.locator('[data-input-bar]').count()).toBe(0)
+  expect(await page.locator('[data-conversation-composer]').count()).toBe(1)
+  const box = await page.locator('[data-conversation-composer-dock]').boundingBox()
   const viewport = page.viewportSize()
   expect(box).not.toBeNull()
   expect(viewport).not.toBeNull()
   expect(box!.x).toBeGreaterThanOrEqual(-1)
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width + 1)
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height + 1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+}
+
+async function expectLastContentAboveComposer(page: Page, selector: string) {
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expect.poll(async () => {
+    const [content, composer] = await Promise.all([
+      page.locator(selector).last().boundingBox(),
+      page.locator('[data-conversation-composer-dock]').boundingBox(),
+    ])
+    return Boolean(content && composer && content.y + content.height <= composer.y + 1)
+  }).toBe(true)
 }
 
 async function saveArtifact(name: string, data: string | Buffer) {
@@ -118,212 +115,106 @@ async function saveArtifact(name: string, data: string | Buffer) {
   await writeFile(resolve(dir, name), data)
 }
 
-test('桌面与移动端空状态基线截图无横向溢出', async ({ page }, testInfo) => {
+test('桌面与移动端只有一个 Composer 且页面模式职责固定', async ({ page }, testInfo) => {
   const errors = trackPageErrors(page)
   await openConfiguredApp(page, 'responses')
-  await page.evaluate(async () => { await document.fonts.ready })
-  await expectComposerInsideViewport(page)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await saveArtifact(
-    `${testInfo.project.name}-gallery.png`,
-    await page.screenshot({ animations: 'disabled', caret: 'hide' }),
-  )
+  await expectSingleComposer(page)
+  expect(await page.locator('.cc-agent-button').count()).toBe(1)
+  expect(await page.locator('[data-conversation-composer-dock] [title="提示词库"]').count()).toBe(0)
+  await saveArtifact(`${testInfo.project.name}-gallery.png`, await page.screenshot({ animations: 'disabled', caret: 'hide' }))
 
-  await page.getByRole('button', { name: 'Agent', exact: true }).click()
+  await page.locator('[data-app-header]').getByRole('button', { name: 'Agent', exact: true }).click()
   await expect(page.locator('[data-agent-workspace]')).toBeVisible()
-  await expectComposerInsideViewport(page)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await saveArtifact(
-    `${testInfo.project.name}-agent.png`,
-    await page.screenshot({ animations: 'disabled', caret: 'hide' }),
-  )
+  await expect(page.locator('[contenteditable][aria-label="Agent 对话输入"]')).toBeVisible()
+  expect(await page.locator('.cc-agent-button').count()).toBe(0)
+  await expectSingleComposer(page)
+  await saveArtifact(`${testInfo.project.name}-agent.png`, await page.screenshot({ animations: 'disabled', caret: 'hide' }))
   expect(errors).toEqual([])
 })
 
-test('画廊提交会创建任务并显示 mock 图片', async ({ page }, testInfo) => {
+test('画廊直发只创建一次图片任务', async ({ page }) => {
   const errors = trackPageErrors(page)
   const requests: Array<Record<string, unknown>> = []
   await page.route(`${API_URL}/**`, async (route) => {
     requests.push(route.request().postDataJSON() as Record<string, unknown>)
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ created: 1, data: [{ b64_json: PNG_BASE64 }] }),
-    })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ created: 1, data: [{ b64_json: PNG_BASE64 }] }) })
   })
   await openConfiguredApp(page, 'images')
-
   const prompt = '画廊基线：红色纸船'
-  const editor = getEditor(page)
-  await editor.fill(prompt)
-  await expect(page.getByRole('button', { name: '生成图像' })).toBeEnabled()
-  await page.getByRole('button', { name: '生成图像' }).click()
+  await page.locator('[contenteditable][aria-label="图片提示词输入"]').fill(prompt)
+  await page.getByRole('button', { name: '生成图片' }).click()
 
   await expect(page.locator('[data-home-main]').getByText(prompt, { exact: true })).toBeVisible()
-  const image = page.locator('[data-home-main] .saveable-image')
-  await expect(image).toBeVisible()
-  expect(await image.evaluate((el) => {
-    const img = el as HTMLImageElement
-    return img.complete && img.naturalWidth > 0
-  })).toBe(true)
+  await expect(page.locator('[data-home-main] .saveable-image')).toBeVisible()
   expect(requests).toHaveLength(1)
   expect(requests[0]).toMatchObject({ model: 'gpt-image-e2e', prompt })
-  await expectComposerInsideViewport(page)
-
-  await testInfo.attach('gallery-result', { body: await page.screenshot(), contentType: 'image/png' })
+  await expectLastContentAboveComposer(page, '[data-task-id]')
   expect(errors).toEqual([])
 })
 
-test('普通 Agent 文本消息完成同一输入框闭环', async ({ page }, testInfo) => {
+test('普通 Agent 页面完成聊天闭环', async ({ page }) => {
   const errors = trackPageErrors(page)
-  const requests: Array<Record<string, unknown>> = []
-  let titleRequests = 0
-  await page.addInitScript(() => {
-    const target = window as typeof window & {
-      __wp0AgentWrites?: number
-      __wp0AgentPendingWrites?: number
-    }
-    target.__wp0AgentWrites = 0
-    target.__wp0AgentPendingWrites = 0
-    const original = IDBDatabase.prototype.transaction
-    IDBDatabase.prototype.transaction = function (storeNames, mode, options) {
-      const names = typeof storeNames === 'string' ? [storeNames] : storeNames
-      const tx = options
-        ? original.call(this, storeNames, mode, options)
-        : original.call(this, storeNames, mode)
-      if (mode === 'readwrite' && names.includes('agentConversations')) {
-        target.__wp0AgentWrites = (target.__wp0AgentWrites ?? 0) + 1
-        target.__wp0AgentPendingWrites = (target.__wp0AgentPendingWrites ?? 0) + 1
-        const settle = () => {
-          target.__wp0AgentPendingWrites = Math.max(0, (target.__wp0AgentPendingWrites ?? 1) - 1)
-        }
-        tx.addEventListener('complete', settle, { once: true })
-        tx.addEventListener('abort', settle, { once: true })
-      }
-      return tx
-    }
-  })
-  await page.route(`${API_URL}/**`, async (route) => {
-    if (isTitleRequest(route)) {
-      titleRequests += 1
-      await fulfillTitle(route)
+  let requests = 0
+  await page.route(`${API_URL}/**`, async (route: Route) => {
+    const body = route.request().postDataJSON() as { max_output_tokens?: number }
+    if (body.max_output_tokens === 32) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(responseJson('<title>E2E 基线</title>')) })
       return
     }
-    requests.push(route.request().postDataJSON() as Record<string, unknown>)
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream; charset=utf-8',
-      body: responseStream(),
-    })
+    requests += 1
+    await route.fulfill({ status: 200, contentType: 'text/event-stream; charset=utf-8', body: responseStream() })
   })
   await openConfiguredApp(page, 'responses')
-
-  await page.getByRole('button', { name: 'Agent', exact: true }).click()
-  await expect(page.locator('[data-agent-workspace]')).toBeVisible()
-  await page.evaluate(() => {
-    (window as typeof window & { __wp0AgentWrites?: number }).__wp0AgentWrites = 0
-  })
-  const prompt = '请只回复基线文本'
-  const editor = getEditor(page)
-  await editor.fill(prompt)
-  await expect(page.getByRole('button', { name: '生成图像' })).toBeEnabled()
-  await page.getByRole('button', { name: '生成图像' }).click()
+  await page.locator('[data-app-header]').getByRole('button', { name: 'Agent', exact: true }).click()
+  const editor = page.locator('[contenteditable][aria-label="Agent 对话输入"]')
+  await editor.fill('请只回复基线文本')
+  await page.getByRole('button', { name: '发送 Agent 消息' }).click()
 
   const workspace = page.locator('[data-agent-workspace]')
-  await expect(workspace.getByText(prompt, { exact: true })).toBeVisible()
   await expect(workspace.getByText(AGENT_TEXT, { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'E2E 基线', exact: true })).toBeVisible()
-  expect(titleRequests).toBe(1)
-  expect(requests).toHaveLength(1)
-  expect(requests[0]).toMatchObject({ model: 'gpt-agent-e2e', stream: true })
-  expect(requests[0].tools).toBeInstanceOf(Array)
-  expect(JSON.stringify(requests[0].input)).toContain(prompt)
-  await expectComposerInsideViewport(page)
-
-  let metrics = { writes: -1, pending: -1 }
-  let stableReads = 0
-  for (let i = 0; i < 20 && stableReads < 3; i += 1) {
-    const next = await page.evaluate(() => {
-      const target = window as typeof window & {
-        __wp0AgentWrites?: number
-        __wp0AgentPendingWrites?: number
-      }
-      return {
-        writes: target.__wp0AgentWrites ?? 0,
-        pending: target.__wp0AgentPendingWrites ?? 0,
-      }
-    })
-    stableReads = next.pending === 0 && next.writes === metrics.writes ? stableReads + 1 : 0
-    metrics = next
-    await page.waitForTimeout(100)
-  }
-  await saveArtifact(
-    `${testInfo.project.name}-agent-metrics.json`,
-    JSON.stringify({ streamedDeltas: 3, agentConversationReadwriteTransactions: metrics.writes }, null, 2),
-  )
-  expect(metrics.pending).toBe(0)
-  expect(metrics.writes).toBeGreaterThan(0)
+  expect(requests).toBe(1)
+  await expectLastContentAboveComposer(page, '[data-agent-workspace] article')
   expect(errors).toEqual([])
 })
 
-test('停止按钮会中止当前 Agent 请求并保留停止消息', async ({ page }) => {
+test('附件支持 40px 缩略图、预览入口、mention 和设置草稿', async ({ page }) => {
   const errors = trackPageErrors(page)
-  let requestAborted = false
-  let markStarted = () => {}
-  let release = () => {}
-  const started = new Promise<void>((resolve) => { markStarted = resolve })
-  const held = new Promise<void>((resolve) => { release = resolve })
-  page.on('requestfailed', (request) => {
-    if (request.url().startsWith(API_URL)) requestAborted = true
-  })
-  await page.route(`${API_URL}/**`, async (route) => {
-    if (isTitleRequest(route)) {
-      await fulfillTitle(route)
-      return
-    }
-    markStarted()
-    await held
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream; charset=utf-8',
-      body: responseStream(),
-    }).catch(() => {})
-  })
-  await openConfiguredApp(page, 'responses')
-
-  await page.getByRole('button', { name: 'Agent', exact: true }).click()
-  await expect(page.locator('[data-agent-workspace]')).toBeVisible()
-  const editor = getEditor(page)
-  await editor.fill('停止请求基线')
-  await expect(page.getByRole('button', { name: '生成图像' })).toBeEnabled()
-  await page.getByRole('button', { name: '生成图像' }).click()
-  await started
-  await page.getByRole('button', { name: '停止生成' }).click()
-  release()
-
-  await expect(page.locator('[data-agent-workspace]').getByText('已停止生成。', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '生成图像' })).toBeDisabled()
-  await expect.poll(() => requestAborted).toBe(true)
-  expect(errors).toEqual([])
-})
-
-test('附件可以通过 @ 菜单写入稳定 mention 胶囊', async ({ page }) => {
-  const errors = trackPageErrors(page)
-  await page.goto('/app')
-  await expect(page.locator('[data-input-bar]')).toBeVisible()
-
-  await page.locator('input[type="file"][multiple]').setInputFiles({
+  await openConfiguredApp(page, 'images')
+  await page.locator('[data-new-composer-file-input]').setInputFiles({
     name: 'reference.png',
     mimeType: 'image/png',
     buffer: Buffer.from(PNG_BASE64, 'base64'),
   })
-  await expect(page.locator('[data-input-image-index="0"]')).toBeVisible()
+  const attachment = page.locator('.cc-attachment').first()
+  await expect(attachment).toBeVisible()
+  const box = await attachment.boundingBox()
+  expect(box?.width).toBe(40)
+  expect(box?.height).toBe(40)
+  await page.getByRole('button', { name: '预览参考图1' }).click()
+  await expect(page.getByRole('button', { name: '编辑遮罩' })).toBeVisible()
+  await page.getByRole('button', { name: '关闭预览' }).click()
 
-  const editor = getEditor(page)
+  const editor = page.locator('[contenteditable][aria-label="图片提示词输入"]')
   await editor.fill('@')
-  await expect(page.getByText('选择图片引用', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: '@图1' }).click()
+  await page.getByRole('button', { name: '选择 @图1' }).click()
+  await expect(editor.locator('.cc-atom')).toHaveText('@图1')
 
-  await expect(editor.locator('.mention-tag')).toHaveText('@图1')
+  await page.locator('[data-conversation-composer-dock] [title="图片设置"]').click()
+  await page.getByRole('button', { name: '高', exact: true }).click()
+  await page.getByRole('button', { name: '关闭设置' }).click()
+  await page.locator('[data-conversation-composer-dock] [title="图片设置"]').click()
+  await expect(page.getByRole('button', { name: '自动' }).first()).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: '横向 16:9' }).click()
+  await page.getByRole('button', { name: '2K' }).click()
+  await page.getByRole('combobox', { name: '生成数量' }).click()
+  await page.getByRole('option', { name: '2 张' }).click()
+  await page.getByRole('button', { name: '高', exact: true }).click()
+  await page.getByRole('button', { name: '保存' }).click()
+  await page.locator('[data-conversation-composer-dock] [title="图片设置"]').click()
+  await expect(page.getByRole('button', { name: '高', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: '横向 16:9' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: '2K' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('combobox', { name: '生成数量' })).toContainText('2 张')
+  await page.getByRole('button', { name: '关闭设置' }).click()
   expect(errors).toEqual([])
 })

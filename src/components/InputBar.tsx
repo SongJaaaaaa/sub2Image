@@ -1,7 +1,7 @@
-import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react'
+import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ALL_FAVORITES_COLLECTION_ID, deleteFavoriteCollection, getTaskFavoriteCollectionIds, useStore, submitTask, submitAgentMessage, stopAgentResponse, addImageFromFile, createInputImageFromFile, deleteImageIfUnreferenced, removeMultipleTasks, getCachedImage, ensureImageCached, getActiveAgentRounds, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
-import { DEFAULT_PARAMS, type TaskRecord } from '../types'
+import { useStore, submitTask, submitAgentMessage, stopAgentResponse, getCachedImage, ensureImageCached, getActiveAgentRounds } from '../store'
+import { DEFAULT_PARAMS } from '../types'
 import { getActiveApiProfile, getAgentImageApiProfile, normalizeSettings } from '../lib/apiProfiles'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { getAtImageQuery, getImageMentionLabel, getPromptIndexFromVisibleIndex, getPromptMentionParts, getSelectedImageMentionLabel, getSelectedTextMentionLabel, imageMentionMatches, insertImageMentionAtVisibleRange, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, stripImageMentionMarkers } from '../lib/promptImageMentions'
@@ -10,13 +10,13 @@ import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { getSafeBoundingClientRect } from '../lib/domRect'
 import { collectAgentRoundOutputImageSlots } from '../lib/agentImageReferences'
 import { useHintTooltip } from '../hooks/useHintTooltip'
-import { downloadImageEntriesAsZip, downloadImageIds, formatExportFileTime, getTaskOutputImageZipEntries } from '../lib/downloadImages'
 import SizePickerModal from './SizePickerModal'
 import { CloseIcon } from './icons'
 import ButtonTooltip from './input/buttonTooltip'
 import DragUploadOverlay from './input/dragUploadOverlay'
-import InputBatchBars from './input/inputBatchBars'
 import InputParamsPanel from './input/inputParamsPanel'
+import { clearActiveComposerOwner, LEGACY_COMPOSER_OWNER, isComposerFocused, setActiveComposerOwner } from '../integrations/conversation/composerFocus'
+import { addInputDropData, addInputImageFiles, MAX_INPUT_IMAGES, replaceInputImageFile } from '../integrations/conversation/inputFiles'
 
 
 function getMentionTagTextLength(el: Element) {
@@ -324,19 +324,6 @@ function setContentEditableSelection(el: HTMLElement, start: number, end: number
   sel.addRange(range)
 }
 
-/** API 支持的最大参考图数量 */
-const API_MAX_IMAGES = 16
-
-function getFavoriteCollectionTasksForBatch(collectionId: string, tasks: TaskRecord[]) {
-  const favoriteTasks = tasks.filter((task) => task.isFavorite)
-  if (collectionId === ALL_FAVORITES_COLLECTION_ID) return favoriteTasks
-  return favoriteTasks.filter((task) => getTaskFavoriteCollectionIds(task).includes(collectionId))
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640)
   useEffect(() => {
@@ -384,13 +371,11 @@ function AtImageOptionThumb({ option }: { option: AtImageOption }) {
   )
 }
 
-export default function InputBar() {
+export default function InputBar({ actionBar, dualComposer = false }: { actionBar?: ReactNode; dualComposer?: boolean }) {
   const prompt = useStore((s) => s.prompt)
   const appMode = useStore((s) => s.appMode)
   const setPrompt = useStore((s) => s.setPrompt)
   const inputImages = useStore((s) => s.inputImages)
-  const addInputImage = useStore((s) => s.addInputImage)
-  const replaceInputImage = useStore((s) => s.replaceInputImage)
   const removeInputImage = useStore((s) => s.removeInputImage)
   const clearInputImages = useStore((s) => s.clearInputImages)
   const params = useStore((s) => s.params)
@@ -402,211 +387,9 @@ export default function InputBar() {
   const setLightboxImageId = useStore((s) => s.setLightboxImageId)
   const showToast = useStore((s) => s.showToast)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
-  const selectedTaskIds = useStore((s) => s.selectedTaskIds)
-  const setSelectedTaskIds = useStore((s) => s.setSelectedTaskIds)
-  const clearSelection = useStore((s) => s.clearSelection)
-  const selectedFavoriteCollectionIds = useStore((s) => s.selectedFavoriteCollectionIds)
-  const setSelectedFavoriteCollectionIds = useStore((s) => s.setSelectedFavoriteCollectionIds)
-  const clearFavoriteCollectionSelection = useStore((s) => s.clearFavoriteCollectionSelection)
   const tasks = useStore((s) => s.tasks)
-  const favoriteCollections = useStore((s) => s.favoriteCollections)
   const agentConversations = useStore((s) => s.agentConversations)
   const activeAgentConversationId = useStore((s) => s.activeAgentConversationId)
-  const filterStatus = useStore((s) => s.filterStatus)
-  const filterFavorite = useStore((s) => s.filterFavorite)
-  const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
-  const openFavoritePicker = useStore((s) => s.openFavoritePicker)
-  const searchQuery = useStore((s) => s.searchQuery)
-
-  const filteredTasks = useMemo(() => {
-    const sorted = [...tasks].sort((a, b) => b.createdAt - a.createdAt)
-    const q = searchQuery.trim().toLowerCase()
-    
-    return sorted.filter((t) => {
-      if (filterFavorite) {
-        if (!t.isFavorite) return false
-        if (activeFavoriteCollectionId && activeFavoriteCollectionId !== ALL_FAVORITES_COLLECTION_ID && !getTaskFavoriteCollectionIds(t).includes(activeFavoriteCollectionId)) return false
-      }
-      if (!taskMatchesFilterStatus(t, filterStatus)) return false
-      return taskMatchesSearchQuery(t, q)
-    })
-  }, [tasks, searchQuery, filterStatus, filterFavorite, activeFavoriteCollectionId])
-
-  const inCollectionOverview = filterFavorite && !activeFavoriteCollectionId
-
-  const favoriteCollectionCards = useMemo(() => {
-    return [
-      {
-        id: ALL_FAVORITES_COLLECTION_ID,
-        name: '全部',
-        tasks: getFavoriteCollectionTasksForBatch(ALL_FAVORITES_COLLECTION_ID, tasks),
-      },
-      ...favoriteCollections.map((collection) => ({
-        id: collection.id,
-        name: collection.name,
-        collection,
-        tasks: getFavoriteCollectionTasksForBatch(collection.id, tasks),
-      })),
-    ]
-  }, [favoriteCollections, tasks])
-
-  const filteredFavoriteCollectionCards = useMemo(() => {
-    if (!searchQuery.trim()) return favoriteCollectionCards
-    const lowerQuery = searchQuery.toLowerCase()
-    return favoriteCollectionCards.filter((collection) => collection.name.toLowerCase().includes(lowerQuery))
-  }, [favoriteCollectionCards, searchQuery])
-
-  const handleSelectAllVisibleTasks = useCallback(() => {
-    setSelectedTaskIds(filteredTasks.map((task) => task.id))
-  }, [filteredTasks, setSelectedTaskIds])
-
-  const handleInvertVisibleTasks = useCallback(() => {
-    const visibleIds = new Set(filteredTasks.map((task) => task.id))
-    setSelectedTaskIds((current) => {
-      const currentSet = new Set(current)
-      const next = current.filter((id) => !visibleIds.has(id))
-      filteredTasks.forEach((task) => {
-        if (!currentSet.has(task.id)) next.push(task.id)
-      })
-      return next
-    })
-  }, [filteredTasks, setSelectedTaskIds])
-
-  const handleSelectAllVisibleFavoriteCollections = useCallback(() => {
-    setSelectedFavoriteCollectionIds(filteredFavoriteCollectionCards.map((collection) => collection.id))
-  }, [filteredFavoriteCollectionCards, setSelectedFavoriteCollectionIds])
-
-  const handleInvertVisibleFavoriteCollections = useCallback(() => {
-    const visibleIds = new Set(filteredFavoriteCollectionCards.map((collection) => collection.id))
-    setSelectedFavoriteCollectionIds((current) => {
-      const currentSet = new Set(current)
-      const next = current.filter((id) => !visibleIds.has(id))
-      filteredFavoriteCollectionCards.forEach((collection) => {
-        if (!currentSet.has(collection.id)) next.push(collection.id)
-      })
-      return next
-    })
-  }, [filteredFavoriteCollectionCards, setSelectedFavoriteCollectionIds])
-
-  const handleToggleFavorite = useCallback(() => {
-    openFavoritePicker(selectedTaskIds)
-  }, [openFavoritePicker, selectedTaskIds])
-
-  const handleDeleteSelected = useCallback(() => {
-    setConfirmDialog({
-      title: '批量删除',
-      message: `确定要删除选中的 ${selectedTaskIds.length} 个任务吗？`,
-      action: () => {
-        removeMultipleTasks(selectedTaskIds)
-      },
-    })
-  }, [selectedTaskIds, setConfirmDialog])
-
-  const handleDownloadSelected = useCallback(async () => {
-    const selectedTasks = tasks.filter((t) => selectedTaskIds.includes(t.id))
-    const imageIds = selectedTasks.flatMap(t => t.outputImages || [])
-    if (imageIds.length === 0) {
-      showToast('选中的任务没有图片', 'info')
-      return
-    }
-
-    try {
-      const timeStr = formatExportFileTime(new Date())
-      const fileNameBase = `batch-${timeStr}`
-      const { successCount, failCount } = settings.zipDownloadRoutes.includes('task-selection')
-        ? await downloadImageEntriesAsZip(getTaskOutputImageZipEntries(selectedTasks), fileNameBase)
-        : await downloadImageIds(imageIds, fileNameBase)
-
-      if (successCount === 0) {
-        showToast('下载失败', 'error')
-      } else if (failCount > 0) {
-        showToast(`部分下载失败：成功 ${successCount}，失败 ${failCount}`, 'error')
-      } else {
-        showToast(successCount > 1 ? `下载成功：${successCount} 张图片` : '下载成功', 'success')
-      }
-    } catch (err) {
-      console.error(err)
-      showToast('下载失败', 'error')
-    }
-    clearSelection()
-  }, [tasks, selectedTaskIds, settings.zipDownloadRoutes, showToast, clearSelection])
-
-  const handleDownloadSelectedFavoriteCollections = useCallback(async () => {
-    const selectedIdSet = new Set(selectedFavoriteCollectionIds)
-    const selectedCollections = favoriteCollectionCards.filter((collection) => selectedIdSet.has(collection.id))
-    if (selectedCollections.length === 0) return
-
-    let successCount = 0
-    let failCount = 0
-    let downloadedCollectionCount = 0
-    const useZipDownload = settings.zipDownloadRoutes.includes('favorite-collection-selection')
-    const timeStr = formatExportFileTime(new Date())
-
-    try {
-      for (const collection of selectedCollections) {
-        const entries = getTaskOutputImageZipEntries(collection.tasks)
-        if (entries.length === 0) continue
-        const zipName = collection.id === ALL_FAVORITES_COLLECTION_ID
-          ? `favorites-all-${timeStr}`
-          : `favorites-${collection.name}-${timeStr}`
-        const result = useZipDownload
-          ? await downloadImageEntriesAsZip(entries, zipName)
-          : await downloadImageIds(entries.map((entry) => entry.imageId), zipName)
-        successCount += result.successCount
-        failCount += result.failCount
-        if (result.successCount > 0) downloadedCollectionCount++
-        if (selectedCollections.length > 1) await delay(100)
-      }
-
-      if (successCount === 0) {
-        showToast('选中的收藏夹没有图片', 'info')
-      } else if (failCount > 0) {
-        showToast(`部分下载失败：成功 ${successCount}，失败 ${failCount}`, 'error')
-      } else {
-        showToast(useZipDownload && downloadedCollectionCount > 1 ? `下载成功：${downloadedCollectionCount} 个压缩包，${successCount} 张图片` : `下载成功：${successCount} 张图片`, 'success')
-      }
-    } catch (err) {
-      console.error(err)
-      showToast('下载失败', 'error')
-    }
-    clearFavoriteCollectionSelection()
-  }, [clearFavoriteCollectionSelection, favoriteCollectionCards, selectedFavoriteCollectionIds, settings.zipDownloadRoutes, showToast])
-
-  const handleDeleteSelectedFavoriteCollections = useCallback(() => {
-    const selectedIdSet = new Set(selectedFavoriteCollectionIds)
-    const selectedCollections = favoriteCollections.filter((collection) => selectedIdSet.has(collection.id))
-    if (selectedCollections.length === 0) {
-      showToast('没有可删除的收藏夹', 'info')
-      return
-    }
-    if (favoriteCollections.length - selectedCollections.length < 1) {
-      showToast('至少保留一个收藏夹', 'error')
-      return
-    }
-
-    const selectedCollectionIds = new Set(selectedCollections.map((collection) => collection.id))
-    const imageCount = new Set(
-      tasks
-        .filter((task) => getTaskFavoriteCollectionIds(task).some((id) => selectedCollectionIds.has(id)))
-        .flatMap((task) => task.outputImages || []),
-    ).size
-    setConfirmDialog({
-      title: '批量删除收藏夹',
-      message: `确定要删除选中的 ${selectedCollections.length} 个收藏夹吗？`,
-      checkbox: imageCount > 0
-        ? {
-            label: `同时删除收藏夹中的图片（${imageCount} 张）`,
-            tone: 'danger',
-          }
-        : undefined,
-      action: async (deleteImages = false) => {
-        for (const collection of selectedCollections) {
-          await deleteFavoriteCollection(collection.id, deleteImages)
-        }
-        clearFavoriteCollectionSelection()
-      },
-    })
-  }, [clearFavoriteCollectionSelection, favoriteCollections, selectedFavoriteCollectionIds, setConfirmDialog, showToast, tasks])
 
   const maskDraft = useStore((s) => s.maskDraft)
   const setMaskEditorImageId = useStore((s) => s.setMaskEditorImageId)
@@ -625,7 +408,7 @@ export default function InputBar() {
   const [submitHover, setSubmitHover] = useState(false)
   const [attachHover, setAttachHover] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
-  const [mobileCollapsed, setMobileCollapsed] = useState(false)
+  const [mobileCollapsed, setMobileCollapsed] = useState(dualComposer)
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
@@ -772,8 +555,8 @@ export default function InputBar() {
         { label: 'medium', value: 'medium' },
         { label: 'high', value: 'high' },
       ]
-  const atImageLimit = inputImages.length >= API_MAX_IMAGES
-  const uploadImageTooltipText = atImageLimit ? `参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加` : '上传图片'
+  const atImageLimit = inputImages.length >= MAX_INPUT_IMAGES
+  const uploadImageTooltipText = atImageLimit ? `参考图数量已达上限（${MAX_INPUT_IMAGES} 张），无法继续添加` : '上传图片'
   const transparentOutputHint = useHintTooltip()
   const handleTransparentOutputMenuOpenChange = useCallback((open: boolean) => {
     if (open) transparentOutputHint.hide()
@@ -1075,39 +858,7 @@ export default function InputBar() {
     window.addEventListener('dragend', release)
   }
 
-  const handleFiles = async (files: FileList | File[]) => {
-    try {
-      const currentCount = useStore.getState().inputImages.length
-      if (currentCount >= API_MAX_IMAGES) {
-        useStore.getState().showToast(
-          `参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`,
-          'error',
-        )
-        return
-      }
-
-      const remaining = API_MAX_IMAGES - currentCount
-      const accepted = Array.from(files).filter((f) => f.type.startsWith('image/'))
-      const toAdd = accepted.slice(0, remaining)
-      const discarded = accepted.length - toAdd.length
-
-      for (const file of toAdd) {
-        await addImageFromFile(file)
-      }
-
-      if (discarded > 0) {
-        useStore.getState().showToast(
-          `已达上限 ${API_MAX_IMAGES} 张，${discarded} 张图片被丢弃`,
-          'error',
-        )
-      }
-    } catch (err) {
-      useStore.getState().showToast(
-        `图片添加失败：${err instanceof Error ? err.message : String(err)}`,
-        'error',
-      )
-    }
-  }
+  const handleFiles = addInputImageFiles
 
   const handleFilesRef = useRef(handleFiles)
   handleFilesRef.current = handleFiles
@@ -1174,39 +925,12 @@ export default function InputBar() {
     replaceImageTargetRef.current = null
     if (!file || !target) return
 
-    try {
-      const image = await createInputImageFromFile(file)
-      if (!image) {
-        showToast('请选择有效图片', 'error')
-        return
-      }
-
-      const currentImages = useStore.getState().inputImages
-      const currentIdx = currentImages.findIndex((item) => item.id === target.id)
-      const targetIdx = currentIdx >= 0 ? currentIdx : target.index
-      const previous = currentImages[targetIdx]
-      if (!previous) {
-        void deleteImageIfUnreferenced(image.id)
-        showToast('原参考图已不存在', 'error')
-        return
-      }
-      if (previous.id === image.id) {
-        showToast('参考图未变化', 'info')
-        return
-      }
-      if (currentImages.some((item, itemIdx) => itemIdx !== targetIdx && item.id === image.id)) {
-        showToast('这张图片已在参考图中', 'info')
-        return
-      }
-
-      replaceInputImage(targetIdx, image)
-      showToast('参考图已替换', 'success')
-    } catch (err) {
-      showToast(`参考图替换失败：${err instanceof Error ? err.message : String(err)}`, 'error')
-    }
+    await replaceInputImageFile(target, file)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' && (e.nativeEvent.isComposing || e.keyCode === 229)) return
+
     if (showAtImageMenu) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -1282,6 +1006,7 @@ export default function InputBar() {
   // 粘贴图片
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
+      if (!isComposerFocused(LEGACY_COMPOSER_OWNER)) return
       const items = e.clipboardData?.items
       if (!items) return
       const imageFiles: File[] = []
@@ -1303,6 +1028,7 @@ export default function InputBar() {
   // 拖拽图片 - 监听整个页面
   useEffect(() => {
     const handleDragEnter = (e: DragEvent) => {
+      if (!isComposerFocused(LEGACY_COMPOSER_OWNER)) return
       e.preventDefault()
       e.stopPropagation()
       dragCounter.current++
@@ -1312,11 +1038,13 @@ export default function InputBar() {
     }
 
     const handleDragOver = (e: DragEvent) => {
+      if (!isComposerFocused(LEGACY_COMPOSER_OWNER)) return
       e.preventDefault()
       e.stopPropagation()
     }
 
     const handleDragLeave = (e: DragEvent) => {
+      if (!isComposerFocused(LEGACY_COMPOSER_OWNER)) return
       e.preventDefault()
       e.stopPropagation()
       dragCounter.current--
@@ -1326,36 +1054,12 @@ export default function InputBar() {
     }
 
     const handleDrop = (e: DragEvent) => {
+      if (!isComposerFocused(LEGACY_COMPOSER_OWNER)) return
       e.preventDefault()
       e.stopPropagation()
       dragCounter.current = 0
       setIsDragging(false)
-      const files = e.dataTransfer?.files
-      if (files && files.length > 0) {
-        handleFilesRef.current(files)
-        return
-      }
-
-      const transferredText = e.dataTransfer?.getData('text/plain')
-      
-      const imageIds = transferredText?.startsWith('agent-images:') 
-        ? transferredText.slice('agent-images:'.length).split(',') 
-        : transferredText?.startsWith('agent-image:')
-        ? [transferredText.slice('agent-image:'.length)]
-        : []
-
-      if (imageIds.length > 0) {
-        Promise.all(imageIds.map(async (imageId) => {
-          const dataUrl = await ensureImageCached(imageId)
-          if (!dataUrl) {
-            showToast('部分图片已不存在', 'error')
-            return
-          }
-          addInputImage({ id: imageId, dataUrl })
-        })).then(() => {
-          showToast('已上传图片', 'success')
-        }).catch((err) => showToast(`上传图片失败：${err instanceof Error ? err.message : String(err)}`, 'error'))
-      }
+      if (e.dataTransfer) void addInputDropData(e.dataTransfer)
     }
 
     document.addEventListener('dragenter', handleDragEnter)
@@ -1369,7 +1073,7 @@ export default function InputBar() {
       document.removeEventListener('dragleave', handleDragLeave)
       document.removeEventListener('drop', handleDrop)
     }
-  }, [addInputImage, showToast])
+  }, [])
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current
@@ -1927,12 +1631,9 @@ export default function InputBar() {
     />
   )
 
-  const showFavoriteCollectionBatchBar = inCollectionOverview && selectedFavoriteCollectionIds.length > 0
-  const showTaskBatchBar = !showFavoriteCollectionBatchBar && selectedTaskIds.length > 0
-
   return (
     <>
-      <DragUploadOverlay visible={isDragging} atImageLimit={atImageLimit} maxImages={API_MAX_IMAGES} />
+      <DragUploadOverlay visible={isDragging} atImageLimit={atImageLimit} maxImages={MAX_INPUT_IMAGES} />
 
       {showSizePicker && (
         <SizePickerModal
@@ -1943,28 +1644,27 @@ export default function InputBar() {
         />
       )}
 
-      <div data-input-bar className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-3 sm:px-4 transition-all duration-300">
-        <InputBatchBars
-          showFavoriteCollectionBatchBar={showFavoriteCollectionBatchBar}
-          showTaskBatchBar={showTaskBatchBar}
-          selectedTaskIds={selectedTaskIds}
-          tasks={tasks}
-          clearFavoriteCollectionSelection={clearFavoriteCollectionSelection}
-          onSelectAllVisibleFavoriteCollections={handleSelectAllVisibleFavoriteCollections}
-          onInvertVisibleFavoriteCollections={handleInvertVisibleFavoriteCollections}
-          onDownloadSelectedFavoriteCollections={handleDownloadSelectedFavoriteCollections}
-          onDeleteSelectedFavoriteCollections={handleDeleteSelectedFavoriteCollections}
-          clearSelection={clearSelection}
-          onSelectAllVisibleTasks={handleSelectAllVisibleTasks}
-          onInvertVisibleTasks={handleInvertVisibleTasks}
-          onToggleFavorite={handleToggleFavorite}
-          onDownloadSelected={handleDownloadSelected}
-          onDeleteSelected={handleDeleteSelected}
-        />
-        <div ref={cardRef} className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10">
+      <div
+        data-input-bar
+        data-composer-owner={LEGACY_COMPOSER_OWNER}
+        onPointerDownCapture={() => setActiveComposerOwner(LEGACY_COMPOSER_OWNER)}
+        onFocusCapture={() => setActiveComposerOwner(LEGACY_COMPOSER_OWNER)}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) clearActiveComposerOwner(LEGACY_COMPOSER_OWNER)
+        }}
+        className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-3 sm:px-4 transition-all duration-300"
+      >
+        {actionBar}
+        <div
+          data-composer-card
+          ref={cardRef}
+          className={`bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10${dualComposer ? ' max-h-[45dvh] overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-visible' : ''}`}
+        >
           {/* 移动端拖动条 */}
           <div
             ref={handleRef}
+            data-mobile-collapse-handle
+            data-mobile-collapsed={mobileCollapsed ? 'true' : 'false'}
             className="sm:hidden flex justify-center pt-0.5 pb-2 -mt-1 cursor-pointer touch-none"
             onClick={() => {
               if (Date.now() < suppressHandleClickUntilRef.current) {

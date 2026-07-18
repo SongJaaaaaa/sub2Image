@@ -1,23 +1,55 @@
+import type { PromptProject } from '../features/promptStudio'
 import type { AgentConversation, PromptCache, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
 
 const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 4
+const DB_VERSION = 5
 const STORE_TASKS = 'tasks'
 const STORE_IMAGES = 'images'
 const STORE_THUMBNAILS = 'thumbnails'
 const STORE_AGENT_CONVERSATIONS = 'agentConversations'
 const STORE_PROMPT_CACHE = 'promptCache'
+const STORE_PROMPT_PROJECTS = 'promptProjects'
+const INDEX_PROMPT_PROJECTS_CONVERSATION_ID = 'conversationId'
 const THUMBNAIL_MAX_SIZE = 720
 const THUMBNAIL_QUALITY = 0.9
 const THUMBNAIL_VERSION = 2
 
 export const CURRENT_THUMBNAIL_VERSION = THUMBNAIL_VERSION
 
+let databasePromise: Promise<IDBDatabase> | null = null
+
+function createDatabaseError(name: string, message: string) {
+  const err = new Error(message)
+  err.name = name
+  return err
+}
+
+function getDatabaseError(error: unknown, fallback: string) {
+  const value = error && typeof error === 'object'
+    ? error as { name?: unknown; message?: unknown }
+    : null
+
+  if (value?.name === 'QuotaExceededError') {
+    return createDatabaseError('QuotaExceededError', '存储空间不足，请清理不需要的数据后重试')
+  }
+  if (error instanceof Error) return error
+  if (value) {
+    return createDatabaseError(
+      typeof value.name === 'string' && value.name ? value.name : 'Error',
+      typeof value.message === 'string' && value.message ? value.message : fallback,
+    )
+  }
+  return new Error(fallback)
+}
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (databasePromise) return databasePromise
+
+  let settled = false
+  const promise = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result
+    req.onupgradeneeded = () => {
+      const db = req.result
       if (!db.objectStoreNames.contains(STORE_TASKS)) {
         db.createObjectStore(STORE_TASKS, { keyPath: 'id' })
       }
@@ -33,10 +65,106 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_PROMPT_CACHE)) {
         db.createObjectStore(STORE_PROMPT_CACHE, { keyPath: 'id' })
       }
+      const projectStore = db.objectStoreNames.contains(STORE_PROMPT_PROJECTS)
+        ? req.transaction!.objectStore(STORE_PROMPT_PROJECTS)
+        : db.createObjectStore(STORE_PROMPT_PROJECTS, { keyPath: 'id' })
+      if (!projectStore.indexNames.contains(INDEX_PROMPT_PROJECTS_CONVERSATION_ID)) {
+        projectStore.createIndex(INDEX_PROMPT_PROJECTS_CONVERSATION_ID, 'conversationId')
+      }
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      const db = req.result
+      if (settled) {
+        db.close()
+        return
+      }
+      settled = true
+      db.onversionchange = () => {
+        db.close()
+        if (databasePromise === promise) databasePromise = null
+      }
+      resolve(db)
+    }
+    req.onerror = () => {
+      if (settled) return
+      settled = true
+      reject(getDatabaseError(req.error, '打开本地数据库失败'))
+    }
+    req.onblocked = () => {
+      if (settled) return
+      settled = true
+      reject(createDatabaseError('BlockedError', '数据库升级被其他页面阻塞，请关闭其他页面后重试'))
+    }
   })
+
+  databasePromise = promise
+  void promise.catch(() => {
+    if (databasePromise === promise) databasePromise = null
+  })
+  return promise
+}
+
+export async function closeDatabase() {
+  const promise = databasePromise
+  databasePromise = null
+  if (!promise) return
+  try {
+    const db = await promise
+    db.close()
+  } catch {
+    // 打开失败时没有可关闭的连接。
+  }
+}
+
+function runTransaction<T>(
+  storeNames: string | string[],
+  mode: IDBTransactionMode,
+  fn: (tx: IDBTransaction) => IDBRequest<T>,
+): Promise<T> {
+  return openDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(storeNames, mode)
+        let req: IDBRequest<T> | null = null
+        let result: T
+        let requestError: DOMException | null = null
+        let settled = false
+
+        const fail = (error: unknown, fallback: string) => {
+          if (settled) return
+          settled = true
+          reject(getDatabaseError(error, fallback))
+        }
+
+        tx.oncomplete = () => {
+          if (settled) return
+          settled = true
+          resolve(result)
+        }
+        tx.onerror = () => fail(tx.error ?? requestError, '数据库事务执行失败')
+        tx.onabort = () => fail(
+          tx.error ?? requestError ?? createDatabaseError('AbortError', '数据库事务已中止'),
+          '数据库事务已中止',
+        )
+
+        try {
+          req = fn(tx)
+          req.onsuccess = () => {
+            result = req!.result
+          }
+          req.onerror = () => {
+            requestError = req?.error ?? null
+          }
+        } catch (err) {
+          try {
+            tx.abort()
+          } catch {
+            // 事务可能已由请求错误中止。
+          }
+          fail(err, '数据库事务执行失败')
+        }
+      }),
+  )
 }
 
 function dbTransaction<T>(
@@ -44,16 +172,7 @@ function dbTransaction<T>(
   mode: IDBTransactionMode,
   fn: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, mode)
-        const store = tx.objectStore(storeName)
-        const req = fn(store)
-        req.onsuccess = () => resolve(req.result)
-        req.onerror = () => reject(req.error)
-      }),
-  )
+  return runTransaction(storeName, mode, (tx) => fn(tx.objectStore(storeName)))
 }
 
 // ===== Tasks =====
@@ -89,18 +208,12 @@ export function clearAgentConversations(): Promise<undefined> {
 }
 
 export function replaceAgentConversations(conversations: AgentConversation[]): Promise<undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_AGENT_CONVERSATIONS, 'readwrite')
-        const store = tx.objectStore(STORE_AGENT_CONVERSATIONS)
-        store.clear()
-        for (const conversation of conversations) store.put(conversation)
-        tx.oncomplete = () => resolve(undefined)
-        tx.onerror = () => reject(tx.error)
-        tx.onabort = () => reject(tx.error)
-      }),
-  )
+  return runTransaction(STORE_AGENT_CONVERSATIONS, 'readwrite', (tx) => {
+    const store = tx.objectStore(STORE_AGENT_CONVERSATIONS)
+    const req = store.clear()
+    for (const conversation of conversations) store.put(conversation)
+    return req
+  })
 }
 
 // ===== Prompt cache =====
@@ -111,6 +224,35 @@ export function getAllPromptCaches(): Promise<PromptCache[]> {
 
 export function putPromptCache(cache: PromptCache): Promise<IDBValidKey> {
   return dbTransaction(STORE_PROMPT_CACHE, 'readwrite', (s) => s.put(cache))
+}
+
+// ===== Prompt projects =====
+
+export function getAllPromptProjects(): Promise<PromptProject[]> {
+  return dbTransaction(STORE_PROMPT_PROJECTS, 'readonly', (s) => s.getAll())
+}
+
+export function getPromptProject(id: string): Promise<PromptProject | null> {
+  return dbTransaction<PromptProject | undefined>(STORE_PROMPT_PROJECTS, 'readonly', (s) => s.get(id))
+    .then((project) => project ?? null)
+}
+
+export function getPromptProjectByConversationId(conversationId: string): Promise<PromptProject | null> {
+  return dbTransaction<PromptProject[]>(STORE_PROMPT_PROJECTS, 'readonly', (s) =>
+    s.index(INDEX_PROMPT_PROJECTS_CONVERSATION_ID).getAll(conversationId),
+  ).then((projects) => projects.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null)
+}
+
+export function putPromptProject(project: PromptProject): Promise<IDBValidKey> {
+  return dbTransaction(STORE_PROMPT_PROJECTS, 'readwrite', (s) => s.put(project))
+}
+
+export function deletePromptProject(id: string): Promise<undefined> {
+  return dbTransaction(STORE_PROMPT_PROJECTS, 'readwrite', (s) => s.delete(id))
+}
+
+export function clearPromptProjects(): Promise<undefined> {
+  return dbTransaction(STORE_PROMPT_PROJECTS, 'readwrite', (s) => s.clear())
 }
 
 // ===== Images =====
@@ -191,29 +333,17 @@ export function putImage(image: StoredImage): Promise<IDBValidKey> {
 }
 
 export function deleteImage(id: string): Promise<undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction([STORE_IMAGES, STORE_THUMBNAILS], 'readwrite')
-        tx.objectStore(STORE_IMAGES).delete(id)
-        tx.objectStore(STORE_THUMBNAILS).delete(id)
-        tx.oncomplete = () => resolve(undefined)
-        tx.onerror = () => reject(tx.error)
-      }),
-  )
+  return runTransaction([STORE_IMAGES, STORE_THUMBNAILS], 'readwrite', (tx) => {
+    tx.objectStore(STORE_IMAGES).delete(id)
+    return tx.objectStore(STORE_THUMBNAILS).delete(id)
+  })
 }
 
 export function clearImages(): Promise<undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction([STORE_IMAGES, STORE_THUMBNAILS], 'readwrite')
-        tx.objectStore(STORE_IMAGES).clear()
-        tx.objectStore(STORE_THUMBNAILS).clear()
-        tx.oncomplete = () => resolve(undefined)
-        tx.onerror = () => reject(tx.error)
-      }),
-  )
+  return runTransaction([STORE_IMAGES, STORE_THUMBNAILS], 'readwrite', (tx) => {
+    tx.objectStore(STORE_IMAGES).clear()
+    return tx.objectStore(STORE_THUMBNAILS).clear()
+  })
 }
 
 // ===== Image hashing & dedup =====

@@ -2,6 +2,7 @@ import type { InputImage } from '../types'
 
 const MENTION_START = '\u2063'
 const MENTION_END = '\u2064'
+const IMAGE_MENTION_RE = /(?:\u2063)?@图(\d+)(?:\u2064)?/g
 const SELECTED_IMAGE_MENTION_RE = /\u2063@图(\d+)\u2064/g
 const SELECTED_MENTION_RE = /\u2063(@图(\d+)|@(?:第)?\d+轮图\d+)\u2064/g
 
@@ -20,6 +21,14 @@ export function getSelectedImageMentionLabel(index: number) {
 
 export function getSelectedTextMentionLabel(text: string) {
   return `${MENTION_START}${text}${MENTION_END}`
+}
+
+export function restoreImageMentionMarkers(prompt: string, imageCount: number) {
+  return prompt.replace(IMAGE_MENTION_RE, (text, n) => {
+    const index = Number(n) - 1
+    if (index < 0 || index >= imageCount) return stripImageMentionMarkers(text)
+    return getSelectedImageMentionLabel(index)
+  })
 }
 
 export function stripImageMentionMarkers(prompt: string): string {

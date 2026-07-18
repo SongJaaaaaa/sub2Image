@@ -20,6 +20,7 @@ export interface CallApiOptions {
   onFalRequestEnqueued?: (request: { requestId: string; endpoint: string }) => void
   onCustomTaskEnqueued?: (task: { taskId: string }) => void
   onPartialImage?: (partial: { image: string; partialImageIndex?: number; requestIndex?: number }) => void
+  signal?: AbortSignal
 }
 
 export interface CallApiResult {
@@ -105,25 +106,58 @@ export function maybeAppendStreamingHint(message: string, status: number, stream
   return appendStreamingUnsupportedHint(message)
 }
 
-async function probeNoCorsReachability(url: string, timeoutMs = 8000): Promise<'opaque' | 'reachable' | 'failed'> {
+export function createRequestAbortScope(callerSignal: AbortSignal | undefined, timeoutMs: number) {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const clearRequestTimeout = () => {
+    if (timeoutId === null) return
+    clearTimeout(timeoutId)
+    timeoutId = null
+  }
+  const abortFromCaller = () => {
+    clearRequestTimeout()
+    controller.abort(callerSignal?.reason ?? new DOMException('请求已停止', 'AbortError'))
+  }
+
+  timeoutId = setTimeout(() => {
+    timeoutId = null
+    callerSignal?.removeEventListener('abort', abortFromCaller)
+    controller.abort(new DOMException('请求超时', 'TimeoutError'))
+  }, timeoutMs)
+
+  if (callerSignal?.aborted) abortFromCaller()
+  else callerSignal?.addEventListener('abort', abortFromCaller, { once: true })
+
+  return {
+    signal: controller.signal,
+    clearTimeout: clearRequestTimeout,
+    dispose: () => {
+      clearRequestTimeout()
+      callerSignal?.removeEventListener('abort', abortFromCaller)
+    },
+  }
+}
+
+async function probeNoCorsReachability(url: string, timeoutMs = 8000, signal?: AbortSignal): Promise<'opaque' | 'reachable' | 'failed'> {
+  const request = createRequestAbortScope(signal, timeoutMs)
   try {
     const response = await fetch(url, {
       method: 'GET',
       mode: 'no-cors',
       cache: 'no-store',
-      signal: controller.signal,
+      signal: request.signal,
     })
     return response.type === 'opaque' ? 'opaque' : 'reachable'
   } catch {
+    signal?.throwIfAborted()
     return 'failed'
   } finally {
-    clearTimeout(timeoutId)
+    request.dispose()
   }
 }
 
 export async function fetchImageUrlAsDataUrl(url: string, fallbackMime: string, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted()
   if (isDataUrl(url)) return url
 
   let response: Response
@@ -133,8 +167,9 @@ export async function fetchImageUrlAsDataUrl(url: string, fallbackMime: string, 
       signal,
     })
   } catch (err) {
+    signal?.throwIfAborted()
     if (err instanceof TypeError) {
-      const probe = await probeNoCorsReachability(url)
+      const probe = await probeNoCorsReachability(url, 8000, signal)
       if (probe === 'opaque') {
         throw new Error(`图片已生成，但因服务商未允许跨域，图片链接下载失败。${IMAGE_FETCH_CORS_HINT}`)
       }
@@ -151,7 +186,10 @@ export async function fetchImageUrlAsDataUrl(url: string, fallbackMime: string, 
   }
 
   const blob = await response.blob()
-  return blobToDataUrl(blob, fallbackMime)
+  signal?.throwIfAborted()
+  const dataUrl = await blobToDataUrl(blob, fallbackMime)
+  signal?.throwIfAborted()
+  return dataUrl
 }
 
 export async function getApiErrorMessage(response: Response): Promise<string> {

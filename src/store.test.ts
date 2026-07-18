@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { strToU8, zipSync } from 'fflate'
+import type { PromptProject } from './features/promptStudio'
 import { DEFAULT_PARAMS } from './types'
 import { createDefaultFalProfile, createDefaultOpenAIProfile, DEFAULT_RESPONSES_MODEL, DEFAULT_SETTINGS, normalizeSettings } from './lib/apiProfiles'
+import { buildExportZip } from './lib/exportZip'
 import type { AgentConversation, ExportData, StoredImage, StoredImageThumbnail, TaskRecord } from './types'
 import { getSelectedImageMentionLabel } from './lib/promptImageMentions'
 vi.mock('./lib/db', () => {
@@ -9,6 +11,7 @@ vi.mock('./lib/db', () => {
   const images = new Map<string, StoredImage>()
   const thumbnails = new Map<string, StoredImageThumbnail>()
   const agentConversations = new Map<string, AgentConversation>()
+  const promptProjects = new Map<string, PromptProject>()
   let imageSeq = 0
 
   return {
@@ -38,6 +41,22 @@ vi.mock('./lib/db', () => {
     replaceAgentConversations: async (conversations: AgentConversation[]) => {
       agentConversations.clear()
       for (const conversation of conversations) agentConversations.set(conversation.id, conversation)
+    },
+    getAllPromptProjects: async () => [...promptProjects.values()],
+    getPromptProject: async (id: string) => promptProjects.get(id),
+    getPromptProjectByConversationId: async (conversationId: string) =>
+      [...promptProjects.values()]
+        .filter((project) => project.conversationId === conversationId)
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0],
+    putPromptProject: async (project: PromptProject) => {
+      promptProjects.set(project.id, project)
+      return project.id
+    },
+    deletePromptProject: async (id: string) => {
+      promptProjects.delete(id)
+    },
+    clearPromptProjects: async () => {
+      promptProjects.clear()
     },
     getImage: async (id: string) => images.get(id),
     getImageThumbnail: async (id: string) => thumbnails.get(id),
@@ -92,6 +111,14 @@ vi.mock('./lib/falAiImageApi', () => ({
     revisedPrompts: [],
   })),
 }))
+vi.mock('./lib/openaiCompatibleImageApi', () => ({
+  getCustomQueuedImageResult: vi.fn(async () => ({
+    images: [],
+    actualParams: {},
+    actualParamsList: [],
+    revisedPrompts: [],
+  })),
+}))
 vi.mock('./lib/transparentImage', () => ({
   GREEN_KEY_COLOR: '#00FF00',
   MAGENTA_KEY_COLOR: '#FF00FF',
@@ -127,11 +154,13 @@ vi.mock('./lib/agentApi', () => ({
     }
   }),
 }))
-import { clearAgentConversations, clearImages, clearTasks, getAllAgentConversations, getAllTasks, getImage, putAgentConversation, putImage, putTask as putDbTask } from './lib/db'
-import { callAgentResponsesApi, callBatchImageSingle } from './lib/agentApi'
+import { clearAgentConversations, clearImages, clearPromptProjects, clearTasks, getAllAgentConversations, getAllPromptProjects, getAllTasks, getImage, putAgentConversation, putImage, putPromptProject, putTask as putDbTask } from './lib/db'
+import { callImageApi } from './lib/api'
+import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle } from './lib/agentApi'
 import { getFalQueuedImageResult } from './lib/falAiImageApi'
+import { getCustomQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { removeKeyedBackgroundFromDataUrl } from './lib/transparentImage'
-import { cleanStaleAgentInputDrafts, clearFailedTasks, deleteAgentRoundFromConversation, deleteFavoriteCollection, editOutputs, getActiveAgentRounds, getAgentConversationTaskIds, getAgentRoundTaskIds, getErrorToastMessage, getPersistedState, getTaskApiProfile, importData, initStore, markInterruptedOpenAIRunningTasks, migratePersistedState, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeTask, reuseConfig, stopAgentResponse, submitAgentMessage, submitTask, taskMatchesFilterStatus, taskMatchesSearchQuery, useStore } from './store'
+import { applyComposerDraft, cleanStaleAgentInputDrafts, clearData, clearFailedTasks, deleteAgentRoundFromConversation, deleteFavoriteCollection, deleteImageIfUnreferenced, editOutputs, getActiveAgentRounds, getAgentConversationTaskIds, getAgentRoundTaskIds, getErrorToastMessage, getPersistedState, getTaskApiProfile, importData, initStore, loadComposerDraft, markInterruptedOpenAIRunningTasks, migratePersistedState, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeMultipleTasks, removeTask, reuseConfig, stopAgentResponse, submitAgentMessage, submitTask, taskMatchesFilterStatus, taskMatchesSearchQuery, useStore } from './store'
 
 const imageA = { id: 'image-a', dataUrl: 'data:image/png;base64,a' }
 const imageB = { id: 'image-b', dataUrl: 'data:image/png;base64,b' }
@@ -143,6 +172,102 @@ describe('error toast messages', () => {
 
   it('uses a generic message for long raw errors without a title', () => {
     expect(getErrorToastMessage(`invalid request ${'x'.repeat(90)}`)).toBe('操作失败，请查看详情')
+  })
+})
+
+describe('prompt project image references', () => {
+  beforeEach(async () => {
+    await clearTasks()
+    await clearAgentConversations()
+    await clearImages()
+    await clearPromptProjects()
+    useStore.setState({
+      tasks: [],
+      agentConversations: [],
+      agentInputDrafts: {},
+      galleryInputDraft: null,
+      inputImages: [],
+      maskDraft: null,
+      maskEditorImageId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('does not delete an image while a prompt project still references it', async () => {
+    await putImage({ id: 'project-image', dataUrl: 'data:image/png;base64,project' })
+    await putPromptProject(promptProject({
+      source: {
+        type: 'conversation',
+        assets: [{ id: 'project-image', type: 'image', label: '主体参考' }],
+      },
+    }))
+
+    await deleteImageIfUnreferenced('project-image')
+    expect(await getImage('project-image')).toBeDefined()
+
+    await clearPromptProjects()
+    await deleteImageIfUnreferenced('project-image')
+    expect(await getImage('project-image')).toBeUndefined()
+  })
+
+  it('loads prompt project references before startup orphan cleanup', async () => {
+    await putImage({ id: 'project-image', dataUrl: 'data:image/png;base64,project' })
+    await putImage({ id: 'orphan-image', dataUrl: 'data:image/png;base64,orphan' })
+    await putPromptProject(promptProject({
+      source: {
+        type: 'conversation',
+        assets: [{ id: 'project-image', type: 'image', label: '主体参考' }],
+      },
+    }))
+
+    await initStore()
+
+    expect(await getImage('project-image')).toBeDefined()
+    expect(await getImage('orphan-image')).toBeUndefined()
+  })
+
+  it('keeps project images when clearing tasks without prompt projects', async () => {
+    await putImage({ id: 'project-image', dataUrl: 'data:image/png;base64,project' })
+    await putPromptProject(promptProject({
+      source: {
+        type: 'conversation',
+        assets: [{ id: 'project-image', type: 'image', label: '主体参考' }],
+      },
+    }))
+
+    await clearData({ clearConfig: false, clearTasks: true, clearPromptProjects: false })
+
+    expect(await getImage('project-image')).toBeDefined()
+    expect(await getAllPromptProjects()).toHaveLength(1)
+
+    await clearData({ clearConfig: false, clearTasks: false, clearPromptProjects: true })
+    expect(await getImage('project-image')).toBeUndefined()
+  })
+
+  it('keeps project images across single, batch and failed task cleanup', async () => {
+    await putImage({ id: 'project-image', dataUrl: 'data:image/png;base64,project' })
+    await putPromptProject(promptProject({
+      source: {
+        type: 'conversation',
+        assets: [{ id: 'project-image', type: 'image', label: '主体参考' }],
+      },
+    }))
+
+    const single = task({ id: 'single-task', outputImages: ['project-image'] })
+    useStore.setState({ tasks: [single] })
+    await removeTask(single)
+    expect(await getImage('project-image')).toBeDefined()
+
+    const batchA = task({ id: 'batch-a', outputImages: ['project-image'] })
+    const batchB = task({ id: 'batch-b', inputImageIds: ['project-image'] })
+    useStore.setState({ tasks: [batchA, batchB] })
+    await removeMultipleTasks([batchA.id, batchB.id])
+    expect(await getImage('project-image')).toBeDefined()
+
+    const failed = task({ id: 'failed-task', status: 'error', error: '失败', outputImages: ['project-image'] })
+    useStore.setState({ tasks: [failed] })
+    await clearFailedTasks()
+    expect(await getImage('project-image')).toBeDefined()
   })
 })
 
@@ -177,11 +302,109 @@ function task(overrides: Partial<TaskRecord> = {}): TaskRecord {
   }
 }
 
+function promptProject(overrides: Partial<PromptProject> = {}): PromptProject {
+  return {
+    id: 'project-a',
+    conversationId: 'conversation-a',
+    domain: 'image',
+    title: '提示词项目',
+    source: { type: 'conversation' },
+    brief: { domain: 'image', fields: {} },
+    messages: [],
+    pendingConflicts: [],
+    versions: [],
+    phase: 'ready',
+    schemaVersion: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  }
+}
+
 function importFile(data: ExportData): File {
   const zipped = zipSync({ 'manifest.json': strToU8(JSON.stringify(data)) })
   const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength)
   return { arrayBuffer: async () => buffer } as File
 }
+
+function importZip(bytes: Uint8Array): File {
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  return { arrayBuffer: async () => buffer } as File
+}
+
+describe('composer draft commands', () => {
+  beforeEach(() => {
+    useStore.setState({
+      appMode: 'agent',
+      prompt: '旧草稿',
+      inputImages: [imageA],
+      maskDraft: null,
+      maskEditorImageId: null,
+      params: { ...DEFAULT_PARAMS },
+      agentConversations: [agentConversation()],
+      activeAgentConversationId: 'conversation-a',
+      agentInputDrafts: {},
+    })
+  })
+
+  it('applies text, images, mask, mentions and params in one store update', () => {
+    const prompt = `${getSelectedImageMentionLabel(0)} 和 ${getSelectedImageMentionLabel(1)}`
+    let updates = 0
+    const unsubscribe = useStore.subscribe(() => { updates += 1 })
+
+    applyComposerDraft({
+      prompt,
+      inputImages: [imageA, imageB],
+      maskDraft: {
+        targetImageId: imageB.id,
+        maskDataUrl: 'data:image/png;base64,mask',
+        updatedAt: 1,
+      },
+      maskEditorImageId: imageB.id,
+      params: { quality: 'high' },
+    })
+    unsubscribe()
+
+    const state = useStore.getState()
+    expect(updates).toBe(1)
+    expect(state.inputImages.map((img) => img.id)).toEqual([imageB.id, imageA.id])
+    expect(state.prompt).toBe(`${getSelectedImageMentionLabel(1)} 和 ${getSelectedImageMentionLabel(0)}`)
+    expect(state.maskDraft).toMatchObject({ targetImageId: imageB.id })
+    expect(state.maskEditorImageId).toBe(imageB.id)
+    expect(state.params.quality).toBe('high')
+    expect(state.agentInputDrafts['conversation-a']).toMatchObject({
+      prompt: state.prompt,
+      inputImages: state.inputImages,
+      maskDraft: state.maskDraft,
+      maskEditorImageId: imageB.id,
+    })
+    expect(state.agentInputDrafts['conversation-a']).not.toHaveProperty('params')
+  })
+
+  it('loads a detached snapshot and clears a mask whose target is missing', () => {
+    useStore.setState({ params: { ...DEFAULT_PARAMS, quality: 'medium' } })
+    applyComposerDraft({
+      prompt: getSelectedImageMentionLabel(0),
+      inputImages: [imageA],
+      maskDraft: {
+        targetImageId: 'missing-image',
+        maskDataUrl: 'data:image/png;base64,mask',
+        updatedAt: 1,
+      },
+      maskEditorImageId: 'missing-image',
+    })
+
+    const draft = loadComposerDraft()
+    draft.inputImages[0]!.dataUrl = 'changed'
+    draft.params!.quality = 'low'
+
+    const state = useStore.getState()
+    expect(state.maskDraft).toBeNull()
+    expect(state.maskEditorImageId).toBeNull()
+    expect(state.inputImages[0]?.dataUrl).toBe(imageA.dataUrl)
+    expect(state.params.quality).toBe('medium')
+  })
+})
 
 describe('favorite collection deletion', () => {
   const collectionA = { id: 'collection-a', name: '收藏夹 A', createdAt: 1, updatedAt: 1 }
@@ -293,6 +516,25 @@ describe('mask draft lifecycle in store actions', () => {
     const state = useStore.getState()
     expect(state.tasks).toHaveLength(1)
     expect(state.showToast).toHaveBeenCalledWith('任务已提交', 'success')
+  })
+
+  it('submits the captured gallery draft without clearing newer input', async () => {
+    const state = useStore.getState()
+    const draft = {
+      prompt: '点击发送时的提示词',
+      inputImages: [],
+      maskDraft: null,
+      params: { ...DEFAULT_PARAMS },
+    }
+    useStore.setState({
+      settings: { ...state.settings, clearInputAfterSubmit: true },
+      prompt: '发送后继续输入的内容',
+    })
+
+    await submitTask({ draft })
+
+    expect(useStore.getState().tasks[0].prompt).toBe(draft.prompt)
+    expect(useStore.getState().prompt).toBe('发送后继续输入的内容')
   })
 
   it('stores decoded image size as actual size when the API omits size', async () => {
@@ -493,6 +735,289 @@ describe('mask draft lifecycle in store actions', () => {
     const state = useStore.getState()
     expect(state.inputImages.map((img) => img.id)).toEqual([replacement.id, imageB.id])
     expect(state.prompt).toBe(prompt)
+  })
+})
+
+describe('external request aborts in store actions', () => {
+  beforeEach(async () => {
+    await clearTasks()
+    await clearImages()
+    vi.mocked(callImageApi).mockReset().mockResolvedValue({
+      images: [],
+      actualParams: {},
+      actualParamsList: [],
+      revisedPrompts: [],
+    })
+    vi.mocked(getFalQueuedImageResult).mockClear()
+    vi.mocked(getCustomQueuedImageResult).mockClear()
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      appMode: 'gallery',
+      prompt: 'prompt',
+      inputImages: [],
+      maskDraft: null,
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      streamPreviews: {},
+      streamPreviewSlots: {},
+      confirmDialog: null,
+      reusedTaskApiProfileId: null,
+      reusedTaskApiProfileName: null,
+      reusedTaskApiProfileMissing: false,
+      agentConversations: [],
+      activeAgentConversationId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('passes the signal to the image API and ignores partials and results that arrive after abort', async () => {
+    let apiOpts!: Parameters<typeof callImageApi>[0]
+    let start!: () => void
+    let resolveApi!: (result: Awaited<ReturnType<typeof callImageApi>>) => void
+    const started = new Promise<void>((resolve) => { start = resolve })
+    const apiResult = new Promise<Awaited<ReturnType<typeof callImageApi>>>((resolve) => { resolveApi = resolve })
+    vi.mocked(callImageApi).mockImplementationOnce(async (opts) => {
+      apiOpts = opts
+      start()
+      return apiResult
+    })
+    const controller = new AbortController()
+    const submit = submitTask({ signal: controller.signal })
+
+    await started
+    const taskId = useStore.getState().tasks[0].id
+    expect(apiOpts.signal).toBe(controller.signal)
+
+    controller.abort(new DOMException('用户停止', 'AbortError'))
+    apiOpts.onPartialImage?.({ image: 'data:image/png;base64,late-partial' })
+    resolveApi({
+      images: ['data:image/png;base64,late-result'],
+      actualParams: {},
+      actualParamsList: [],
+      revisedPrompts: [],
+    })
+    await submit
+
+    const stopped = useStore.getState().tasks.find((item) => item.id === taskId)
+    expect(stopped).toMatchObject({
+      status: 'error',
+      error: '已停止生成。',
+      outputImages: [],
+      falRecoverable: false,
+      customRecoverable: false,
+    })
+    expect(stopped?.streamPartialImageIds).toBeUndefined()
+    expect(useStore.getState().streamPreviews[taskId]).toBeUndefined()
+    expect(useStore.getState().streamPreviewSlots[taskId]).toBeUndefined()
+  })
+
+  it('keeps the same signal after confirming a missing reused profile', async () => {
+    const profile = createDefaultOpenAIProfile({ id: 'current-profile', apiKey: 'test-key' })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+        reuseTaskApiProfileTemporarily: true,
+      }),
+      reusedTaskApiProfileId: null,
+      reusedTaskApiProfileName: '已删除配置',
+      reusedTaskApiProfileMissing: true,
+    })
+    let apiSignal: AbortSignal | undefined
+    let start!: () => void
+    const started = new Promise<void>((resolve) => { start = resolve })
+    vi.mocked(callImageApi).mockImplementationOnce((opts) => new Promise((_resolve, reject) => {
+      apiSignal = opts.signal
+      start()
+      opts.signal?.addEventListener('abort', () => reject(opts.signal?.reason), { once: true })
+    }))
+    const controller = new AbortController()
+    const submit = submitTask({ signal: controller.signal })
+    const dialog = useStore.getState().confirmDialog
+
+    expect(dialog?.title).toBe('找不到 API 配置')
+    dialog?.action?.()
+    useStore.setState({ confirmDialog: null })
+    await started
+    controller.abort(new DOMException('用户停止', 'AbortError'))
+    await submit
+
+    expect(apiSignal).toBe(controller.signal)
+    expect(useStore.getState().tasks[0]).toMatchObject({ status: 'error', error: '已停止生成。' })
+  })
+
+  it('closes a pending task confirmation when its Runtime signal aborts', async () => {
+    useStore.setState({
+      settings: normalizeSettings({ ...DEFAULT_SETTINGS, reuseTaskApiProfileTemporarily: true }),
+      reusedTaskApiProfileId: null,
+      reusedTaskApiProfileName: '已删除配置',
+      reusedTaskApiProfileMissing: true,
+    })
+    const controller = new AbortController()
+    const submit = submitTask({ signal: controller.signal })
+    expect(useStore.getState().confirmDialog?.title).toBe('找不到 API 配置')
+
+    controller.abort(new DOMException('用户停止', 'AbortError'))
+
+    await expect(submit).rejects.toMatchObject({ name: 'AbortError' })
+    expect(useStore.getState().confirmDialog).toBeNull()
+    expect(useStore.getState().tasks).toEqual([])
+  })
+
+  it.each(['fal', 'custom'] as const)('does not schedule %s recovery after caller abort', async (provider) => {
+    vi.useFakeTimers()
+    try {
+      const profile = provider === 'fal'
+        ? createDefaultFalProfile({ id: 'fal-abort', apiKey: 'test-key' })
+        : { ...createDefaultOpenAIProfile({ id: 'custom-abort', apiKey: 'test-key' }), provider: 'custom-abort' }
+      useStore.setState({
+        settings: normalizeSettings({
+          ...DEFAULT_SETTINGS,
+          customProviders: provider === 'custom' ? [{
+            id: 'custom-abort',
+            name: 'Custom Abort',
+            submit: { path: 'images/generations', taskIdPath: 'task_id' },
+            poll: {
+              path: 'images/tasks/{task_id}',
+              statusPath: 'status',
+              successValues: ['done'],
+              failureValues: ['failed'],
+              result: { b64JsonPaths: ['data.*.b64_json'] },
+            },
+          }] : [],
+          profiles: [profile],
+          activeProfileId: profile.id,
+        }),
+      })
+
+      let start!: () => void
+      let resolveApi!: (result: Awaited<ReturnType<typeof callImageApi>>) => void
+      const started = new Promise<void>((resolve) => { start = resolve })
+      const apiResult = new Promise<Awaited<ReturnType<typeof callImageApi>>>((resolve) => { resolveApi = resolve })
+      vi.mocked(callImageApi).mockImplementationOnce(async (opts) => {
+        if (provider === 'fal') opts.onFalRequestEnqueued?.({ requestId: 'fal-request', endpoint: 'fal/model' })
+        else opts.onCustomTaskEnqueued?.({ taskId: 'custom-task' })
+        start()
+        return apiResult
+      })
+      const controller = new AbortController()
+      const submit = submitTask({ signal: controller.signal })
+
+      await started
+      controller.abort(new DOMException('用户停止', 'AbortError'))
+      resolveApi({ images: [], actualParams: {}, actualParamsList: [], revisedPrompts: [] })
+      await submit
+
+      expect(useStore.getState().tasks[0]).toMatchObject({
+        status: 'error',
+        error: '已停止生成。',
+        falRecoverable: false,
+        customRecoverable: false,
+      })
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(getFalQueuedImageResult).not.toHaveBeenCalled()
+      expect(getCustomQueuedImageResult).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops the Agent round when its external signal aborts', async () => {
+    const profile = createDefaultOpenAIProfile({
+      id: 'agent-abort',
+      apiKey: 'test-key',
+      apiMode: 'responses',
+      model: DEFAULT_RESPONSES_MODEL,
+    })
+    const conversation = agentConversation()
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+      }),
+      appMode: 'agent',
+      prompt: '停止这个回复',
+      agentConversations: [conversation],
+      activeAgentConversationId: conversation.id,
+    })
+
+    let apiSignal: AbortSignal | undefined
+    let titleSignal: AbortSignal | undefined
+    let start!: () => void
+    const started = new Promise<void>((resolve) => { start = resolve })
+    vi.mocked(callAgentResponsesApi).mockImplementationOnce((opts) => new Promise((_resolve, reject) => {
+      apiSignal = opts.signal
+      start()
+      opts.signal?.addEventListener('abort', () => reject(opts.signal?.reason), { once: true })
+    }))
+    vi.mocked(callAgentConversationTitleApi).mockImplementationOnce((opts) => new Promise((_resolve, reject) => {
+      titleSignal = opts.signal
+      opts.signal?.addEventListener('abort', () => reject(opts.signal?.reason), { once: true })
+    }))
+    const controller = new AbortController()
+    const submit = submitAgentMessage({ signal: controller.signal })
+
+    await started
+    await vi.waitFor(() => expect(titleSignal).toBe(controller.signal))
+    controller.abort(new DOMException('用户停止', 'AbortError'))
+    await submit
+
+    expect(apiSignal?.aborted).toBe(true)
+    expect(titleSignal?.aborted).toBe(true)
+    expect(useStore.getState().agentConversations[0].rounds[0]).toMatchObject({
+      status: 'error',
+      error: '已停止生成。',
+    })
+  })
+
+  it('submits an Agent draft to its captured conversation after switching away', async () => {
+    const profile = createDefaultOpenAIProfile({
+      id: 'agent-snapshot',
+      apiKey: 'test-key',
+      apiMode: 'responses',
+      model: DEFAULT_RESPONSES_MODEL,
+    })
+    const target = agentConversation({ id: 'conversation-target' })
+    const active = agentConversation({ id: 'conversation-active' })
+    const draft = {
+      prompt: '目标会话的消息',
+      inputImages: [],
+      maskDraft: null,
+      params: { ...DEFAULT_PARAMS },
+    }
+    vi.mocked(callAgentResponsesApi).mockResolvedValueOnce({
+      responseId: 'response-snapshot',
+      text: '完成',
+      images: [],
+      outputItems: [],
+    })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+      }),
+      appMode: 'agent',
+      prompt: '当前会话的新草稿',
+      inputImages: [],
+      maskDraft: null,
+      params: { ...DEFAULT_PARAMS },
+      agentConversations: [target, active],
+      activeAgentConversationId: active.id,
+      showToast: vi.fn(),
+    })
+
+    await submitAgentMessage({ conversationId: target.id, draft, editingRoundId: null })
+
+    const state = useStore.getState()
+    expect(state.agentConversations.find((item) => item.id === target.id)?.rounds[0]).toMatchObject({
+      prompt: draft.prompt,
+      status: 'done',
+    })
+    expect(state.agentConversations.find((item) => item.id === active.id)?.rounds).toEqual([])
+    expect(state.prompt).toBe('当前会话的新草稿')
   })
 })
 
@@ -1496,6 +2021,101 @@ describe('data import', () => {
       showToast: vi.fn(),
     })
     await clearAgentConversations()
+    await clearPromptProjects()
+  })
+
+  it('migrates prompt projects and keeps both sides of an id conflict', async () => {
+    const local = promptProject({ id: 'shared-project', title: '本地项目' })
+    const importedVersion = {
+      id: 'version-a',
+      artifact: { domain: 'image', title: '版本', prompt: '完整提示词', params: {} },
+      source: 'model' as const,
+      createdAt: 2,
+    }
+    const incoming = {
+      ...promptProject({
+        id: 'shared-project',
+        title: '导入项目',
+        source: {
+          type: 'conversation',
+          assets: [{ id: 'project-image', type: 'image' as const, label: '主体参考' }],
+        },
+        versions: [importedVersion],
+        activeVersionId: importedVersion.id,
+      }),
+      schemaVersion: 0,
+    }
+    const child = promptProject({
+      id: 'child-project',
+      title: '关联项目',
+      source: { type: 'project', id: incoming.id },
+    })
+    await putPromptProject(local)
+
+    const imported = await importData(importFile({
+      version: 4,
+      exportedAt: new Date(0).toISOString(),
+      promptProjects: [incoming as unknown as PromptProject, child],
+      imageFiles: {},
+    }), { importConfig: false, importTasks: false, importPromptProjects: true })
+
+    const projects = await getAllPromptProjects()
+    const restored = projects.find((project) => project.title === incoming.title)
+    const restoredChild = projects.find((project) => project.id === child.id)
+    expect(imported).toBe(true)
+    expect(projects).toHaveLength(3)
+    expect(projects.find((project) => project.id === local.id)?.title).toBe(local.title)
+    expect(restored?.id).not.toBe(local.id)
+    expect(restored?.schemaVersion).toBe(1)
+    expect(restored?.versions).toEqual([importedVersion])
+    expect(restored?.source.assets).toEqual(incoming.source.assets)
+    expect(restoredChild?.source.id).toBe(restored?.id)
+  })
+
+  it('round-trips project versions, asset refs and project-only images through ZIP', async () => {
+    const version = {
+      id: 'version-a',
+      artifact: { domain: 'image', title: '版本', prompt: '完整提示词', params: { quality: 'high' } },
+      source: 'model' as const,
+      createdAt: 2,
+    }
+    const project = promptProject({
+      id: 'roundtrip-project',
+      source: {
+        type: 'conversation',
+        assets: [{ id: 'roundtrip-image', type: 'image', label: '主体参考', role: 'subject', width: 1200, height: 800 }],
+      },
+      versions: [version],
+      activeVersionId: version.id,
+    })
+    const image = {
+      id: 'roundtrip-image',
+      dataUrl: 'data:image/png;base64,AAECAw==',
+      source: 'upload' as const,
+      createdAt: 1700000000000,
+    }
+    const { bytes } = buildExportZip({
+      options: { exportPromptProjects: true },
+      exportedAt: 1700000001000,
+      settings: DEFAULT_SETTINGS,
+      tasks: [],
+      images: [image],
+      thumbnailsByImageId: new Map(),
+      favoriteCollections: [],
+      defaultFavoriteCollectionId: null,
+      agentConversations: [],
+      promptProjects: [project],
+    })
+
+    const imported = await importData(importZip(bytes), {
+      importConfig: false,
+      importTasks: false,
+      importPromptProjects: true,
+    })
+
+    expect(imported).toBe(true)
+    expect(await getAllPromptProjects()).toEqual([project])
+    expect(await getImage(image.id)).toEqual(expect.objectContaining(image))
   })
 
   it('restores favorite collections and default collection when importing task data', async () => {
@@ -2853,6 +3473,81 @@ describe('reused task API profile', () => {
     const state = useStore.getState()
     expect(state.inputImages.map((img) => img.id)).toEqual([imageA.id, imageB.id])
     expect(state.prompt).toBe(taskPrompt)
+  })
+
+  it('restores a reused mask and remaps mentions with the mask target first', async () => {
+    await clearImages()
+    await putImage(imageA)
+    await putImage(imageB)
+    await putImage({ id: 'mask-a', dataUrl: 'data:image/png;base64,mask' })
+
+    await reuseConfig(task({
+      apiProvider: 'openai',
+      apiProfileId: openaiProfile.id,
+      prompt: `${getSelectedImageMentionLabel(0)} 和 ${getSelectedImageMentionLabel(1)}`,
+      inputImageIds: [imageA.id, imageB.id],
+      maskTargetImageId: imageB.id,
+      maskImageId: 'mask-a',
+      params: { ...DEFAULT_PARAMS, quality: 'high' },
+    }))
+
+    const state = useStore.getState()
+    expect(state.inputImages.map((img) => img.id)).toEqual([imageB.id, imageA.id])
+    expect(state.prompt).toBe(`${getSelectedImageMentionLabel(1)} 和 ${getSelectedImageMentionLabel(0)}`)
+    expect(state.maskDraft).toMatchObject({
+      targetImageId: imageB.id,
+      maskDataUrl: 'data:image/png;base64,mask',
+    })
+    expect(state.params.quality).toBe('high')
+  })
+
+  it('does not overwrite a draft changed while reused images are loading', async () => {
+    await clearImages()
+    await putImage(imageA)
+    const pending = reuseConfig(task({
+      apiProvider: 'fal',
+      apiProfileId: falProfile.id,
+      prompt: '迟到的复用草稿',
+      inputImageIds: [imageA.id],
+    }))
+
+    useStore.getState().setPrompt('用户继续输入')
+    await pending
+
+    const state = useStore.getState()
+    expect(state.prompt).toBe('用户继续输入')
+    expect(state.inputImages).toEqual([])
+    expect(state.reusedTaskApiProfileId).toBeNull()
+  })
+
+  it('only applies the latest concurrent reuse request', async () => {
+    await clearImages()
+    await putImage(imageA)
+    await putImage(imageB)
+
+    const first = reuseConfig(task({ apiProvider: 'openai', apiProfileId: openaiProfile.id, prompt: '复用 A', inputImageIds: [imageA.id] }))
+    const second = reuseConfig(task({ apiProvider: 'openai', apiProfileId: openaiProfile.id, prompt: '复用 B', inputImageIds: [imageB.id] }))
+    await Promise.all([first, second])
+
+    const state = useStore.getState()
+    expect(state.prompt).toBe('复用 B')
+    expect(state.inputImages.map((img) => img.id)).toEqual([imageB.id])
+  })
+
+  it('marks missing reused image mentions instead of shifting them to another image', async () => {
+    await clearImages()
+    await putImage(imageB)
+
+    await reuseConfig(task({
+      apiProvider: 'openai',
+      apiProfileId: openaiProfile.id,
+      prompt: `${getSelectedImageMentionLabel(0)} 和 ${getSelectedImageMentionLabel(1)}`,
+      inputImageIds: ['missing-image', imageB.id],
+    }))
+
+    const state = useStore.getState()
+    expect(state.inputImages.map((img) => img.id)).toEqual([imageB.id])
+    expect(state.prompt).toBe(`@已移除图片 和 ${getSelectedImageMentionLabel(0)}`)
   })
 
   it('clears temporary reuse when switching current settings to the reused API profile', async () => {

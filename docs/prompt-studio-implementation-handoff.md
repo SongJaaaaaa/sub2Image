@@ -12,6 +12,7 @@
 2. D:\test项目\sub2Image\docs\prompt-studio-design.md
 3. D:\test项目\sub2Image\docs\prompt-studio-development-plan.md
 4. D:\test项目\sub2Image\docs\assets\prompt-studio-composer-reference.png
+5. D:\test项目\sub2Image\docs\assets\prompt-studio-parallel-composer-reference.png
 
 这些文档是跨会话事实来源，不要依赖当前对话之外的记忆。用户最新消息优先；如果最新要求改变了已确认设计，先同步更新两份文档再实现。
 
@@ -21,6 +22,8 @@
 - 开始工作包时把状态改成“进行中”。
 - 一次只完成一个工作包，不跨阶段混改；严格遵守该工作包的目标、涉及文件、测试门禁和回滚点。
 - 不进行一次性重写 InputBar，不向 store.ts 塞入 Prompt Studio 领域逻辑。
+- 开发和验收期间保留底部原 InputBar，把新 ConversationComposer 挂载在它正上方；两者同时可用，全部门禁通过且用户明确验收后才允许删除旧输入框。
+- 新旧输入框不得双重提交或同时响应同一次 paste/drop/快捷键；WP2 不显示空壳，WP3 具备最小可操作能力后再挂载验收区。
 - ConversationComposer 不得依赖具体 Tool；Prompt Studio、图片生成和普通对话通过公开 Tool 协议接入。
 - 提示词 Tool 默认关闭，只有用户主动开启后才运行。
 - 模型只优化和补充建议，最终提示词由用户决定。
