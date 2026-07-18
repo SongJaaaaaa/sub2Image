@@ -163,9 +163,8 @@ describe('ConversationView', () => {
 
     render(<ConversationView messages={[...batch, ...states]} registry={createSub2ImageMessageRendererRegistry()} />)
 
-    expect(screen.getByText('批量任务 A')).toBeTruthy()
-    expect(screen.getByText('批量任务 B')).toBeTruthy()
-    expect(screen.getByText('已停止图片任务')).toBeTruthy()
+    // 任务卡改为纯图片展示，不再渲染提示词文本，改为断言渲染出的任务卡数量
+    expect(document.querySelectorAll('.group\\/card').length).toBe(3)
     expect(screen.getByText('已停止', { exact: true })).toBeTruthy()
     expect(screen.getByText('[Image Removed]')).toBeTruthy()
   })
@@ -181,7 +180,8 @@ describe('ConversationView', () => {
       },
     }]} registry={createSub2ImageMessageRendererRegistry()} />)
 
-    expect(screen.getByText('独立图片生成结果')).toBeTruthy()
+    // 任务卡改为纯图片展示，不再渲染提示词文本，改为断言任务卡渲染成功
+    expect(document.querySelectorAll('.group\\/card').length).toBe(1)
   })
 
 })
