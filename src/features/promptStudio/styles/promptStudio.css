@@ -317,7 +317,8 @@
   transition: border-color 140ms, background 140ms, color 140ms;
 }
 
-.ps-agent-option:hover,
+/* 悬浮通过 onMouseEnter 移动唯一高亮（.is-highlighted），
+   :hover 不再单独套用选中样式，避免出现多个"选中"外观 */
 .ps-agent-option.is-active {
   border-color: color-mix(in srgb, var(--ps-ai-mid) 55%, var(--ps-line));
   background: color-mix(in srgb, var(--ps-ai-mid) 12%, var(--ps-panel));
@@ -338,7 +339,6 @@
   transition: opacity 140ms;
 }
 
-.ps-agent-option:hover .ps-agent-option-arrow,
 .ps-agent-option.is-active .ps-agent-option-arrow {
   opacity: 1;
   color: var(--ps-ai-ink);
@@ -357,7 +357,6 @@
   font-weight: 600;
 }
 
-.ps-agent-option:hover .ps-agent-option-index,
 .ps-agent-option.is-active .ps-agent-option-index {
   border-color: transparent;
   background: var(--ps-ai-mid);
@@ -378,6 +377,13 @@
   border: 1px solid var(--ps-line);
   border-radius: 8px;
   background: var(--ps-panel);
+}
+
+/* 输入框常驻聚焦（承接键盘导航），弱化聚焦外观避免与选项高亮抢注意力 */
+.ps-agent-custom input:focus,
+.ps-agent-custom input:focus-visible {
+  outline: none;
+  border-color: var(--ps-line-strong);
 }
 
 .ps-agent-next,

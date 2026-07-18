@@ -161,7 +161,7 @@ function AgentImageTaskMessage({ message }: ConversationMessageProps) {
   }
 
   return (
-    <div className="mt-4 w-44 max-w-full" onClick={(e) => e.stopPropagation()}>
+    <div className="mt-4 w-[200px] max-w-full" onClick={(e) => e.stopPropagation()}>
       <TaskCard
         task={task}
         disableSwipe

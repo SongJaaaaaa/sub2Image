@@ -235,11 +235,13 @@ function Question({
   const uniqueOptions = question.options.filter(
     (option, i, arr) => arr.findIndex((item) => sameValue(item.value, option.value)) === i,
   )
-  // 键盘高亮：默认选中第一条，上下键切换，回车确认
+  // 键盘高亮：默认选中第一条，上下键切换，回车确认。
+  // 输入自定义文本后高亮让位给输入框，避免出现"两个选中"。
   const [highlight, setHighlight] = useState(0)
   useEffect(() => {
     setHighlight(0)
   }, [question.id])
+  const highlightVisible = !custom.trim()
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (uniqueOptions.length > 0 && !custom.trim()) {
@@ -282,7 +284,7 @@ function Question({
               <button
                 key={`${question.id}-opt-${optionIndex}`}
                 type="button"
-                className={`ps-agent-option${active ? ' is-active' : ''}${optionIndex === highlight ? ' is-highlighted' : ''}`}
+                className={`ps-agent-option${active ? ' is-active' : ''}${highlightVisible && optionIndex === highlight ? ' is-highlighted' : ''}`}
                 aria-pressed={active}
                 onMouseEnter={() => setHighlight(optionIndex)}
                 onClick={() => question.input === 'multiple'
