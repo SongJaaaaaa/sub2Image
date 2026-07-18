@@ -24,7 +24,7 @@ function TaskActionButton({
   tooltip: string
   className: string
   disabled?: boolean
-  onClick?: () => void
+  onClick?: (e: React.MouseEvent) => void
   children: ReactNode
 }) {
   const [tooltipVisible, setTooltipVisible] = useState(false)
@@ -665,7 +665,10 @@ export default function TaskCard({
             </TaskActionButton>
             <TaskActionButton
               tooltip="删除任务"
-              onClick={onDelete}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
               className="p-1.5 rounded-md text-white/80 hover:text-red-300 hover:bg-white/10 transition"
             >
               <svg
