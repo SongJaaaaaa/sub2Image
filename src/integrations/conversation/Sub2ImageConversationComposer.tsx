@@ -122,6 +122,7 @@ export default function Sub2ImageConversationComposer() {
   const [promptAgentSelected, setPromptAgentSelected] = useState(false)
   const [promptStarting, setPromptStarting] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAgentWelcome, setShowAgentWelcome] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const promptDraftEditedRef = useRef(false)
   const [, refreshRuntime] = useReducer((value) => value + 1, 0)
@@ -437,10 +438,12 @@ export default function Sub2ImageConversationComposer() {
   const togglePromptAgent = async () => {
     if (promptAgentSelected) {
       setPromptAgentSelected(false)
+      setShowAgentWelcome(false)
       return
     }
 
     setPromptAgentSelected(true)
+    setShowAgentWelcome(true)
     window.requestAnimationFrame(() => editorRef.current?.focus())
     // 工作台模式选中 Agent 走对话分析流程，无需预载画廊的提示词问答工具
     if (appMode === 'agent') return
@@ -473,7 +476,7 @@ export default function Sub2ImageConversationComposer() {
 
   return (
     <>
-      {!showSettings && (
+      {(
         <div
           ref={dockRef}
           data-conversation-composer-dock
@@ -486,6 +489,17 @@ export default function Sub2ImageConversationComposer() {
           className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] left-1/2 z-30 w-full max-w-4xl -translate-x-1/2 px-3 sm:px-4"
         >
           {appMode === 'gallery' && <GallerySelectionActionBar />}
+          {showAgentWelcome && (
+            <div
+              className="cc-agent-welcome"
+              role="status"
+              onAnimationEnd={() => setShowAgentWelcome(false)}
+            >
+              <p className="cc-agent-welcome-title">欢迎使用 Agent 模式！</p>
+              <p>在此模式下，Agent 会像智能助手一样，主动探索创意、多次迭代帮你生成和优化图片。</p>
+              <p>请描述你想要的内容，我来帮您创作！</p>
+            </div>
+          )}
           {promptOpen ? (
             <section className="cc-composer cc-composer--agent">
               {promptBundle && !promptStarting ? (

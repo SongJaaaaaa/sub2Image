@@ -419,6 +419,8 @@
 
 .cc-settings-overlay {
   z-index: 130;
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .cc-preview-dialog {
@@ -456,17 +458,73 @@
   --cc-muted-surface: #eef1f4;
   --cc-border: #dfe3e8;
   --cc-text: #1f2937;
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: fixed;
+  right: max(0.75rem, calc((100vw - 56rem) / 2 + 1rem));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 9.5rem);
   display: flex;
-  width: min(400px, 100vw);
-  height: 100dvh;
+  width: min(360px, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 12rem);
   flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--cc-border, #e5e7eb);
+  border-radius: 20px;
   background: var(--cc-bg, #fff);
   color: var(--cc-text, #1f2937);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.2);
-  animation: cc-drawer-in 180ms ease-out;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  animation: cc-popover-in 160ms ease-out;
+  transform-origin: bottom right;
+}
+
+/* Agent 模式欢迎提示：淡入停留后逐渐淡出 */
+.cc-agent-welcome {
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 16px;
+  background: rgba(23, 30, 44, 0.92);
+  color: #d6e2f5;
+  font-size: 13px;
+  line-height: 1.6;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+  animation: cc-agent-welcome-fade 7s ease-in-out forwards;
+  pointer-events: none;
+}
+
+.cc-agent-welcome-title {
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+@keyframes cc-agent-welcome-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  6% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes cc-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .cc-settings-header,
@@ -886,7 +944,9 @@
 
 @media (max-width: 639px) {
   .cc-settings-drawer {
-    width: 100vw;
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
   }
 
   .cc-toolbar-action span {

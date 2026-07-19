@@ -207,6 +207,14 @@ export default function AgentWorkspace() {
     return () => document.documentElement.classList.remove('agent-no-pull-refresh')
   }, [appMode])
 
+  // 工作台模式下深色主题使用纯黑背景（Flow 风格）
+  useEffect(() => {
+    if (appMode !== 'agent') return
+
+    document.body.classList.add('agent-workspace-active')
+    return () => document.body.classList.remove('agent-workspace-active')
+  }, [appMode])
+
   useEffect(() => {
     if (!agentMobileHeaderVisible || appMode !== 'agent') return
 
@@ -604,7 +612,7 @@ export default function AgentWorkspace() {
         <div className="pl-[max(1rem,env(safe-area-inset-left))] flex h-full min-h-0 w-full flex-col">
           <div className="safe-area-top shrink-0">
             <div className="flex h-14 items-center justify-between gap-2 px-4">
-              <button type="button" onClick={() => setSidebarCollapsed(true)} className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors" title="折叠左侧边��">
+              <button type="button" onClick={() => setSidebarCollapsed(true)} className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors" title="折叠左侧边���">
                 <SidebarLeftIcon className="w-5 h-5" />
               </button>
               <button type="button" onClick={createConversation} className="p-2 -mr-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 lg:hover:bg-gray-100 lg:dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话">
@@ -618,7 +626,7 @@ export default function AgentWorkspace() {
               value={conversationSearchQuery}
               onChange={(e) => setConversationSearchQuery(e.target.value)}
               placeholder="搜索聊天..."
-              className="w-full rounded-xl border border-border bg-muted/80 px-3 py-2 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-400 focus:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400 dark:focus:bg-white/[0.07]"
+              className={`${conversationSearchQuery ? 'w-full' : 'w-3/4 focus:w-full'} rounded-xl border border-border bg-muted/80 px-3 py-2 text-sm text-gray-900 outline-none transition-[width,border-color,background-color] duration-300 ease-out placeholder:text-gray-400 focus:border-blue-400 focus:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400 dark:focus:bg-white/[0.07]`}
             />
           </div>
           <div className="space-y-1 overflow-y-auto flex-1 px-4 pb-4">

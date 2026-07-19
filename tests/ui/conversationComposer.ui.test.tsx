@@ -237,24 +237,24 @@ describe('Sub2ImageConversationComposer', () => {
     expect(mocks.submitTask).not.toHaveBeenCalled()
   })
 
-  it('uses a temporary settings draft and only commits on save', async () => {
+  it('applies settings changes immediately without a save button', async () => {
     render(<Sub2ImageConversationComposer />)
     const user = userEvent.setup()
 
     await user.click(screen.getByRole('button', { name: '图片设置' }))
-    await user.click(screen.getByRole('button', { name: '高' }))
-    await user.click(screen.getByRole('button', { name: '关闭设置' }))
-    expect(useStore.getState().params.quality).toBe('auto')
+    // 输入框在设置浮层打开时保持可见
     expect(screen.getByRole('textbox', { name: '图片提示词输入' })).toBeTruthy()
-
-    await user.click(screen.getByRole('button', { name: '图片设置' }))
+    // 没有保存按钮，选中即生效
+    expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
     await user.click(screen.getByRole('button', { name: '高' }))
+    expect(useStore.getState().params.quality).toBe('high')
+
     await user.click(screen.getByRole('button', { name: 'JPEG' }))
     await user.click(screen.getByRole('button', { name: '横向 16:9' }))
     await user.click(screen.getByRole('button', { name: '2K' }))
     await user.click(screen.getByRole('combobox', { name: '生成数量' }))
     await user.click(screen.getByRole('option', { name: '2 张' }))
-    await user.click(screen.getByRole('button', { name: '保存' }))
+    await user.click(screen.getByRole('button', { name: '关闭设置' }))
     expect(useStore.getState().params).toMatchObject({
       size: '2560x1440',
       quality: 'high',

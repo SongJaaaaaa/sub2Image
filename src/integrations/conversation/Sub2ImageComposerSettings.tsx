@@ -1,10 +1,9 @@
-import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getOutputImageLimitForSettings } from '../../lib/paramCompatibility'
 import { calculateImageSize, normalizeImageSize, type SizeTier } from '../../lib/size'
 import { useStore } from '../../store'
 import type { TaskParams } from '../../types'
-import { ChevronLeftIcon, CloseIcon } from '../../components/icons'
+import { CloseIcon } from '../../components/icons'
 import Select from '../../components/Select'
 import { TooltipButton } from '../../components/TooltipButton'
 
@@ -36,9 +35,13 @@ export default function Sub2ImageComposerSettings({ onClose, onSaved }: Props) {
   const params = useStore((state) => state.params)
   const settings = useStore((state) => state.settings)
   const setParams = useStore((state) => state.setParams)
-  const [draft, setDraft] = useState<TaskParams>(() => ({ ...params }))
   const limit = getOutputImageLimitForSettings(settings)
-  const patch = (next: Partial<TaskParams>) => setDraft((current) => ({ ...current, ...next }))
+  // 即选即生效：直接写入全局参数并同步草稿，无需保存按钮
+  const patch = (next: Partial<TaskParams>) => {
+    setParams(next)
+    onSaved?.()
+  }
+  const draft = params
   const preset = getSizePreset(draft.size)
   const selectSize = (tier: SizeTier, ratio: string) => {
     const size = calculateImageSize(tier, ratio)
@@ -49,7 +52,6 @@ export default function Sub2ImageComposerSettings({ onClose, onSaved }: Props) {
     <div className="cc-settings-overlay" data-composer-settings onClick={onClose}>
       <aside className="cc-settings-drawer" onClick={(e) => e.stopPropagation()} aria-label="图片设置">
         <header className="cc-settings-header">
-          <button type="button" className="cc-icon-button" aria-label="返回" onClick={onClose}><ChevronLeftIcon className="h-4 w-4" /></button>
           <h2>图片设置</h2>
           <button type="button" className="cc-icon-button" aria-label="关闭设置" onClick={onClose}><CloseIcon className="h-4 w-4" /></button>
         </header>
@@ -169,19 +171,6 @@ export default function Sub2ImageComposerSettings({ onClose, onSaved }: Props) {
             onChange={(value) => patch({ moderation: value as TaskParams['moderation'] })}
           />
         </div>
-        <footer className="cc-settings-footer">
-          <button
-            type="button"
-            className="cc-settings-save"
-            onClick={() => {
-              setParams(draft)
-              onSaved?.()
-              onClose()
-            }}
-          >
-            保存
-          </button>
-        </footer>
       </aside>
     </div>,
     document.body,

@@ -116,6 +116,11 @@ body.drag-selecting * {
   scrollbar-color: #3f3f46 transparent;
 }
 
+/* 工作台（Agent 模式）深色主题使用纯黑背景 */
+.dark body.agent-workspace-active {
+  background-color: #000000;
+}
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -512,7 +517,7 @@ input[type="number"] {
   animation: overlay-in 0.2s ease-out both;
 }
 
-/* �����窗面板：从中心弹出 */
+/* �������窗面板：从中心弹出 */
 @keyframes modal-in {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -1156,7 +1161,7 @@ html:not(.dark) ::selection {
 
 /* ============================================================
    黑夜模式金属化覆盖
-   黑夜的蓝色强调 → 亮银白钢色，实心按钮 → 深锌 3D 金属，
+   黑夜的蓝色强��� → 亮银白钢色，实心按钮 → 深锌 3D 金属，
    与 Metal3DButton 的黑夜壳（#3f3f46 → #09090b）统一。
    亮银色阶: 300 #dbe2e8 / 400 #b8c4cf / 500 #93a2b0
    ============================================================ */
