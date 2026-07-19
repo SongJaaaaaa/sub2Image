@@ -213,9 +213,15 @@ describe('Sub2ImageConversationComposer', () => {
     await waitFor(() => expect(editor.textContent).toBe('旧输入框更新'))
     expect(screen.getByRole('button', { name: '预览参考图1' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '图片设置' }))
-    expect(screen.getByRole('button', { name: '高' }).getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByRole('button', { name: '横向 16:9' })).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: '生成数量' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '比例 自动' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '分辨率 1K' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成数量 1x' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '格式 PNG' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '透明背景 关闭' })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: '质量' })).toBeNull()
+    expect(screen.queryByRole('spinbutton', { name: '输出压缩' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '审核强度' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: '生成模型' })).toBeNull()
     expect(screen.getByRole('dialog', { name: '图片设置' })).toBeTruthy()
   })
 
@@ -240,28 +246,29 @@ describe('Sub2ImageConversationComposer', () => {
   it('applies settings changes immediately without a save button', async () => {
     render(<Sub2ImageConversationComposer />)
     const user = userEvent.setup()
+    await waitFor(() => expect(document.documentElement.style.getPropertyValue('--composer-stack-clearance')).not.toBe(''))
+    const clearance = document.documentElement.style.getPropertyValue('--composer-stack-clearance')
 
     await user.click(screen.getByRole('button', { name: '图片设置' }))
+    expect(document.documentElement.style.getPropertyValue('--composer-stack-clearance')).toBe(clearance)
     // 输入框在设置浮层打开时保持可见
     expect(screen.getByRole('textbox', { name: '图片提示词输入' })).toBeTruthy()
     // 没有保存按钮，选中即生效
     expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: '高' }))
-    expect(useStore.getState().params.quality).toBe('high')
-
-    await user.click(screen.getByRole('button', { name: 'JPEG' }))
-    await user.click(screen.getByRole('button', { name: '横向 16:9' }))
-    await user.click(screen.getByRole('button', { name: '2K' }))
-    await user.click(screen.getByRole('combobox', { name: '生成数量' }))
-    await user.click(screen.getByRole('option', { name: '2 张' }))
-    await user.click(screen.getByRole('button', { name: '关闭设置' }))
+    await user.click(screen.getByRole('button', { name: '比例 16:9' }))
+    await user.click(screen.getByRole('button', { name: '分辨率 2K' }))
+    await user.click(screen.getByRole('button', { name: '生成数量 x2' }))
+    await user.click(screen.getByRole('button', { name: '格式 JPEG' }))
+    await user.click(screen.getByRole('button', { name: '透明背景 开启' }))
+    await user.click(document.querySelector<HTMLElement>('.cc-settings-overlay')!)
     expect(useStore.getState().params).toMatchObject({
       size: '2560x1440',
-      quality: 'high',
-      output_format: 'jpeg',
       n: 2,
+      output_format: 'jpeg',
+      transparent_output: true,
     })
+    expect(screen.queryByRole('dialog', { name: '图片设置' })).toBeNull()
   })
 
   it('keeps thumbnails at 40px and opens mask actions through preview', async () => {

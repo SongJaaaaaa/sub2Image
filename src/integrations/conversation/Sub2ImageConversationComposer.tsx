@@ -143,7 +143,7 @@ export default function Sub2ImageConversationComposer() {
 
   useLayoutEffect(() => {
     const dock = dockRef.current
-    if (!dock || showSettings) return
+    if (!dock) return
     let frame = 0
     const schedule = () => {
       window.cancelAnimationFrame(frame)
@@ -164,7 +164,7 @@ export default function Sub2ImageConversationComposer() {
       visualViewport?.removeEventListener('scroll', schedule)
       document.documentElement.style.removeProperty('--composer-stack-clearance')
     }
-  }, [promptOpen, showSettings, updateClearance])
+  }, [promptOpen, updateClearance])
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
@@ -591,6 +591,7 @@ export default function Sub2ImageConversationComposer() {
               paramsSlot={(
                 <button
                   type="button"
+                  data-composer-settings-trigger
                   className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.08] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
                   title="图片设置"
                   aria-label="图片设置"

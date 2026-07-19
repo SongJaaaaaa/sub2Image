@@ -13,10 +13,14 @@ function LazyVideo({
   src,
   poster,
   className,
+  loop = true,
+  onEnded,
 }: {
   src: string
   poster: string
   className?: string
+  loop?: boolean
+  onEnded?: () => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
@@ -47,7 +51,8 @@ function LazyVideo({
           className="absolute inset-0 h-full w-full object-cover"
           autoPlay
           muted
-          loop
+          loop={loop}
+          onEnded={onEnded}
           playsInline
           preload="none"
         />
@@ -86,7 +91,7 @@ const stages = [
 
 /**
  * 瀑布墙瓦片，按行排列，宽度权重模拟错落感。
- * poster 为静态封面图，video 为循环短视频；进入视口时才挂载视频播放（复刻 labs.google 的动态墙）。
+ * 每轮随机播放六个不同视频，其余瓦片保持静态。
  */
 const galleryRows: { poster: string; video: string; grow: number }[][] = [
   [
@@ -110,6 +115,33 @@ const galleryRows: { poster: string; video: string; grow: number }[][] = [
     { poster: '/gallery/g6.jpg', video: '/wall/w1.mp4', grow: 2 },
   ],
 ]
+
+const galleryTiles = galleryRows.flatMap((row, rowIdx) =>
+  row.map((item, i) => ({ id: `${rowIdx}-${i}`, video: item.video })),
+)
+const GALLERY_VIDEO_COUNT = 6
+
+const pickGalleryVideos = (prev: string[] = []) => {
+  const prevVideos = new Set(
+    galleryTiles.filter(({ id }) => prev.includes(id)).map(({ video }) => video),
+  )
+  const shuffled = [...galleryTiles].sort(() => Math.random() - 0.5)
+  const pool = [
+    ...shuffled.filter(({ video }) => !prevVideos.has(video)),
+    ...shuffled.filter(({ video }) => prevVideos.has(video)),
+  ]
+  const videos = new Set<string>()
+  const ids: string[] = []
+
+  for (const item of pool) {
+    if (videos.has(item.video)) continue
+    videos.add(item.video)
+    ids.push(item.id)
+    if (ids.length === GALLERY_VIDEO_COUNT) break
+  }
+
+  return ids
+}
 
 const navLinks = ['概览', '模型能力', '创作工具', '定价']
 
@@ -145,12 +177,15 @@ const featuredWorks = [
 ]
 
 export default function LandingPage({ onEnter }: LandingPageProps) {
+  const pageRef = useRef<HTMLElement>(null)
   const heroContentRef = useRef<HTMLDivElement>(null)
   const wallRef = useRef<HTMLDivElement>(null)
   const capsTrackRef = useRef<HTMLDivElement>(null)
   const stageVideoRef = useRef<HTMLVideoElement>(null)
   const [activeStage, setActiveStage] = useState(0)
   const activeStageRef = useRef(0)
+  const [motionIds, setMotionIds] = useState(() => pickGalleryVideos())
+  const endedMotionIdsRef = useRef(new Set<string>())
   /**
    * 精选集 3D 转轮（复刻 Flow Sessions）：
    * 作品卡片围绕一个巨大的圆环排布（rotateY + translateZ），
@@ -167,71 +202,14 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
   const activeWork = activeSlot % featuredWorks.length
   const work = featuredWorks[activeWork]
 
-  useEffect(() => {
-    const root = document.documentElement
-    const snapType = root.style.scrollSnapType
-    let locked = false
-    let wheelDelta = 0
-    let wheelTimer = 0
-    let lockTimer = 0
-    root.style.scrollSnapType = 'y mandatory'
+  const onMotionEnded = (id: string) => {
+    const endedIds = endedMotionIdsRef.current
+    endedIds.add(id)
+    if (endedIds.size < motionIds.length) return
 
-    const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
-
-      const pages = Array.from(document.querySelectorAll<HTMLElement>('[data-snap-page]'))
-        .filter((el) => el.offsetHeight > 0)
-      if (pages.length === 0) return
-
-      const first = pages[0].offsetTop - window.innerHeight
-      if (window.scrollY < first - 2) return
-
-      e.preventDefault()
-      if (locked) return
-
-      wheelDelta += e.deltaY
-      window.clearTimeout(wheelTimer)
-      wheelTimer = window.setTimeout(() => {
-        wheelDelta = 0
-      }, 120)
-      if (Math.abs(wheelDelta) < 40) return
-
-      const end = root.scrollHeight - window.innerHeight
-      const stops = [first, ...pages.map((el) => el.offsetTop), end]
-      const top = wheelDelta > 0
-        ? stops.find((stop) => stop > window.scrollY + 2)
-        : stops.slice().reverse().find((stop) => stop < window.scrollY - 2)
-      if (top === undefined) return
-
-      locked = true
-      wheelDelta = 0
-      window.scrollTo({ top, behavior: 'smooth' })
-      lockTimer = window.setTimeout(() => {
-        locked = false
-      }, 700)
-    }
-
-    window.addEventListener('wheel', onWheel, { passive: false })
-    return () => {
-      window.removeEventListener('wheel', onWheel)
-      window.clearTimeout(wheelTimer)
-      window.clearTimeout(lockTimer)
-      root.style.scrollSnapType = snapType
-    }
-  }, [])
-
-  /** 转轮视频：仅播放焦点卡位，其余暂停省资源 */
-  const ringVideoRefs = useRef<(HTMLVideoElement | null)[]>([])
-  useEffect(() => {
-    ringVideoRefs.current.forEach((v, slot) => {
-      if (!v) return
-      if (slot === activeSlot) {
-        v.play().catch(() => {})
-      } else {
-        v.pause()
-      }
-    })
-  }, [activeSlot])
+    endedIds.clear()
+    setMotionIds((prev) => pickGalleryVideos(prev))
+  }
 
   /** 仅在"创作"阶段激活时播放视频，其余时间暂停以省资源 */
   useEffect(() => {
@@ -263,17 +241,23 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
   /** 依据滚动进度切换能力区阶段（rAF 节流，避免滚动卡顿） */
   useEffect(() => {
+    const page = pageRef.current
     const track = capsTrackRef.current
-    if (!track) return
+    if (!page || !track) return
 
     let ticking = false
+    let frame = 0
+    let start = 0
+    let total = 1
+
+    const measure = () => {
+      start = track.offsetTop
+      total = Math.max(track.offsetHeight - page.clientHeight, 1)
+    }
 
     const update = () => {
       ticking = false
-      const rect = track.getBoundingClientRect()
-      const total = rect.height - window.innerHeight
-      if (total <= 0) return
-      const progress = Math.min(Math.max(-rect.top / total, 0), 0.999)
+      const progress = Math.min(Math.max((page.scrollTop - start) / total, 0), 0.999)
       const idx = Math.floor(progress * stages.length)
       if (idx !== activeStageRef.current) {
         activeStageRef.current = idx
@@ -284,28 +268,40 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
     const onScroll = () => {
       if (!ticking) {
         ticking = true
-        requestAnimationFrame(update)
+        frame = requestAnimationFrame(update)
       }
     }
 
+    const onResize = () => {
+      measure()
+      onScroll()
+    }
+
+    measure()
     update()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    page.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onResize, { passive: true })
+    return () => {
+      page.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onResize)
+      cancelAnimationFrame(frame)
+    }
   }, [])
 
   /** 点击 Tab：立即切换阶段并滚动到对应位置 */
   const scrollToStage = (idx: number) => {
+    const page = pageRef.current
     const track = capsTrackRef.current
-    if (!track) return
+    if (!page || !track) return
     activeStageRef.current = idx
     setActiveStage(idx)
-    const total = track.offsetHeight - window.innerHeight
+    const total = track.offsetHeight - page.clientHeight
     const top = track.offsetTop + (total * (idx + 0.5)) / stages.length
-    window.scrollTo({ top })
+    page.scrollTo({ top })
   }
 
   return (
-    <main className="min-h-svh bg-black text-white">
+    <main ref={pageRef} className="h-svh snap-y snap-mandatory overflow-y-auto overscroll-y-contain bg-black text-white">
       <h1 className="sr-only">我的贾维斯 / JWS Image</h1>
 
       {/* 顶部导航 */}
@@ -347,15 +343,33 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
           <div className="flex h-full flex-col gap-2 p-2">
             {galleryRows.map((row, rowIndex) => (
               <div key={rowIndex} className="flex min-h-0 flex-1 gap-2">
-                {row.map((item, i) => (
-  <div
-  key={`${rowIndex}-${i}`}
-  className="relative min-w-0 overflow-hidden rounded-xl opacity-80"
-  style={{ flexGrow: item.grow, flexBasis: 0 }}
-  >
-  <LazyVideo src={item.video} poster={item.poster} className="absolute inset-0" />
-  </div>
-                ))}
+                {row.map((item, i) => {
+                  const id = `${rowIndex}-${i}`
+                  return (
+                    <div
+                      key={id}
+                      className="relative min-w-0 overflow-hidden rounded-xl opacity-80"
+                      style={{ flexGrow: item.grow, flexBasis: 0 }}
+                    >
+                      {motionIds.includes(id) ? (
+                        <LazyVideo
+                          src={item.video}
+                          poster={item.poster}
+                          className="absolute inset-0"
+                          loop={false}
+                          onEnded={() => onMotionEnded(id)}
+                        />
+                      ) : (
+                        <img
+                          src={item.poster}
+                          alt=""
+                          aria-hidden="true"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ))}
           </div>
@@ -571,18 +585,20 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                         focused ? 'opacity-100 blur-0' : 'opacity-40 blur-[4px]'
                       }`}
                     >
-                      <video
-                        ref={(el) => {
-                          ringVideoRefs.current[slot] = el
-                        }}
-                        src={w.video}
-                        poster={w.img}
-                        className="h-full w-full object-cover"
-                        muted
-                        loop
-                        playsInline
-                        preload="metadata"
-                      />
+                      {focused ? (
+                        <LazyVideo
+                          src={w.video}
+                          poster={w.img}
+                          className="relative h-full w-full"
+                        />
+                      ) : (
+                        <img
+                          src={w.img}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      )}
                     </div>
                   </div>
                 )

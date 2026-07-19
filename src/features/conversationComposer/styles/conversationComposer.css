@@ -452,37 +452,280 @@
   margin-top: 10px;
 }
 
-/* 紧凑设置浮层：紧贴输入框上方偏右，不占据大面积屏幕 */
+/* Google Flow 设置浮层：与触发按钮对齐，保持 280px 紧凑尺寸。 */
 .cc-settings-popover {
-  --cc-bg: #f8fafc;
-  --cc-surface: #fff;
-  --cc-muted-surface: #eef1f4;
-  --cc-border: #dfe3e8;
-  --cc-text: #1f2937;
   position: fixed;
-  right: max(0.75rem, calc((100vw - 56rem) / 2 + 1rem));
-  bottom: var(--cc-popover-bottom, calc(env(safe-area-inset-bottom, 0px) + 8.5rem));
+  right: var(--cc-popover-right, 0.75rem);
+  bottom: var(--cc-popover-bottom, 5rem);
   display: flex;
-  width: min(380px, calc(100vw - 1.5rem));
-  max-height: min(560px, calc(100dvh - var(--cc-popover-bottom, 8.5rem) - 1rem));
+  width: min(280px, calc(100vw - 16px));
   flex-direction: column;
+  gap: 4px;
+  padding: 8px;
   overflow: hidden;
-  border: 1px solid var(--cc-border, #e5e7eb);
-  border-radius: 20px;
-  background: var(--cc-bg, #fff);
-  color: var(--cc-text, #1f2937);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  border: 0;
+  border-radius: 18px;
+  background: rgba(22, 23, 24, 0.9);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(218, 220, 224, 0.05), 0 16px 32px -8px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
   animation: cc-popover-in 160ms ease-out;
   transform-origin: bottom right;
 }
 
-.dark .cc-settings-popover {
-  --cc-bg: #121416;
-  --cc-surface: #202326;
-  --cc-muted-surface: #191c1f;
-  --cc-border: rgba(255, 255, 255, 0.1);
-  --cc-text: #f3f4f6;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+.cc-settings-tabs,
+.cc-settings-ratio-row,
+.cc-settings-count-row {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(218, 220, 224, 0.05);
+}
+
+.cc-settings-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cc-settings-tabs button,
+.cc-settings-count-row button {
+  height: 34px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.cc-settings-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cc-settings-tabs button.is-active {
+  background: #f1f3f4;
+  color: #202124;
+}
+
+.cc-settings-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.cc-settings-ratio-row {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.cc-settings-ratio-row button {
+  display: flex;
+  height: 53px;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+}
+
+.cc-settings-ratio-row button.is-active,
+.cc-settings-count-row button.is-active {
+  background: rgba(218, 220, 224, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.cc-settings-ratio-row strong {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.cc-settings-count-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cc-settings-count-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.cc-settings-row {
+  display: grid;
+  min-width: 0;
+  min-height: 34px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+}
+
+.cc-settings-row > span {
+  min-width: 0;
+  padding-left: 8px;
+  overflow: hidden;
+  color: rgba(218, 220, 224, 0.72);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-settings-segmented {
+  display: grid;
+  height: 34px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(218, 220, 224, 0.05);
+}
+
+.cc-settings-wide {
+  width: 100%;
+}
+
+.cc-settings-segmented button {
+  min-width: 0;
+  height: 34px;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-settings-segmented button.is-active {
+  background: rgba(218, 220, 224, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.cc-settings-segmented button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.cc-settings-transparent-row {
+  display: grid;
+  height: 58px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(218, 220, 224, 0.05);
+}
+
+.cc-settings-transparent-row button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+}
+
+.cc-settings-transparent-row button.is-active {
+  background: rgba(218, 220, 224, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.cc-settings-transparent-row strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cc-settings-number {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  outline: 0;
+  background: rgba(218, 220, 224, 0.05);
+  color: #fff;
+  font-size: 12px;
+}
+
+.cc-settings-number::placeholder {
+  color: rgba(218, 220, 224, 0.5);
+}
+
+.cc-settings-ratio-icon {
+  display: flex;
+  width: 20px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+
+.cc-settings-ratio-icon > span {
+  max-width: 100%;
+  max-height: 100%;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+.cc-settings-model {
+  position: relative;
+  display: flex;
+  height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: rgba(218, 220, 224, 0.05);
+  color: #fff;
+  font-size: 12px;
+}
+
+.cc-settings-model select {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  padding: 0 24px 0 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.cc-settings-model select option {
+  background: #202124;
+  color: #fff;
+}
+
+.cc-settings-model svg {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+}
+
+.cc-settings-model--empty {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.cc-settings-footnote {
+  min-height: 51px;
+  margin: 0;
+  padding-top: 15px;
+  color: rgba(218, 220, 224, 0.72);
+  text-align: center;
+  font-size: 12px;
+}
+
+.cc-settings-footnote u {
+  color: rgba(218, 220, 224, 0.9);
+  text-underline-offset: 3px;
 }
 
 /* Agent 模式欢迎提示：淡入停留后逐渐淡出 */
@@ -954,9 +1197,7 @@
 
 @media (max-width: 639px) {
   .cc-settings-popover {
-    right: 0.75rem;
-    left: 0.75rem;
-    width: auto;
+    right: max(var(--cc-popover-right, 8px), 8px);
   }
 
   .cc-toolbar-action span {
