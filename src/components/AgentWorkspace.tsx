@@ -702,6 +702,18 @@ export default function AgentWorkspace() {
             <button type="button" onClick={() => setSidebarCollapsed(false)} className="p-1.5 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="展开对话列表">
               <SidebarLeftIcon className="w-5 h-5" />
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarCollapsed(false)
+                if (conversation) {
+                  useStore.getState().setAgentEditingConversationId(conversation.id)
+                }
+              }}
+              className="min-w-0 flex-1 truncate rounded px-2 py-0.5 text-center text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/[0.04]"
+            >
+              {conversation?.title || 'Agent'}
+            </button>
             <button type="button" onClick={createConversation} className="p-1.5 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话">
               <EditIcon className="w-5 h-5" />
             </button>
@@ -775,10 +787,10 @@ export default function AgentWorkspace() {
                         if (!isAssistant && node) messageRefs.current.set(message.roundId, node)
                         else if (!isAssistant) messageRefs.current.delete(message.roundId)
                       }}
-                      className={`group flex max-w-[95%] flex-col md:max-w-[85%] lg:max-w-[75%] ${isAssistant ? 'items-start' : 'items-end'}`}
+                      className={`group flex max-w-[95%] flex-col md:max-w-[85%] lg:max-w-[75%] ${isAssistant ? 'items-start' : 'items-end'} ${isAssistant && tasksForRound.length > 0 ? 'w-full' : ''}`}
                     >
                       <article 
-                        className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${
+                        className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${isAssistant && tasksForRound.length > 0 ? 'w-full ' : ''}${
                         isAssistant 
                           ? 'rounded-tl-sm border border-border bg-sidebar/80 hover:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.04]'
                           : `rounded-tr-sm bg-muted dark:bg-[#2A2D31] ${isEditing ? 'ring-2 ring-blue-500/50 dark:ring-blue-400/50' : ''}`

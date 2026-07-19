@@ -12,6 +12,8 @@ interface Props {
   onClick: (e: React.MouseEvent | React.TouchEvent) => void
   isSelected?: boolean
   disableSwipe?: boolean
+  /** 按图片原始宽高比自适应卡片高度（用于 Agent 对话流全宽展示） */
+  naturalAspect?: boolean
 }
 
 function TaskActionButton({
@@ -61,8 +63,9 @@ export default function TaskCard({
   onClick,
   isSelected,
   disableSwipe,
+  naturalAspect,
 }: Props) {
-  const [thumbs, setThumbs] = useState<Record<string, { src: string; ratio: string; size: string }>>({})
+  const [thumbs, setThumbs] = useState<Record<string, { src: string; ratio: string; size: string; w?: number; h?: number }>>({})
   const [thumbIndex, setThumbIndex] = useState(0)
   const [justRevealed, setJustRevealed] = useState(false)
   const prevStatusRef = useRef(task.status)
@@ -260,6 +263,8 @@ export default function TaskCard({
             src: thumbnail.dataUrl,
             ratio: thumbnail.width && thumbnail.height ? formatImageRatio(thumbnail.width, thumbnail.height) : '',
             size: thumbnail.width && thumbnail.height ? `${thumbnail.width}×${thumbnail.height}` : '',
+            w: thumbnail.width,
+            h: thumbnail.height,
           },
         }))
       }
@@ -402,7 +407,10 @@ export default function TaskCard({
           </svg>
         </div>
       )}
-      <div className="h-40">
+      <div
+        className={naturalAspect && currentThumb?.w && currentThumb?.h ? 'max-h-[70vh] w-full' : 'h-40'}
+        style={naturalAspect && currentThumb?.w && currentThumb?.h ? { aspectRatio: `${currentThumb.w} / ${currentThumb.h}` } : undefined}
+      >
         {/* 图片区域：铺满整个卡片 */}
         <div className="h-full w-full bg-gray-100 dark:bg-black/20 relative flex items-center justify-center overflow-hidden">
           {task.status === 'running' && streamPreviewSrc && (
