@@ -626,7 +626,7 @@ export default function AgentWorkspace() {
               value={conversationSearchQuery}
               onChange={(e) => setConversationSearchQuery(e.target.value)}
               placeholder="搜索聊天..."
-              className={`${conversationSearchQuery ? 'w-full' : 'w-3/4 focus:w-full'} rounded-xl border border-border bg-muted/80 px-3 py-2 text-sm text-gray-900 outline-none transition-[width,border-color,background-color] duration-300 ease-out placeholder:text-gray-400 focus:border-blue-400 focus:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400 dark:focus:bg-white/[0.07]`}
+              className="w-full rounded-xl border border-border bg-muted/80 px-3 py-2 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-400 focus:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400 dark:focus:bg-white/[0.07]"
             />
           </div>
           <div className="space-y-1 overflow-y-auto flex-1 px-4 pb-4">
@@ -684,7 +684,7 @@ export default function AgentWorkspace() {
                       <AgentActionButton tooltip="编辑标题" className="p-1.5 text-gray-400 hover:text-gray-700 disabled:text-gray-300 disabled:hover:text-gray-300 disabled:cursor-not-allowed dark:hover:text-gray-200 dark:disabled:text-gray-600 dark:disabled:hover:text-gray-600" onClick={(e) => startRenameConversation(e, item.id, item.title)} disabled={isGeneratingTitle}>
                         <EditIcon className="w-4 h-4" />
                       </AgentActionButton>
-                      <AgentActionButton tooltip="删除" className="p-1.5 text-gray-400 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleDeleteConversation(item.id) }}>
+                      <AgentActionButton tooltip="删���" className="p-1.5 text-gray-400 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleDeleteConversation(item.id) }}>
                         <TrashIcon className="w-4 h-4" />
                       </AgentActionButton>
                     </>

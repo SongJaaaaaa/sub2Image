@@ -213,10 +213,9 @@ describe('Sub2ImageConversationComposer', () => {
     await waitFor(() => expect(editor.textContent).toBe('旧输入框更新'))
     expect(screen.getByRole('button', { name: '预览参考图1' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '图片设置' }))
-    expect(screen.getByRole('button', { name: '高' }).getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByRole('button', { name: '横向 16:9' })).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: '生成数量' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '低质量生成最快、费用最低；高质量细节更多，但更慢、费用更高。' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '比例 16:9' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成 1 张' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: '图片设置' })).toBeTruthy()
   })
 
   it('selects Prompt Agent first and waits for send before opening questions', async () => {
@@ -246,21 +245,12 @@ describe('Sub2ImageConversationComposer', () => {
     expect(screen.getByRole('textbox', { name: '图片提示词输入' })).toBeTruthy()
     // 没有保存按钮，选中即生效
     expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: '高' }))
-    expect(useStore.getState().params.quality).toBe('high')
 
-    await user.click(screen.getByRole('button', { name: 'JPEG' }))
-    await user.click(screen.getByRole('button', { name: '横向 16:9' }))
-    await user.click(screen.getByRole('button', { name: '2K' }))
-    await user.click(screen.getByRole('combobox', { name: '生成数量' }))
-    await user.click(screen.getByRole('option', { name: '2 张' }))
-    await user.click(screen.getByRole('button', { name: '关闭设置' }))
-    expect(useStore.getState().params).toMatchObject({
-      size: '2560x1440',
-      quality: 'high',
-      output_format: 'jpeg',
-      n: 2,
-    })
+    await user.click(screen.getByRole('button', { name: '比例 16:9' }))
+    expect(useStore.getState().params.size).toBe('1280x720')
+
+    await user.click(screen.getByRole('button', { name: '生成 2 张' }))
+    expect(useStore.getState().params.n).toBe(2)
   })
 
   it('keeps thumbnails at 40px and opens mask actions through preview', async () => {

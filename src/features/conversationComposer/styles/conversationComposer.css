@@ -452,27 +452,203 @@
   margin-top: 10px;
 }
 
-.cc-settings-drawer {
-  --cc-bg: #f8fafc;
-  --cc-surface: #fff;
-  --cc-muted-surface: #eef1f4;
-  --cc-border: #dfe3e8;
-  --cc-text: #1f2937;
+/* Flow 风格紧凑设置浮层：紧贴输入框上方 */
+.cc-settings-popover {
   position: fixed;
   right: max(0.75rem, calc((100vw - 56rem) / 2 + 1rem));
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 9.5rem);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10.5rem);
   display: flex;
-  width: min(360px, calc(100vw - 1.5rem));
-  max-height: calc(100dvh - 12rem);
+  width: min(340px, calc(100vw - 1.5rem));
   flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--cc-border, #e5e7eb);
-  border-radius: 20px;
-  background: var(--cc-bg, #fff);
-  color: var(--cc-text, #1f2937);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  background: #f8fafc;
+  color: #1f2937;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
   animation: cc-popover-in 160ms ease-out;
   transform-origin: bottom right;
+}
+
+.cc-settings-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #e9edf2;
+}
+
+.cc-settings-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.cc-settings-tabs button.is-active {
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.cc-settings-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cc-settings-ratio-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  padding: 4px;
+  border-radius: 18px;
+  background: #e9edf2;
+}
+
+.cc-settings-ratio-row button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 6px;
+  border-radius: 14px;
+  color: #4b5563;
+  transition: background-color 120ms ease;
+}
+
+.cc-settings-ratio-row button:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.cc-settings-ratio-row button.is-active {
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.cc-settings-ratio-row strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cc-settings-count-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #e9edf2;
+}
+
+.cc-settings-count-row button {
+  padding: 8px 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  transition: background-color 120ms ease;
+}
+
+.cc-settings-count-row button:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.cc-settings-count-row button.is-active {
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.cc-settings-model {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cc-settings-model select {
+  width: 100%;
+  padding: 10px 36px 10px 14px;
+  border-radius: 999px;
+  background: #e9edf2;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.cc-settings-model svg {
+  position: absolute;
+  right: 14px;
+  pointer-events: none;
+  color: #6b7280;
+}
+
+.cc-settings-footnote {
+  margin: 4px 0 2px;
+  text-align: center;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.cc-settings-footnote u {
+  text-underline-offset: 3px;
+}
+
+.dark .cc-settings-popover {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #131519;
+  color: #e5e7eb;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+
+.dark .cc-settings-tabs,
+.dark .cc-settings-ratio-row,
+.dark .cc-settings-count-row,
+.dark .cc-settings-model select {
+  background: #1f2227;
+}
+
+.dark .cc-settings-tabs button,
+.dark .cc-settings-count-row button {
+  color: #9ca3af;
+}
+
+.dark .cc-settings-tabs button.is-active {
+  background: #fff;
+  color: #111827;
+}
+
+.dark .cc-settings-ratio-row button {
+  color: #9ca3af;
+}
+
+.dark .cc-settings-ratio-row button:hover,
+.dark .cc-settings-count-row button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dark .cc-settings-ratio-row button.is-active,
+.dark .cc-settings-count-row button.is-active {
+  background: #3a3f47;
+  color: #fff;
+  box-shadow: none;
+}
+
+.dark .cc-settings-model select {
+  color: #e5e7eb;
+}
+
+.dark .cc-settings-footnote {
+  color: #9ca3af;
 }
 
 /* Agent 模式欢迎提示：淡入停留后逐渐淡出 */
@@ -943,7 +1119,7 @@
 }
 
 @media (max-width: 639px) {
-  .cc-settings-drawer {
+  .cc-settings-popover {
     right: 0.75rem;
     left: 0.75rem;
     width: auto;
@@ -956,7 +1132,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cc-composer--agent::before,
-  .cc-settings-drawer {
+  .cc-settings-popover {
     animation: none;
   }
 
