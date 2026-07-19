@@ -32,7 +32,7 @@ export function AiLiquidModeSwitch({ value, onChange, className = '' }: AiLiquid
         onClick={() => onChange('agent')}
         className={`relative z-10 flex h-8 min-w-0 items-center justify-center rounded-full px-4 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:focus-visible:outline-zinc-400 ${value === 'agent' ? 'font-medium text-zinc-950' : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}`}
       >
-        Agent
+        对话
       </button>
     </div>
   )

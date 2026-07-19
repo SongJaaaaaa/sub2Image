@@ -123,7 +123,7 @@ test('桌面与移动端只有一个 Composer 且页面模式职责固定', asyn
   expect(await page.locator('[data-conversation-composer-dock] [title="提示词库"]').count()).toBe(0)
   await saveArtifact(`${testInfo.project.name}-gallery.png`, await page.screenshot({ animations: 'disabled', caret: 'hide' }))
 
-  await page.locator('[data-app-header]').getByRole('button', { name: 'Agent', exact: true }).click()
+  await page.locator('[data-app-header]').getByRole('button', { name: '对话', exact: true }).click()
   await expect(page.locator('[data-agent-workspace]')).toBeVisible()
   await expect(page.locator('[contenteditable][aria-label="Agent 对话输入"]')).toBeVisible()
   expect(await page.locator('.cc-agent-button').count()).toBe(0)
@@ -165,7 +165,7 @@ test('普通 Agent 页面完成聊天闭环', async ({ page }) => {
     await route.fulfill({ status: 200, contentType: 'text/event-stream; charset=utf-8', body: responseStream() })
   })
   await openConfiguredApp(page, 'responses')
-  await page.locator('[data-app-header]').getByRole('button', { name: 'Agent', exact: true }).click()
+  await page.locator('[data-app-header]').getByRole('button', { name: '对话', exact: true }).click()
   const editor = page.locator('[contenteditable][aria-label="Agent 对话输入"]')
   await editor.fill('请只回复基线文本')
   await page.getByRole('button', { name: '发送 Agent 消息' }).click()
