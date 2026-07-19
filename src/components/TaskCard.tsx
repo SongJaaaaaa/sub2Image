@@ -327,6 +327,13 @@ export default function TaskCard({
   const thumbSrc = currentThumb?.src || ''
   const coverRatio = currentThumb?.ratio || ''
   const coverSize = currentThumb?.size || ''
+  // naturalAspect 模式下的宽高比：优先用真实图片尺寸，生成中回退到任务配置的尺寸
+  const aspectDims = (() => {
+    if (currentThumb?.w && currentThumb?.h) return { w: currentThumb.w, h: currentThumb.h }
+    const m = task.params.size?.match(/^\s*(\d+)\s*[xX×]\s*(\d+)\s*$/)
+    if (m) return { w: Number(m[1]), h: Number(m[2]) }
+    return null
+  })()
   const canCycleThumbs = task.status === 'done' && outputImages.length > 1
   const cycleThumb = (delta: number) => {
     if (!outputImages.length) return
@@ -408,8 +415,8 @@ export default function TaskCard({
         </div>
       )}
       <div
-        className={naturalAspect && currentThumb?.w && currentThumb?.h ? 'max-h-[70vh] w-full' : 'h-40'}
-        style={naturalAspect && currentThumb?.w && currentThumb?.h ? { aspectRatio: `${currentThumb.w} / ${currentThumb.h}` } : undefined}
+        className={naturalAspect && aspectDims ? 'max-h-[70vh] w-full' : 'h-40'}
+        style={naturalAspect && aspectDims ? { aspectRatio: `${aspectDims.w} / ${aspectDims.h}` } : undefined}
       >
         {/* 图片区域：铺满整个卡片 */}
         <div className="h-full w-full bg-gray-100 dark:bg-black/20 relative flex items-center justify-center overflow-hidden">

@@ -584,8 +584,8 @@
 }
 
 .cc-ratio-icon > span {
-  width: 100%;
-  max-height: 22px;
+  max-width: 100%;
+  max-height: 100%;
   border: 2px solid currentColor;
   border-radius: 3px;
 }

@@ -79,7 +79,13 @@ export default function Sub2ImageComposerSettings({ onClose, onSaved }: Props) {
                     onClick={() => selectSize(preset?.tier ?? '1K', ratio.value)}
                   >
                     <span className="cc-ratio-icon" aria-hidden="true">
-                      <span style={{ aspectRatio: `${width} / ${height}` }} />
+                      <span
+                        style={{
+                          aspectRatio: `${width} / ${height}`,
+                          // 横向/方形按宽度定高，纵向按高度定宽，确保图标形状真实反映比例
+                          ...(width >= height ? { width: '100%' } : { height: '100%' }),
+                        }}
+                      />
                     </span>
                     <strong>{ratio.label}</strong>
                     <small>{ratio.direction}</small>
