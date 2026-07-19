@@ -692,29 +692,17 @@ export default function AgentWorkspace() {
       {/* Center Chat Area */}
       <section className="min-w-0 flex-1 flex flex-col relative">
         {/* Mobile Header Toggles */}
-        <div className={`sticky top-0 z-20 lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${mobileTopBarVisible ? 'max-h-16 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0 pointer-events-none'}`}>
+        <div className={`sticky top-0 z-20 lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${mobileTopBarVisible ? 'max-h-10 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0 pointer-events-none'}`}>
           <div
-            className="flex h-14 items-center justify-between border-b border-border bg-sidebar/90 px-2 backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/80"
+            className="flex h-10 items-center justify-between border-b border-border bg-sidebar/90 px-2 backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/80"
             onTouchStart={handleHeaderTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <button type="button" onClick={() => setSidebarCollapsed(false)} className="p-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="展开对话列表">
+            <button type="button" onClick={() => setSidebarCollapsed(false)} className="p-1.5 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="展开对话列表">
               <SidebarLeftIcon className="w-5 h-5" />
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSidebarCollapsed(false)
-                if (conversation) {
-                  useStore.getState().setAgentEditingConversationId(conversation.id)
-                }
-              }}
-              className="text-sm font-semibold text-gray-700 dark:text-gray-300 truncate flex-1 text-center px-2 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded transition-colors"
-            >
-              {conversation?.title || 'Agent'}
-            </button>
-            <button type="button" onClick={createConversation} className="p-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话">
+            <button type="button" onClick={createConversation} className="p-1.5 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话">
               <EditIcon className="w-5 h-5" />
             </button>
           </div>
@@ -787,10 +775,10 @@ export default function AgentWorkspace() {
                         if (!isAssistant && node) messageRefs.current.set(message.roundId, node)
                         else if (!isAssistant) messageRefs.current.delete(message.roundId)
                       }}
-                      className={`group flex max-w-[95%] flex-col md:max-w-[85%] lg:max-w-[75%] ${isAssistant ? 'items-start' : 'items-end'} ${isAssistant && tasksForRound.length > 0 ? 'w-full' : ''}`}
+                      className={`group flex max-w-[95%] flex-col md:max-w-[85%] lg:max-w-[75%] ${isAssistant ? 'items-start' : 'items-end'}`}
                     >
                       <article 
-                        className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${isAssistant && tasksForRound.length > 0 ? 'w-full ' : ''}${
+                        className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${
                         isAssistant 
                           ? 'rounded-tl-sm border border-border bg-sidebar/80 hover:bg-sidebar dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.04]'
                           : `rounded-tr-sm bg-muted dark:bg-[#2A2D31] ${isEditing ? 'ring-2 ring-blue-500/50 dark:ring-blue-400/50' : ''}`

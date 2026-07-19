@@ -512,7 +512,7 @@ input[type="number"] {
   animation: overlay-in 0.2s ease-out both;
 }
 
-/* ���窗面板：从中心弹出 */
+/* �����窗面板：从中心弹出 */
 @keyframes modal-in {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -708,25 +708,65 @@ input[type="number"] {
 /* --- 生成中卡片：Flow 风格无文字模糊渐变占位 --- */
 .task-gen-placeholder {
   background:
-    radial-gradient(120% 90% at 20% 15%, rgba(203, 213, 225, 0.7), transparent 60%),
-    radial-gradient(110% 100% at 85% 80%, rgba(148, 163, 184, 0.5), transparent 65%),
-    linear-gradient(150deg, #d7dce3, #c4cbd4 45%, #d0d6de 75%, #c8cfd8);
-  background-size: 200% 200%, 200% 200%, 220% 220%;
-  animation: task-gen-drift 5.5s ease-in-out infinite alternate;
+    radial-gradient(90% 70% at 20% 15%, rgba(255, 255, 255, 0.9), transparent 55%),
+    radial-gradient(80% 75% at 85% 80%, rgba(120, 138, 160, 0.75), transparent 60%),
+    radial-gradient(70% 65% at 60% 30%, rgba(226, 232, 240, 0.8), transparent 55%),
+    linear-gradient(150deg, #e2e7ee, #b4bdc9 45%, #dae0e8 75%, #bcc5d1);
+  background-size: 240% 240%, 240% 240%, 260% 260%, 300% 300%;
+  animation: task-gen-drift 3.2s ease-in-out infinite alternate;
 }
 
 .dark .task-gen-placeholder {
   background:
-    radial-gradient(120% 90% at 20% 15%, rgba(148, 163, 184, 0.28), transparent 60%),
-    radial-gradient(110% 100% at 85% 80%, rgba(100, 116, 139, 0.32), transparent 65%),
-    linear-gradient(150deg, #4b5563, #313842 45%, #454c57 75%, #383f49);
-  background-size: 200% 200%, 200% 200%, 220% 220%;
+    radial-gradient(90% 70% at 20% 15%, rgba(186, 200, 218, 0.5), transparent 55%),
+    radial-gradient(80% 75% at 85% 80%, rgba(51, 61, 75, 0.9), transparent 60%),
+    radial-gradient(70% 65% at 60% 30%, rgba(132, 148, 170, 0.42), transparent 55%),
+    linear-gradient(150deg, #5b6675, #262c36 45%, #4e5867 75%, #2e3540);
+  background-size: 240% 240%, 240% 240%, 260% 260%, 300% 300%;
+}
+
+/* 生成中占位：流光扫过叠层，加强"活着"的动感 */
+.task-gen-placeholder::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.32) 48%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.32) 52%,
+    transparent 65%
+  );
+  background-size: 280% 100%;
+  animation: task-gen-sheen 2.4s ease-in-out infinite;
+  content: '';
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+.dark .task-gen-placeholder::after {
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(203, 218, 238, 0.2) 48%,
+    rgba(226, 236, 250, 0.38) 50%,
+    rgba(203, 218, 238, 0.2) 52%,
+    transparent 65%
+  );
+  background-size: 280% 100%;
+  mix-blend-mode: screen;
 }
 
 @keyframes task-gen-drift {
-  0% { background-position: 0% 0%, 100% 100%, 0% 50%; }
-  50% { background-position: 60% 40%, 40% 60%, 100% 50%; }
-  100% { background-position: 100% 100%, 0% 0%, 0% 50%; }
+  0% { background-position: 0% 0%, 100% 100%, 50% 100%, 0% 50%; }
+  33% { background-position: 70% 30%, 30% 80%, 0% 40%, 60% 30%; }
+  66% { background-position: 30% 80%, 70% 20%, 100% 60%, 40% 80%; }
+  100% { background-position: 100% 100%, 0% 0%, 50% 0%, 100% 50%; }
+}
+
+@keyframes task-gen-sheen {
+  0% { background-position: 130% 0; }
+  100% { background-position: -80% 0; }
 }
 
 /* --- 生成完成揭示特效：光束扫过 + 模糊聚焦 --- */
@@ -777,6 +817,7 @@ input[type="number"] {
 
 @media (prefers-reduced-motion: reduce) {
   .task-gen-placeholder,
+  .task-gen-placeholder::after,
   .task-reveal .task-deck-img,
   .task-reveal::after,
   .task-deck-img {
