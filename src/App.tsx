@@ -166,7 +166,7 @@ function Workspace() {
   return (
     <>
       <Header />
-      <WorkspaceSidebar appMode={appMode}>
+      <WorkspaceSidebar>
         {appMode === 'agent' ? (
           <AgentWorkspace />
         ) : (

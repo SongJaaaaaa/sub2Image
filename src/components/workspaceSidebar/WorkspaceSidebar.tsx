@@ -5,16 +5,14 @@ import {
   saveWorkspaceSidebarState,
   type WorkspaceSidebarCategory,
 } from '../../lib/workspaceSidebarState'
-import { CodeIcon } from '../ui/icons'
 import WorkspaceSidebarNav from './WorkspaceSidebarNav'
 import WorkspaceSidebarPanel from './WorkspaceSidebarPanel'
 
 type Props = {
-  appMode: 'gallery' | 'agent'
   children: ReactNode
 }
 
-export default function WorkspaceSidebar({ appMode, children }: Props) {
+export default function WorkspaceSidebar({ children }: Props) {
   const [state, setState] = useState(loadWorkspaceSidebarState)
 
   useEffect(() => {
@@ -54,19 +52,6 @@ export default function WorkspaceSidebar({ appMode, children }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="打开扩展侧边栏"
-        title="扩展"
-        onClick={() => setState((current) => ({ ...current, expanded: true }))}
-        className={`fixed left-2 z-30 flex h-10 w-10 items-center justify-center rounded-md border border-border bg-sidebar/95 text-gray-600 shadow-md backdrop-blur transition-colors hover:bg-white hover:text-gray-900 dark:border-white/[0.1] dark:bg-gray-950/95 dark:text-gray-300 dark:hover:bg-gray-800 lg:hidden ${appMode === 'agent'
-          ? 'top-14'
-          : 'top-[calc(var(--app-header-height,4rem)+0.75rem)]'
-        }`}
-      >
-        <CodeIcon className="h-5 w-5" />
-      </button>
-
       {state.expanded && (
         <button
           type="button"

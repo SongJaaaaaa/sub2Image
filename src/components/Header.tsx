@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
+import { openWorkspaceSidebar } from '../lib/workspaceSidebarState'
 import ViewportTooltip from './ui/ViewportTooltip'
 import { AiLiquidModeSwitch } from './aiLiquidModeSwitch'
 import HelpModal from './HelpModal'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
-import { HelpCircleIcon, InstallIcon, SettingsIcon } from './ui/icons'
+import { CodeIcon, HelpCircleIcon, InstallIcon, SettingsIcon } from './ui/icons'
 import GalleryHeaderControls from '../features/gallery/components/GalleryHeaderControls'
 
 type BeforeInstallPromptEvent = Event & {
@@ -33,43 +34,11 @@ export default function Header() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isPwaInstalled, setIsPwaInstalled] = useState(isInstalledPwa)
   const [hintVisible, setHintVisible] = useState(false)
-  const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('up')
   const [gallerySearchFocused, setGallerySearchFocused] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     if (appMode !== 'gallery') setGallerySearchFocused(false)
-  }, [appMode])
-
-  useEffect(() => {
-    if (appMode === 'agent') {
-      setScrollDirection('up')
-      return
-    }
-
-    let lastScrollY = window.scrollY
-    let ticking = false
-
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY
-          if (currentScrollY < 20) {
-            setScrollDirection('up')
-          } else if (currentScrollY > lastScrollY + 10) {
-            setScrollDirection('down')
-          } else if (currentScrollY < lastScrollY - 10) {
-            setScrollDirection('up')
-          }
-          lastScrollY = currentScrollY
-          ticking = false
-        })
-        ticking = true
-      }
-    }
-
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
   }, [appMode])
 
   useEffect(() => {
@@ -177,11 +146,11 @@ export default function Header() {
     <>
       <header ref={headerRef} data-app-header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 border-b border-border bg-sidebar/90 backdrop-blur transition-transform duration-300 ease-in-out dark:border-white/[0.08] dark:bg-gray-950/80 ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between relative">
-          <div className={`min-w-0 pr-2 flex items-center gap-2 overflow-hidden transition-all duration-300 ease-out ${hideForSearch
+          <div className={`flex min-w-0 items-center gap-1 overflow-hidden pr-1 transition-all duration-300 ease-out sm:gap-2 sm:pr-2 ${hideForSearch
             ? 'xl:w-0 xl:flex-none xl:pr-0 xl:opacity-0 xl:pointer-events-none'
             : 'flex-1 xl:w-[140px] xl:flex-none xl:opacity-100'
           }`}>
-            <h1 className="inline-flex min-w-0 items-start relative mr-2">
+            <h1 className="relative inline-flex min-w-0 items-start whitespace-nowrap sm:mr-2">
               {showFavoriteCollectionTitle ? (
                 <>
                   <span className="min-w-0 truncate text-[17px] font-bold tracking-tight text-gray-800 dark:text-gray-100 sm:hidden" title={favoriteCollectionTitle}>{favoriteCollectionTitle}</span>
@@ -195,12 +164,21 @@ export default function Header() {
               ) : (
                 <a
                   href="/"
-                  className="text-[17px] sm:text-lg font-bold tracking-tight text-gray-800 dark:text-gray-100 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="whitespace-nowrap text-[17px] font-bold tracking-tight text-gray-800 transition-colors hover:text-gray-600 dark:text-gray-100 dark:hover:text-gray-300 sm:text-lg"
                 >
                   JWS Image
                 </a>
               )}
             </h1>
+            <button
+              type="button"
+              aria-label="打开扩展侧边栏"
+              title="扩展"
+              onClick={() => openWorkspaceSidebar('skills')}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-sidebar text-gray-500 transition-colors hover:bg-muted hover:text-gray-900 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.07] dark:hover:text-gray-100 lg:hidden"
+            >
+              <CodeIcon className="h-[18px] w-[18px]" />
+            </button>
           </div>
           {appMode === 'gallery' && (
             <GalleryHeaderControls focused={gallerySearchFocused} onFocusChange={setGallerySearchFocused} />
@@ -215,9 +193,9 @@ export default function Header() {
           <AiLiquidModeSwitch
             value={appMode}
             onChange={setAppMode}
-            className={`hidden transition-all duration-300 ease-out sm:grid ${hideForSearch
+            className={`grid w-[116px] shrink-0 transition-all duration-300 ease-out [&_button]:px-2 sm:w-[168px] sm:[&_button]:px-4 ${hideForSearch
               ? 'xl:mr-0 xl:w-0 xl:opacity-0 xl:pointer-events-none'
-              : 'mr-4 w-[168px] opacity-100'
+              : 'mx-1 opacity-100 sm:ml-0 sm:mr-4'
             }`}
           />
           <div className={`flex shrink-0 items-center gap-1 overflow-hidden transition-all duration-300 ease-out ${hideForSearch
@@ -226,7 +204,7 @@ export default function Header() {
           }`}>
             {!isPwaInstalled && (
               <div
-                className="relative"
+                className="relative hidden sm:block"
                 {...installTooltip.handlers}
               >
                 <button
@@ -246,7 +224,7 @@ export default function Header() {
               </div>
             )}
             <div
-              className="relative"
+              className="relative hidden sm:block"
               {...helpTooltip.handlers}
             >
               <button
@@ -282,9 +260,6 @@ export default function Header() {
             </div>
           </div>
         </div>
-        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-20 opacity-100 pb-2'}`}>
-          <AiLiquidModeSwitch value={appMode} onChange={setAppMode} className="mx-2 w-[calc(100%-1rem)]" />
-        </div>
       </header>
       
       {/* Hint for sliding down */}
@@ -296,11 +271,6 @@ export default function Header() {
 
       <div className={`safe-area-top invisible pointer-events-none transition-all duration-300 ease-in-out ${appMode === 'agent' && !agentMobileHeaderVisible ? 'max-h-0 sm:max-h-[500px] opacity-0 sm:opacity-100 overflow-hidden sm:overflow-visible' : 'max-h-[500px] opacity-100'}`} aria-hidden="true">
         <div className="safe-header-inner" />
-        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 pb-0' : 'max-h-20 pb-2'}`}>
-          <div className="p-1">
-            <div className="py-1.5 text-sm">占位</div>
-          </div>
-        </div>
       </div>
       {showHelp && <HelpModal appMode={appMode} isFavoriteCollectionOverview={appMode === 'gallery' && filterFavorite && !activeFavoriteCollectionId} onClose={() => setShowHelp(false)} />}
     </>
