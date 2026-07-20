@@ -94,15 +94,13 @@ vi.mock('./lib/db', () => {
     },
   }
 })
-vi.mock('./lib/api', () => ({
+vi.mock('./integrations/imageApi', () => ({
   callImageApi: vi.fn(async () => ({
     images: [],
     actualParams: {},
     actualParamsList: [],
     revisedPrompts: [],
   })),
-}))
-vi.mock('./lib/falAiImageApi', () => ({
   getFalErrorMessage: vi.fn((err: unknown) => err instanceof Error ? err.message : String(err)),
   getFalQueuedImageResult: vi.fn(async () => ({
     images: [],
@@ -110,8 +108,6 @@ vi.mock('./lib/falAiImageApi', () => ({
     actualParamsList: [],
     revisedPrompts: [],
   })),
-}))
-vi.mock('./lib/openaiCompatibleImageApi', () => ({
   getCustomQueuedImageResult: vi.fn(async () => ({
     images: [],
     actualParams: {},
@@ -134,7 +130,7 @@ vi.mock('./lib/transparentImage', () => ({
   })),
   removeKeyedBackgroundFromDataUrl: vi.fn(async (dataUrl: string) => `transparent:${dataUrl}`),
 }))
-vi.mock('./lib/agentApi', () => ({
+vi.mock('./integrations/conversation/agentApi', () => ({
   callAgentConversationTitleApi: vi.fn(async () => '标题'),
   callAgentResponsesApi: vi.fn(() => new Promise(() => {})),
   callBatchImageSingle: vi.fn(async (opts: { batchItemId: string; prompt: string }) => ({
@@ -155,10 +151,8 @@ vi.mock('./lib/agentApi', () => ({
   }),
 }))
 import { clearAgentConversations, clearImages, clearPromptProjects, clearTasks, getAllAgentConversations, getAllPromptProjects, getAllTasks, getImage, putAgentConversation, putImage, putPromptProject, putTask as putDbTask } from './lib/db'
-import { callImageApi } from './lib/api'
-import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle } from './lib/agentApi'
-import { getFalQueuedImageResult } from './lib/falAiImageApi'
-import { getCustomQueuedImageResult } from './lib/openaiCompatibleImageApi'
+import { callImageApi, getCustomQueuedImageResult, getFalQueuedImageResult } from './integrations/imageApi'
+import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle } from './integrations/conversation/agentApi'
 import { removeKeyedBackgroundFromDataUrl } from './lib/transparentImage'
 import { applyComposerDraft, cleanStaleAgentInputDrafts, clearData, clearFailedTasks, deleteAgentRoundFromConversation, deleteFavoriteCollection, deleteImageIfUnreferenced, editOutputs, getActiveAgentRounds, getAgentConversationTaskIds, getAgentRoundTaskIds, getErrorToastMessage, getPersistedState, getTaskApiProfile, importData, initStore, loadComposerDraft, markInterruptedOpenAIRunningTasks, migratePersistedState, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeMultipleTasks, removeTask, reuseConfig, stopAgentResponse, submitAgentMessage, submitTask, taskMatchesFilterStatus, taskMatchesSearchQuery, useStore } from './store'
 
@@ -538,7 +532,7 @@ describe('mask draft lifecycle in store actions', () => {
   })
 
   it('stores decoded image size as actual size when the API omits size', async () => {
-    const { callImageApi } = await import('./lib/api')
+    const { callImageApi } = await import('./integrations/imageApi')
     vi.mocked(callImageApi).mockClear()
     vi.mocked(callImageApi).mockResolvedValueOnce({
       images: ['data:image/png;base64,actual-1254x1254'],
@@ -562,7 +556,7 @@ describe('mask draft lifecycle in store actions', () => {
   })
 
   it('keeps API-returned actual size over decoded image size', async () => {
-    const { callImageApi } = await import('./lib/api')
+    const { callImageApi } = await import('./integrations/imageApi')
     vi.mocked(callImageApi).mockClear()
     vi.mocked(callImageApi).mockResolvedValueOnce({
       images: ['data:image/png;base64,actual-1254x1254'],
@@ -586,7 +580,7 @@ describe('mask draft lifecycle in store actions', () => {
   })
 
   it('stores transparent background output after local post-processing', async () => {
-    const { callImageApi } = await import('./lib/api')
+    const { callImageApi } = await import('./integrations/imageApi')
     vi.mocked(callImageApi).mockClear()
     vi.mocked(removeKeyedBackgroundFromDataUrl).mockClear()
     vi.mocked(callImageApi).mockResolvedValueOnce({
@@ -636,7 +630,7 @@ describe('mask draft lifecycle in store actions', () => {
   })
 
   it('falls back to the original output when transparent post-processing fails', async () => {
-    const { callImageApi } = await import('./lib/api')
+    const { callImageApi } = await import('./integrations/imageApi')
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(callImageApi).mockClear()
     vi.mocked(removeKeyedBackgroundFromDataUrl).mockClear()
@@ -676,7 +670,7 @@ describe('mask draft lifecycle in store actions', () => {
   })
 
   it('supports transparent background post-processing for fal gallery tasks', async () => {
-    const { callImageApi } = await import('./lib/api')
+    const { callImageApi } = await import('./integrations/imageApi')
     const falProfile = createDefaultFalProfile({ id: 'fal-profile', apiKey: 'fal-key' })
     vi.mocked(callImageApi).mockClear()
     vi.mocked(removeKeyedBackgroundFromDataUrl).mockClear()

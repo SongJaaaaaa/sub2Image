@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
-import ViewportTooltip from './ViewportTooltip'
+import ViewportTooltip from './ui/ViewportTooltip'
 import { AiLiquidModeSwitch } from './aiLiquidModeSwitch'
 import HelpModal from './HelpModal'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
-import { HelpCircleIcon, InstallIcon, SettingsIcon } from './icons'
+import { HelpCircleIcon, InstallIcon, SettingsIcon } from './ui/icons'
+import GalleryHeaderControls from '../features/gallery/components/GalleryHeaderControls'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -33,7 +34,12 @@ export default function Header() {
   const [isPwaInstalled, setIsPwaInstalled] = useState(isInstalledPwa)
   const [hintVisible, setHintVisible] = useState(false)
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('up')
+  const [gallerySearchFocused, setGallerySearchFocused] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (appMode !== 'gallery') setGallerySearchFocused(false)
+  }, [appMode])
 
   useEffect(() => {
     if (appMode === 'agent') {
@@ -165,11 +171,16 @@ export default function Header() {
     }
   }
 
+  const hideForSearch = appMode === 'gallery' && gallerySearchFocused
+
   return (
     <>
       <header ref={headerRef} data-app-header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 border-b border-border bg-sidebar/90 backdrop-blur transition-transform duration-300 ease-in-out dark:border-white/[0.08] dark:bg-gray-950/80 ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between relative">
-          <div className="flex-1 min-w-0 pr-2 flex items-center gap-2">
+          <div className={`min-w-0 pr-2 flex items-center gap-2 overflow-hidden transition-all duration-300 ease-out ${hideForSearch
+            ? 'xl:w-0 xl:flex-none xl:pr-0 xl:opacity-0 xl:pointer-events-none'
+            : 'flex-1 xl:w-[140px] xl:flex-none xl:opacity-100'
+          }`}>
             <h1 className="inline-flex min-w-0 items-start relative mr-2">
               {showFavoriteCollectionTitle ? (
                 <>
@@ -191,15 +202,28 @@ export default function Header() {
               )}
             </h1>
           </div>
+          {appMode === 'gallery' && (
+            <GalleryHeaderControls focused={gallerySearchFocused} onFocusChange={setGallerySearchFocused} />
+          )}
           {showFavoriteCollectionTitle && (
-            <div className="absolute left-1/2 top-1/2 hidden max-w-[30%] -translate-x-1/2 -translate-y-1/2 sm:flex">
+            <div className="absolute left-1/2 top-1/2 hidden max-w-[30%] -translate-x-1/2 -translate-y-1/2 sm:flex xl:hidden">
               <div className="truncate rounded px-2 py-1 text-sm font-semibold text-gray-700 dark:text-gray-300" title={favoriteCollectionTitle}>
                 {favoriteCollectionTitle}
               </div>
             </div>
           )}
-          <AiLiquidModeSwitch value={appMode} onChange={setAppMode} className="mr-4 hidden w-[168px] sm:grid" />
-          <div className="flex items-center gap-1 shrink-0">
+          <AiLiquidModeSwitch
+            value={appMode}
+            onChange={setAppMode}
+            className={`hidden transition-all duration-300 ease-out sm:grid ${hideForSearch
+              ? 'xl:mr-0 xl:w-0 xl:opacity-0 xl:pointer-events-none'
+              : 'mr-4 w-[168px] opacity-100'
+            }`}
+          />
+          <div className={`flex shrink-0 items-center gap-1 overflow-hidden transition-all duration-300 ease-out ${hideForSearch
+            ? 'xl:max-w-0 xl:opacity-0 xl:pointer-events-none'
+            : 'max-w-[160px] opacity-100'
+          }`}>
             {!isPwaInstalled && (
               <div
                 className="relative"

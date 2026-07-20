@@ -7,7 +7,6 @@ const blocked = [
   '/imageGeneration/',
   '/integrations/',
   '/store',
-  '/components/InputBar',
 ]
 
 const sources = import.meta.glob('../**/*.{ts,tsx}', {

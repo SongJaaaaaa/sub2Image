@@ -7,7 +7,7 @@ import {
   useStore,
 } from '../../store'
 import { useDragSelect } from '../../hooks/useDragSelect'
-import { FavoriteIcon } from '../icons'
+import { FavoriteIcon } from '../ui/icons'
 import { FavoriteCollectionOverviewCard } from './FavoriteCollectionOverviewCard'
 import { getCollectionTasks, getLatestCoverTask, type CollectionCard } from './favoriteUtils'
 

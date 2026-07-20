@@ -826,7 +826,7 @@ export function createPromptStudioStore(opts: PromptStudioStoreOptions) {
     }
     const result = applyPromptProjectPatch({ ...base, source }, patch, getDomain(base, opts.domains))
     const input = hasImages
-      ? '参考图已更新，请重新分析图片并继续��认创作需求。'
+      ? '参考图已更新，请重新分析图片并继续确认创作需求。'
       : '参考图已移除，请根据当前素材继续确认创作需求。'
     const next = withUi({ ...result.project, phase: 'interview' }, {
       questions: [],

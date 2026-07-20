@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import type { PromptQuestion, PromptScalar } from '../../features/promptStudio'
 import type { PromptQuestionAnswer, PromptStudioToolBundle } from '../../features/promptStudio'
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, StopIcon } from '../../components/icons'
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, StopIcon } from '../../components/ui/icons'
 
 type Props = {
   conversationId: string

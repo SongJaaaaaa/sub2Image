@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 import type { TaskRecord } from '../../types'
 import { useTooltip } from '../../hooks/useTooltip'
-import ViewportTooltip from '../ViewportTooltip'
+import ViewportTooltip from '../ui/ViewportTooltip'
 
 function BatchActionButton({
   tooltip,

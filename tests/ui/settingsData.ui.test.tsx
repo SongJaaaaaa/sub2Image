@@ -17,8 +17,8 @@ vi.mock('../../src/store', async (importOriginal) => ({
   clearData: mocks.clearData,
 }))
 
-import ConfirmDialog from '../../src/components/ConfirmDialog'
-import SettingsModal from '../../src/components/SettingsModal'
+import ConfirmDialog from '../../src/components/ui/ConfirmDialog'
+import SettingsModal from '../../src/features/settings/components/SettingsModal'
 import { useStore } from '../../src/store'
 
 const initialState = useStore.getState()

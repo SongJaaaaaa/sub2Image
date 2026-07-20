@@ -22,8 +22,34 @@
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
+  --workspace-sidebar-width: 0px;
+  --workspace-sidebar-offset: 0px;
   color-scheme: light;
   scrollbar-gutter: stable;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --workspace-sidebar-width: 64px;
+    --workspace-sidebar-offset: 32px;
+  }
+
+  :root[data-workspace-sidebar-expanded='true'] {
+    --workspace-sidebar-width: 344px;
+    --workspace-sidebar-offset: 172px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --workspace-sidebar-width: 0px;
+    --workspace-sidebar-offset: 0px;
+  }
+
+  :root[data-workspace-sidebar-expanded='true'] {
+    --workspace-sidebar-width: 344px;
+    --workspace-sidebar-offset: 172px;
+  }
 }
 
 html {
@@ -517,7 +543,7 @@ input[type="number"] {
   animation: overlay-in 0.2s ease-out both;
 }
 
-/* �������窗面板：从中心弹出 */
+/* 弹窗面板：从中心弹出 */
 @keyframes modal-in {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -986,7 +1012,7 @@ input[type="number"] {
    液态银主题覆盖（仅白天模式）
    将全站蓝色强调色重映射为钢银色，与液态银画布、
    Metal3DButton / AiLiquidButton 的金属质感统一。
-   黑夜模式（.dark）不受影响���保持原蓝色。
+   黑夜模式（.dark）不受影响，保持原蓝色。
    钢银色阶: 50 #eef1f5 / 100 #e2e7ed / 300 #aab6c2
              400 #8494a3 / 500 #5f6f7e / 600 #49586593 / 700 #3a4753
    ============================================================ */
@@ -1161,7 +1187,7 @@ html:not(.dark) ::selection {
 
 /* ============================================================
    黑夜模式金属化覆盖
-   黑夜的蓝色强��� → 亮银白钢色，实心按钮 → 深锌 3D 金属，
+   黑夜的蓝色强调色 → 亮银白钢色，实心按钮 → 深锌 3D 金属，
    与 Metal3DButton 的黑夜壳（#3f3f46 → #09090b）统一。
    亮银色阶: 300 #dbe2e8 / 400 #b8c4cf / 500 #93a2b0
    ============================================================ */

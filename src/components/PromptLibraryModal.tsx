@@ -10,7 +10,7 @@ import {
   PROMPT_SOURCES,
   refreshPromptLibrary,
 } from '../lib/promptLibrary'
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, RefreshIcon } from './icons'
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, RefreshIcon } from './ui/icons'
 
 const PAGE_SIZE = 24
 

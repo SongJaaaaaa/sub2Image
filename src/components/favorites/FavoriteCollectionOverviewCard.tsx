@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type SVGProps } from 'react'
 import type { TaskRecord, FavoriteCollection } from '../../types'
 import { ensureImageThumbnailCached, subscribeImageThumbnail } from '../../store'
-import { TooltipButton as FavoriteActionButton } from '../TooltipButton'
-import { EditIcon, FavoriteIcon, TrashIcon } from '../icons'
+import { TooltipButton as FavoriteActionButton } from '../ui/TooltipButton'
+import { EditIcon, FavoriteIcon, TrashIcon } from '../ui/icons'
 import type { CollectionCard } from './favoriteUtils'
 
 function FolderIcon(props: SVGProps<SVGSVGElement>) {

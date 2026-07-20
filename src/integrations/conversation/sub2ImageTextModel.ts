@@ -5,7 +5,7 @@ import {
 } from '../../features/promptStudio'
 import { validateApiProfile } from '../../lib/apiProfiles'
 import { buildApiUrl, readClientDevProxyConfig, shouldUseApiProxy } from '../../lib/devProxy'
-import { createRequestAbortScope, getApiErrorMessage } from '../../lib/imageApiShared'
+import { createRequestAbortScope, getApiErrorMessage } from '../imageApi/shared'
 import type { ApiProfile } from '../../types'
 
 export type Sub2ImageTextModelOptions = {

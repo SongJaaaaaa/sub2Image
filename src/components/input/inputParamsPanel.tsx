@@ -1,6 +1,6 @@
 import type { ApiProfile, TaskParams } from '../../types'
 import { dismissAllTooltips } from '../../lib/tooltipDismiss'
-import Select from '../Select'
+import Select from '../ui/Select'
 import ButtonTooltip from './buttonTooltip'
 
 interface HintTooltipState {

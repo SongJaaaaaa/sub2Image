@@ -5,8 +5,8 @@ import { copyTextToClipboard, getClipboardFailureMessage } from '../../lib/clipb
 import { getPromptMentionParts } from '../../lib/promptImageMentions'
 import { editOutputs, removeTask, reuseConfig, useStore } from '../../store'
 import MarkdownRenderer from '../../components/MarkdownRenderer'
-import TaskCard from '../../components/TaskCard'
-import { TrashIcon } from '../../components/icons'
+import TaskCard from '../../features/gallery/components/TaskCard'
+import { TrashIcon } from '../../components/ui/icons'
 import {
   AGENT_IMAGE_TASK_KIND,
   AGENT_WEB_SEARCH_KIND,

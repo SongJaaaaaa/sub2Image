@@ -10,8 +10,8 @@ import {
 } from '../../store'
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../../hooks/usePreventBackgroundScroll'
-import { TooltipButton as FavoriteActionButton } from '../TooltipButton'
-import { CloseIcon, DragHandleIcon, EditIcon, FavoriteIcon, TrashIcon } from '../icons'
+import { TooltipButton as FavoriteActionButton } from '../ui/TooltipButton'
+import { CloseIcon, DragHandleIcon, EditIcon, FavoriteIcon, TrashIcon } from '../ui/icons'
 
 export function ManageCollectionsModal() {
   const open = useStore((s) => s.isManageCollectionsModalOpen)

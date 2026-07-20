@@ -9,7 +9,7 @@ import {
 } from '../lib/sub2api'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
-import { CloseIcon } from './icons'
+import { CloseIcon } from './ui/icons'
 
 interface JwsConnectModalProps {
   onClose: () => void

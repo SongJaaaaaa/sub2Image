@@ -11,9 +11,9 @@ import {
 } from '../../store'
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../../hooks/usePreventBackgroundScroll'
-import { Checkbox } from '../Checkbox'
-import { TooltipButton as FavoriteActionButton } from '../TooltipButton'
-import { CloseIcon, DragHandleIcon, EditIcon, FavoriteIcon, TrashIcon } from '../icons'
+import { Checkbox } from '../ui/Checkbox'
+import { TooltipButton as FavoriteActionButton } from '../ui/TooltipButton'
+import { CloseIcon, DragHandleIcon, EditIcon, FavoriteIcon, TrashIcon } from '../ui/icons'
 import { getInitialCheckedCollectionIds } from './favoriteUtils'
 
 export function FavoriteCollectionPickerModal() {

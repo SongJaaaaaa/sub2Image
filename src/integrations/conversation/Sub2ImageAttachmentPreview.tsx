@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape'
-import { CloseIcon, EditIcon, RefreshIcon } from '../../components/icons'
+import { CloseIcon, EditIcon, RefreshIcon } from '../../components/ui/icons'
 
 type Props = {
   src: string

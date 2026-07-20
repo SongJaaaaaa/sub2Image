@@ -8,21 +8,22 @@ import { getSub2Token, OPEN_SUB2_CONNECT_EVENT } from './lib/sub2api'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
 import type { AppSettings } from './types'
 import Header from './components/Header'
-import SearchBar from './components/SearchBar'
-import TaskGrid from './components/TaskGrid'
-import AgentWorkspace from './components/AgentWorkspace'
+import SearchBar from './features/gallery/components/SearchBar'
+import TaskGrid from './features/gallery/components/TaskGrid'
+import AgentWorkspace from './features/agent/components/AgentWorkspace'
 import Sub2ImageConversationComposer from './integrations/conversation/Sub2ImageConversationComposer'
-import DetailModal from './components/DetailModal'
-import Lightbox from './components/Lightbox'
-import SettingsModal from './components/SettingsModal'
-import ConfirmDialog from './components/ConfirmDialog'
-import Toast from './components/Toast'
-import MaskEditorModal from './components/MaskEditorModal'
-import ImageContextMenu from './components/ImageContextMenu'
+import DetailModal from './features/gallery/components/DetailModal'
+import Lightbox from './features/gallery/components/Lightbox'
+import SettingsModal from './features/settings/components/SettingsModal'
+import ConfirmDialog from './components/ui/ConfirmDialog'
+import Toast from './components/ui/Toast'
+import MaskEditorModal from './features/imageEditor/components/MaskEditorModal'
+import ImageContextMenu from './features/gallery/components/ImageContextMenu'
 import SupportPromptModal from './components/SupportPromptModal'
 import LandingPage from './components/LandingPage'
 import JwsConnectModal from './components/JwsConnectModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
+import WorkspaceSidebar from './components/workspaceSidebar/WorkspaceSidebar'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
 
 let customProviderConfigUrlImportStarted = false
@@ -165,16 +166,18 @@ function Workspace() {
   return (
     <>
       <Header />
-      {appMode === 'agent' ? (
-        <AgentWorkspace />
-      ) : (
-        <main data-home-main data-drag-select-surface style={{ paddingBottom: 'calc(var(--composer-stack-clearance, 10rem) + 2rem)' }}>
-          <div className="safe-area-x max-w-7xl mx-auto">
-            <SearchBar />
-            {filterFavorite && !activeFavoriteCollectionId ? <FavoriteCollectionsView /> : <TaskGrid />}
-          </div>
-        </main>
-      )}
+      <WorkspaceSidebar appMode={appMode}>
+        {appMode === 'agent' ? (
+          <AgentWorkspace />
+        ) : (
+          <main data-home-main data-drag-select-surface style={{ paddingBottom: 'calc(var(--composer-stack-clearance, 10rem) + 2rem)' }}>
+            <div className="safe-area-x max-w-7xl mx-auto">
+              <SearchBar />
+              {filterFavorite && !activeFavoriteCollectionId ? <FavoriteCollectionsView /> : <TaskGrid />}
+            </div>
+          </main>
+        )}
+      </WorkspaceSidebar>
       <Sub2ImageConversationComposer />
       <DetailModal />
       <Lightbox />

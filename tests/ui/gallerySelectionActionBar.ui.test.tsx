@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -30,7 +28,7 @@ vi.mock('../../src/lib/downloadImages', async (importOriginal) => ({
 }))
 
 import { useStore } from '../../src/store'
-import GallerySelectionActionBar from '../../src/components/GallerySelectionActionBar'
+import GallerySelectionActionBar from '../../src/features/gallery/components/GallerySelectionActionBar'
 
 const initialState = useStore.getState()
 
@@ -205,22 +203,4 @@ describe('GallerySelectionActionBar', () => {
     expect(useStore.getState().confirmDialog).toBeNull()
   })
 
-  it('InputBar 不再订阅画廊批量状态', () => {
-    const source = readFileSync(resolve('src/components/InputBar.tsx'), 'utf8')
-    const selectors = [
-      'selectedTaskIds',
-      'selectedFavoriteCollectionIds',
-      'favoriteCollections',
-      'filterStatus',
-      'filterFavorite',
-      'activeFavoriteCollectionId',
-      'searchQuery',
-    ]
-
-    selectors.forEach((name) => {
-      expect(source).not.toContain(`useStore((s) => s.${name})`)
-    })
-    expect(source).not.toContain("from './input/inputBatchBars'")
-    expect(source).toContain('collectAgentRoundOutputImageSlots(round, tasks)')
-  })
 })

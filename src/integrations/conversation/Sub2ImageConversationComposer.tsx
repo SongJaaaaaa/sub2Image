@@ -12,8 +12,8 @@ import {
   type ConversationAttachmentItem,
 } from '../../features/conversationComposer'
 import type { PromptProject, PromptStudioToolBundle } from '../../features/promptStudio'
-import GallerySelectionActionBar from '../../components/GallerySelectionActionBar'
-import { TuneIcon } from '../../components/icons'
+import GallerySelectionActionBar from '../../features/gallery/components/GallerySelectionActionBar'
+import { TuneIcon } from '../../components/ui/icons'
 import { AiLiquidButton } from '../../components/aiLiquidButton'
 import { clearActiveComposerOwner, isComposerFocused, NEXT_COMPOSER_OWNER, setActiveComposerOwner } from './composerFocus'
 import { conversationTools, SUB2_CHAT_TOOL_ID, SUB2_IMAGE_TOOL_ID } from './conversationTools'
@@ -487,6 +487,10 @@ export default function Sub2ImageConversationComposer() {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) clearActiveComposerOwner(NEXT_COMPOSER_OWNER)
           }}
           className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] left-1/2 z-30 w-full max-w-4xl -translate-x-1/2 px-3 sm:px-4"
+          style={{
+            left: 'calc(50% + var(--workspace-sidebar-offset, 0px))',
+            maxWidth: 'min(56rem, calc(100vw - var(--workspace-sidebar-width, 0px)))',
+          }}
         >
           {appMode === 'gallery' && <GallerySelectionActionBar />}
           {showAgentWelcome && (
