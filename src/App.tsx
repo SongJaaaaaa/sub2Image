@@ -23,7 +23,7 @@ import SupportPromptModal from './components/SupportPromptModal'
 import LandingPage from './components/LandingPage'
 import JwsConnectModal from './components/JwsConnectModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
-import WorkspaceSidebar from './components/workspaceSidebar/WorkspaceSidebar'
+import { ExtensionWorkspace, isExtensionPath } from './ExtensionWorkspace'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
 
 let customProviderConfigUrlImportStarted = false
@@ -53,6 +53,8 @@ export default function App() {
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  if (isExtensionPath(path)) return <ExtensionWorkspace />
 
   if (path !== '/app' && path !== '/app/') {
     return (
@@ -166,18 +168,16 @@ function Workspace() {
   return (
     <>
       <Header />
-      <WorkspaceSidebar>
-        {appMode === 'agent' ? (
-          <AgentWorkspace />
-        ) : (
-          <main data-home-main data-drag-select-surface style={{ paddingBottom: 'calc(var(--composer-stack-clearance, 10rem) + 2rem)' }}>
-            <div className="safe-area-x max-w-7xl mx-auto">
-              <SearchBar />
-              {filterFavorite && !activeFavoriteCollectionId ? <FavoriteCollectionsView /> : <TaskGrid />}
-            </div>
-          </main>
-        )}
-      </WorkspaceSidebar>
+      {appMode === 'agent' ? (
+        <AgentWorkspace />
+      ) : (
+        <main data-home-main data-drag-select-surface style={{ paddingBottom: 'calc(var(--composer-stack-clearance, 10rem) + 2rem)' }}>
+          <div className="safe-area-x max-w-7xl mx-auto">
+            <SearchBar />
+            {filterFavorite && !activeFavoriteCollectionId ? <FavoriteCollectionsView /> : <TaskGrid />}
+          </div>
+        </main>
+      )}
       <Sub2ImageConversationComposer />
       <DetailModal />
       <Lightbox />

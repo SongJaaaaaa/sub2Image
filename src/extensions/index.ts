@@ -1,7 +1,0 @@
-export type { ExtensionEntry, ExtensionStatus } from './shared/types'
-export { skills } from './skills'
-export type { SkillEntry } from './skills'
-export { tools } from './tools'
-export type { ToolEntry } from './tools'
-export { workflows } from './workflows'
-export type { WorkflowEntry } from './workflows'

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../store'
-import { openWorkspaceSidebar } from '../../../lib/workspaceSidebarState'
+import { navigateToExtensionWorkspace } from '../../../ExtensionWorkspace'
 import {
   ChevronLeftIcon,
   CloseIcon,
@@ -63,7 +63,7 @@ export default function GalleryHeaderControls({ focused, onFocusChange }: Props)
     <>
       <div ref={rootRef} data-gallery-header-controls className="hidden min-w-0 flex-1 items-center justify-center gap-2 xl:flex">
         <div className={leftClass}>
-          <button type="button" className={iconButtonClass} aria-label="打开 Skill" title="Skill" onClick={() => openWorkspaceSidebar('skills')}>
+          <button type="button" className={iconButtonClass} aria-label="打开拓展工作区" title="拓展工作区" onClick={() => navigateToExtensionWorkspace()}>
             <CodeIcon className="h-5 w-5" />
           </button>
           <button

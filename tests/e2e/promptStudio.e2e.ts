@@ -121,7 +121,7 @@ async function screenshot(page: Page, name: string) {
   await page.screenshot({ path: resolve(dir, name), animations: 'disabled' })
 }
 
-test('WP9-R 单 Composer 问答、暂停恢复、设置取消和生成回填', async ({ page }, testInfo) => {
+test('WP9-R 单 Composer 问答、暂停恢复、设置同步和生成回填', async ({ page }, testInfo) => {
   const errors: string[] = []
   let requests = 0
   page.on('pageerror', (err) => errors.push(err.message))
@@ -146,6 +146,13 @@ test('WP9-R 单 Composer 问答、暂停恢复、设置取消和生成回填', a
     mimeType: 'image/png',
     buffer: Buffer.from(PNG_BASE64, 'base64'),
   })
+  await page.getByRole('button', { name: '图片设置' }).click()
+  const settings = page.locator('[data-composer-settings]')
+  await page.getByRole('button', { name: '比例 16:9' }).click()
+  await page.getByRole('button', { name: '分辨率 2K' }).click()
+  await page.getByRole('button', { name: '生成数量 x2' }).click()
+  await settings.click({ position: { x: 1, y: 1 } })
+
   await page.locator('.cc-agent-button').click()
   await expect(page.locator('.cc-agent-button')).toHaveAttribute('aria-pressed', 'true')
   await expect(editor).toBeVisible()
@@ -161,11 +168,6 @@ test('WP9-R 单 Composer 问答、暂停恢复、设置取消和生成回填', a
   await screenshot(page, `wp9-r-${testInfo.project.name}-question.png`)
 
   await page.getByRole('button', { name: '产品近景' }).click()
-  await expect(page.getByText('视觉焦点放在哪里？')).toBeVisible()
-  await page.getByRole('button', { name: '图片设置' }).click()
-  await expect(page.locator('[data-composer-settings]')).toBeVisible()
-  await page.getByRole('button', { name: '高', exact: true }).click()
-  await page.getByRole('button', { name: '关闭设置' }).click()
   await expect(page.getByText('视觉焦点放在哪里？')).toBeVisible()
 
   await page.getByRole('button', { name: '暂停并关闭提示词 Agent' }).click()
@@ -188,18 +190,11 @@ test('WP9-R 单 Composer 问答、暂停恢复、设置取消和生成回填', a
   await screenshot(page, `wp9-r-${testInfo.project.name}-result.png`)
 
   await page.locator('[data-conversation-composer-dock] [title="图片设置"]').click()
-  await expect(page.getByRole('button', { name: '自动' }).first()).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: '横向 16:9' })).toBeVisible()
-  await expect(page.getByRole('combobox', { name: '生成数量' })).toBeVisible()
-  const qualityTip = '低质量生成最快、费用最低；高质量细节更多，但更慢、费用更高。'
-  await page.getByRole('button', { name: qualityTip }).hover()
-  await expect(page.getByText(qualityTip)).toBeVisible()
+  await expect(page.getByRole('button', { name: '比例 16:9' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: '分辨率 2K' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: '生成数量 x2' })).toHaveAttribute('aria-pressed', 'true')
   await screenshot(page, `wp9-r-${testInfo.project.name}-settings.png`)
-  await page.getByRole('combobox', { name: '生成数量' }).click()
-  await expect(page.getByRole('listbox', { name: '生成数量选项' })).toBeVisible()
-  await screenshot(page, `wp9-r-${testInfo.project.name}-settings-dropdown.png`)
-  await page.getByRole('option', { name: '1 张' }).click()
-  await page.getByRole('button', { name: '关闭设置' }).click()
+  await settings.click({ position: { x: 1, y: 1 } })
 
   if (testInfo.project.name === 'desktop') {
     await page.setViewportSize({ width: 844, height: 390 })

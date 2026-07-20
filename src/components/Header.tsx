@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
+import { navigateToExtensionWorkspace } from '../ExtensionWorkspace'
 import { useTooltip } from '../hooks/useTooltip'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
-import { openWorkspaceSidebar } from '../lib/workspaceSidebarState'
 import ViewportTooltip from './ui/ViewportTooltip'
 import { AiLiquidModeSwitch } from './aiLiquidModeSwitch'
 import HelpModal from './HelpModal'
@@ -172,9 +172,9 @@ export default function Header() {
             </h1>
             <button
               type="button"
-              aria-label="打开扩展侧边栏"
-              title="扩展"
-              onClick={() => openWorkspaceSidebar('skills')}
+              aria-label="打开拓展工作区"
+              title="拓展工作区"
+              onClick={() => navigateToExtensionWorkspace()}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-sidebar text-gray-500 transition-colors hover:bg-muted hover:text-gray-900 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.07] dark:hover:text-gray-100 lg:hidden"
             >
               <CodeIcon className="h-[18px] w-[18px]" />
