@@ -5,14 +5,17 @@ import {
   clearAgentConversations,
   clearPromptProjects,
   clearTasks,
+  clearVideos,
   getAllImageIds,
   getAllImages,
   getAllPromptProjects,
   getAllTasks,
+  getAllVideos,
   getImageThumbnail,
   putImage,
   putImageThumbnail,
   putPromptProject,
+  putVideo,
 } from '../../lib/db'
 import { formatExportFileTime } from '../../lib/exportFileName'
 import { buildExportZip, readExportZip, readExportZipFileAsDataUrl } from '../../lib/exportZip'
@@ -54,6 +57,7 @@ export async function clearData(options: ClearOptions = { clearConfig: true, cle
   if (options.clearTasks) {
     for (const id of await getAllImageIds()) imageIds.add(id)
     await clearTasks()
+    await clearVideos()
     await clearAgentConversations()
     setTasks([])
     clearInputImages()
@@ -98,6 +102,10 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
     const images = options.exportTasks || options.exportPromptProjects
       ? (await getAllImages()).filter((image) => imageIds.has(image.id))
       : []
+    const videoIds = new Set(tasks.flatMap((task) => task.outputVideoIds || []))
+    const videos = options.exportTasks
+      ? await Promise.all((await getAllVideos()).filter((record) => videoIds.has(record.id)).map(async (record) => ({ record, bytes: new Uint8Array(await record.blob.arrayBuffer()) })))
+      : []
     const exportedAt = Date.now()
     const thumbnailsByImageId = new Map<string, NonNullable<Awaited<ReturnType<typeof getImageThumbnail>>>>()
 
@@ -121,6 +129,7 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
       settings,
       tasks,
       images,
+      videos,
       thumbnailsByImageId,
       favoriteCollections,
       defaultFavoriteCollectionId,
@@ -189,6 +198,7 @@ export async function importData(file: File, options: ImportOptions = { importCo
           dataUrl,
           createdAt: info.createdAt,
           source: info.source,
+          sourceImageId: info.sourceImageId,
           width: info.width,
           height: info.height,
         })
@@ -212,6 +222,23 @@ export async function importData(file: File, options: ImportOptions = { importCo
           width: info.width,
           height: info.height,
           thumbnailVersion: info.thumbnailVersion,
+        })
+      }
+    }
+
+    if (options.importTasks && data.videoFiles) {
+      for (const [id, info] of Object.entries(data.videoFiles)) {
+        const bytes = files[info.path]
+        if (!bytes) continue
+        await putVideo({
+          id,
+          blob: new Blob([bytes.buffer as ArrayBuffer], { type: info.mimeType }),
+          name: info.name,
+          mimeType: info.mimeType,
+          duration: info.duration,
+          width: info.width,
+          height: info.height,
+          createdAt: info.createdAt,
         })
       }
     }

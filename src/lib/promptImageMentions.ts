@@ -2,9 +2,11 @@ import type { InputImage } from '../types'
 
 const MENTION_START = '\u2063'
 const MENTION_END = '\u2064'
+const MENTION_META = '\u2062'
 const IMAGE_MENTION_RE = /(?:\u2063)?@图(\d+)(?:\u2064)?/g
 const SELECTED_IMAGE_MENTION_RE = /\u2063@图(\d+)\u2064/g
 const SELECTED_MENTION_RE = /\u2063(@图(\d+)|@(?:第)?\d+轮图\d+)\u2064/g
+const STRUCTURED_MENTION_RE = /\u2063([^\u2062\u2064]+)\u2062([a-z-]+):([a-z0-9-]+)\u2064/g
 
 export interface AtImageQuery {
   start: number
@@ -23,6 +25,20 @@ export function getSelectedTextMentionLabel(text: string) {
   return `${MENTION_START}${text}${MENTION_END}`
 }
 
+export function getSelectedStructuredMentionLabel(text: string, type: string, id: string) {
+  return `${MENTION_START}${text}${MENTION_META}${type}:${id}${MENTION_END}`
+}
+
+export function getStructuredMentions(prompt: string) {
+  return [...prompt.matchAll(STRUCTURED_MENTION_RE)].map((match) => ({
+    raw: match[0],
+    label: match[1],
+    type: match[2],
+    id: match[3],
+    index: match.index,
+  }))
+}
+
 export function restoreImageMentionMarkers(prompt: string, imageCount: number) {
   return prompt.replace(IMAGE_MENTION_RE, (text, n) => {
     const index = Number(n) - 1
@@ -32,24 +48,44 @@ export function restoreImageMentionMarkers(prompt: string, imageCount: number) {
 }
 
 export function stripImageMentionMarkers(prompt: string): string {
-  return prompt.replace(/[\u2063\u2064]/g, '')
+  return prompt
+    .replace(STRUCTURED_MENTION_RE, (_match, label: string) => label)
+    .replace(/[\u2062\u2063\u2064]/g, '')
 }
 
 export function getPromptIndexFromVisibleIndex(prompt: string, visibleIndex: number): number {
   let visible = 0
-  for (let i = 0; i < prompt.length; i++) {
-    if (prompt[i] === MENTION_START || prompt[i] === MENTION_END) continue
+  for (let i = 0; i < prompt.length;) {
+    const structured = prompt[i] === MENTION_START
+      ? prompt.slice(i).match(/^\u2063([^\u2062\u2064]+)\u2062[a-z-]+:[a-z0-9-]+\u2064/)
+      : null
+    if (structured) {
+      if (visibleIndex <= visible) return i
+      if (visibleIndex <= visible + structured[1].length) return i + structured[0].length
+      visible += structured[1].length
+      i += structured[0].length
+      continue
+    }
+    if (prompt[i] === MENTION_START || prompt[i] === MENTION_END) {
+      i++
+      continue
+    }
     if (visible >= visibleIndex) return i
     visible++
+    i++
   }
   return prompt.length
 }
 
 export function isCursorInSelectedImageMention(prompt: string, visibleCursor: number): boolean {
-  for (const match of prompt.matchAll(SELECTED_MENTION_RE)) {
-    if (match.index == null) continue
-    const visibleStart = stripImageMentionMarkers(prompt.slice(0, match.index)).length
-    const visibleEnd = visibleStart + match[1].length
+  const matches = [
+    ...[...prompt.matchAll(SELECTED_MENTION_RE)].map((match) => ({ match, label: match[1] })),
+    ...[...prompt.matchAll(STRUCTURED_MENTION_RE)].map((match) => ({ match, label: match[1] })),
+  ]
+  for (const item of matches) {
+    if (item.match.index == null) continue
+    const visibleStart = stripImageMentionMarkers(prompt.slice(0, item.match.index)).length
+    const visibleEnd = visibleStart + item.label.length
     if (visibleCursor > visibleStart && visibleCursor <= visibleEnd) return true
   }
   return false
@@ -90,6 +126,15 @@ export function insertImageMentionAtVisibleRange(prompt: string, start: number, 
   return insertTextMentionAtVisibleRange(prompt, start, cursor, getImageMentionLabel(imageIndex))
 }
 
+export function insertStructuredMentionAtVisibleRange(prompt: string, start: number, cursor: number, text: string, type: string, id: string) {
+  const promptStart = getPromptIndexFromVisibleIndex(prompt, start)
+  const promptCursor = getPromptIndexFromVisibleIndex(prompt, cursor)
+  return {
+    prompt: `${prompt.slice(0, promptStart)}${getSelectedStructuredMentionLabel(text, type, id)}${prompt.slice(promptCursor)}`,
+    cursor: start + text.length,
+  }
+}
+
 export function insertTextMentionAtVisibleRange(prompt: string, start: number, cursor: number, text: string) {
   const promptStart = getPromptIndexFromVisibleIndex(prompt, start)
   const promptCursor = getPromptIndexFromVisibleIndex(prompt, cursor)
@@ -125,9 +170,15 @@ export function getPromptMentionParts(prompt: string, inputImages: InputImage[])
   const parts: PromptMentionPart[] = []
   let lastIndex = 0
 
-  for (const match of prompt.matchAll(SELECTED_MENTION_RE)) {
-    const text = match[1]
-    const index = match[2] ? Number(match[2]) - 1 : null
+  const matches = [
+    ...[...prompt.matchAll(SELECTED_MENTION_RE)].map((match) => ({ match, text: match[1], imageIndex: match[2] ? Number(match[2]) - 1 : null })),
+    ...[...prompt.matchAll(STRUCTURED_MENTION_RE)].map((match) => ({ match, text: match[1], imageIndex: null })),
+  ].sort((a, b) => (a.match.index ?? 0) - (b.match.index ?? 0))
+
+  for (const item of matches) {
+    const match = item.match
+    const text = item.text
+    const index = item.imageIndex
     if (match.index == null) continue
     if (index != null && !inputImages[index]) continue
 
@@ -135,7 +186,7 @@ export function getPromptMentionParts(prompt: string, inputImages: InputImage[])
       parts.push({ type: 'text', text: stripImageMentionMarkers(prompt.slice(lastIndex, match.index)) })
     }
     parts.push(index == null
-      ? { type: 'mention', text, mentionText: getSelectedTextMentionLabel(text) }
+      ? { type: 'mention', text, mentionText: match[0] }
       : { type: 'mention', text, imageIndex: index })
     lastIndex = match.index + match[0].length
   }

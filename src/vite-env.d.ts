@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_DOCKER_LEGACY_API_URL_USED?: string
   readonly VITE_SHOW_DEFAULT_CONFIG_ONLY?: string
   readonly VITE_JWS_IMAGE_MODEL?: string
+  readonly VITE_BACKGROUND_REMOVAL_PUBLIC_PATH?: string
 }
 
 interface ImportMeta {

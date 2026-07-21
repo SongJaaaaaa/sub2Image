@@ -24,6 +24,8 @@ if [ "$SHOW_DEFAULT_CONFIG_ONLY" = "true" ]; then
     DEFAULT_CONFIG_ONLY=true
 fi
 
+BACKGROUND_REMOVAL_PUBLIC_PATH=${BACKGROUND_REMOVAL_PUBLIC_PATH:-}
+
 escape_sed_replacement() {
     printf '%s' "$1" | sed 's/[&|\\]/\\&/g'
 }
@@ -33,6 +35,7 @@ escape_js_string() {
 }
 
 DEFAULT_API_URL_ESCAPED=$(escape_sed_replacement "$(escape_js_string "$DEFAULT_API_URL")")
+BACKGROUND_REMOVAL_PUBLIC_PATH_ESCAPED=$(escape_sed_replacement "$(escape_js_string "$BACKGROUND_REMOVAL_PUBLIC_PATH")")
 
 # 查找所有 js 文件并将占位符替换为运行时配置
 find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_DEFAULT_API_URL_PLACEHOLDER__|$DEFAULT_API_URL_ESCAPED|g" {} +
@@ -41,6 +44,7 @@ find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_AP
 find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_DOCKER_DEPLOYMENT_PLACEHOLDER__|true|g" {} +
 find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_DOCKER_LEGACY_API_URL_USED_PLACEHOLDER__|$DOCKER_LEGACY_API_URL_USED|g" {} +
 find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_SHOW_DEFAULT_CONFIG_ONLY_PLACEHOLDER__|$DEFAULT_CONFIG_ONLY|g" {} +
+find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_BACKGROUND_REMOVAL_PUBLIC_PATH_PLACEHOLDER__|$BACKGROUND_REMOVAL_PUBLIC_PATH_ESCAPED|g" {} +
 
 # 检查是否启用了 API 代理
 if [ "$ENABLE_API_PROXY" != "true" ]; then

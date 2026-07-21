@@ -180,6 +180,12 @@ export interface ComposerDraft {
   params?: Partial<TaskParams>
 }
 
+export interface AgentSkillRef {
+  id: string
+  name: string
+  version: number
+}
+
 // ===== 远程提示词库 =====
 
 export interface RemotePrompt {
@@ -246,6 +252,8 @@ export interface TaskRecord {
   maskImageId?: string | null
   /** 输出图片的 image store id 列表 */
   outputImages: string[]
+  /** 输出视频的 video store id 列表 */
+  outputVideoIds?: string[]
   /** 并发多图中失败的输出槽位，requestIndex 为从 0 开始的请求序号 */
   outputErrors?: Array<{ requestIndex: number; error: string }>
   /** 流式生成的中间步骤图片 id 列表，仅失败时保留供排查/下载 */
@@ -301,6 +309,7 @@ export interface AgentMessage {
   maskTargetImageId?: string | null
   maskImageId?: string | null
   outputTaskIds?: string[]
+  skill?: AgentSkillRef
   createdAt: number
 }
 
@@ -315,6 +324,7 @@ export interface AgentRound {
   maskTargetImageId?: string | null
   maskImageId?: string | null
   outputTaskIds: string[]
+  skill?: AgentSkillRef
   responseId?: string
   responseOutput?: ResponsesOutputItem[]
   status: AgentRoundStatus
@@ -341,7 +351,9 @@ export interface StoredImage {
   /** 图片首次存储时间（ms） */
   createdAt?: number
   /** 图片来源：用户上传 / API 生成 / 遮罩 */
-  source?: 'upload' | 'generated' | 'mask'
+  source?: 'upload' | 'generated' | 'mask' | 'edited'
+  /** 编辑结果的来源图片 ID */
+  sourceImageId?: string
   /** 原图宽度 */
   width?: number
   /** 原图高度 */
@@ -358,6 +370,19 @@ export interface StoredImageThumbnail {
   height?: number
   /** 缩略图生成参数版本 */
   thumbnailVersion?: number
+}
+
+// ===== IndexedDB 存储的视频 =====
+
+export interface StoredVideo {
+  id: string
+  blob: Blob
+  name: string
+  mimeType: string
+  duration: number
+  width: number
+  height: number
+  createdAt: number
 }
 
 // ===== API 响应 =====
@@ -476,7 +501,8 @@ export interface ExportData {
   imageFiles?: Record<string, {
     path: string
     createdAt?: number
-    source?: 'upload' | 'generated' | 'mask'
+    source?: 'upload' | 'generated' | 'mask' | 'edited'
+    sourceImageId?: string
     width?: number
     height?: number
   }>
@@ -486,5 +512,15 @@ export interface ExportData {
     width?: number
     height?: number
     thumbnailVersion?: number
+  }>
+  /** videoId → 视频文件信息 */
+  videoFiles?: Record<string, {
+    path: string
+    name: string
+    mimeType: string
+    duration: number
+    width: number
+    height: number
+    createdAt: number
   }>
 }

@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 
 import type { PromptProject } from '../features/promptStudio'
-import type { AgentConversation, AppSettings, ExportData, FavoriteCollection, StoredImage, StoredImageThumbnail, TaskRecord } from '../types'
+import type { AgentConversation, AppSettings, ExportData, FavoriteCollection, StoredImage, StoredImageThumbnail, StoredVideo, TaskRecord } from '../types'
 import { bytesToDataUrl, dataUrlToBytes } from './dataUrl'
 import { getNumberedFileNameBase, sanitizeFileNamePart } from './exportFileName'
 import { addAgentImageReferences, addPromptProjectImageReferences, addTaskImageReferences } from './imageReferences'
@@ -20,6 +20,7 @@ export interface BuildExportZipParams {
   settings: AppSettings
   tasks: TaskRecord[]
   images: StoredImage[]
+  videos?: Array<{ record: StoredVideo, bytes: Uint8Array }>
   thumbnailsByImageId: Map<string, StoredImageThumbnail>
   favoriteCollections: FavoriteCollection[]
   defaultFavoriteCollectionId: string | null
@@ -42,6 +43,7 @@ export function buildExportZip(params: BuildExportZipParams) {
   const imageFileNameBases = getImageFileNameBases(exportedTasks, exportedProjects)
   const imageFiles: ExportData['imageFiles'] = {}
   const thumbnailFiles: NonNullable<ExportData['thumbnailFiles']> = {}
+  const videoFiles: NonNullable<ExportData['videoFiles']> = {}
   const zipFiles: ZipFiles = {}
   const usedImagePaths = new Set<string>()
 
@@ -56,6 +58,7 @@ export function buildExportZip(params: BuildExportZipParams) {
         path,
         createdAt,
         source: img.source,
+        sourceImageId: img.sourceImageId,
         width: img.width,
         height: img.height,
       }
@@ -78,6 +81,26 @@ export function buildExportZip(params: BuildExportZipParams) {
     }
   }
 
+  if (params.options.exportTasks) {
+    const videoIds = new Set(params.tasks.flatMap((task) => task.outputVideoIds || []))
+    for (const item of params.videos || []) {
+      if (!videoIds.has(item.record.id)) continue
+      const ext = item.record.name.split('.').pop() || 'mp4'
+      const base = sanitizeFileNamePart(item.record.name.replace(/\.[^.]+$/, '')) || 'video'
+      const path = `videos/${base}-${sanitizeFileNamePart(item.record.id)}.${ext}`
+      videoFiles[item.record.id] = {
+        path,
+        name: item.record.name,
+        mimeType: item.record.mimeType,
+        duration: item.record.duration,
+        width: item.record.width,
+        height: item.record.height,
+        createdAt: item.record.createdAt,
+      }
+      zipFiles[path] = [item.bytes, { mtime: new Date(item.record.createdAt) }]
+    }
+  }
+
   const manifest: ExportData = {
     version: 4,
     exportedAt: exportedAtDate.toISOString(),
@@ -91,6 +114,7 @@ export function buildExportZip(params: BuildExportZipParams) {
     manifest.agentConversations = params.agentConversations
     manifest.imageFiles = imageFiles
     manifest.thumbnailFiles = thumbnailFiles
+    manifest.videoFiles = videoFiles
   }
   if (params.options.exportPromptProjects) {
     manifest.promptProjects = params.promptProjects

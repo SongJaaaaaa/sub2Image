@@ -1,0 +1,57 @@
+[data-image-editor-tool] .FIE_root {
+  border-radius: 0 !important;
+  font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif !important;
+}
+
+[data-image-editor-tool] .FIE_root * {
+  letter-spacing: 0;
+}
+
+[data-image-editor-tool] .FIE_topbar {
+  border-radius: 0 !important;
+}
+
+[data-image-editor-tool] .FIE_filters-item-label {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.FIE_save-modal .SfxInput-root {
+  border-color: #d4d4d8 !important;
+  border-radius: 6px !important;
+  background: #fafafa !important;
+  color: #18181b !important;
+}
+
+.FIE_save-modal .SfxInput-root:hover {
+  border-color: #a1a1aa !important;
+  background: #f4f4f5 !important;
+}
+
+.FIE_save-modal .SfxInput-root:focus-within {
+  border-color: #ec4899 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.12);
+}
+
+html.dark .FIE_save-modal .SfxInput-root {
+  border-color: #52525b !important;
+  background: #27272a !important;
+  color: #f4f4f5 !important;
+}
+
+html.dark .FIE_save-modal .SfxInput-root:hover {
+  border-color: #71717a !important;
+  background: #3f3f46 !important;
+}
+
+html.dark .FIE_save-modal .SfxInput-root:focus-within {
+  border-color: #ec4899 !important;
+  background: #27272a !important;
+}
+
+html.dark .FIE_save-modal .SfxInput-Base::placeholder {
+  color: #71717a !important;
+}

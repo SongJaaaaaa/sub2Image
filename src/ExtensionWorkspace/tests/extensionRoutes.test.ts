@@ -36,4 +36,14 @@ describe('extensionRoutes', () => {
     leaveExtensionWorkspace()
     expect(window.location.pathname).toBe('/app')
   })
+
+  it('passes tool input through the query string', () => {
+    navigateToExtensionWorkspace('tools', 'image-editor', { image: 'image 1' })
+
+    expect(window.location.pathname).toBe('/app/extensions/tools/image-editor')
+    expect(window.location.search).toBe('?image=image+1')
+
+    navigateToExtensionWorkspace('tools', 'image-editor')
+    expect(window.location.search).toBe('')
+  })
 })

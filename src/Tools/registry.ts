@@ -1,4 +1,7 @@
-import type { WorkspaceTool } from './types'
+import type { PlannedWorkspaceTool, WorkspaceTool, WorkspaceToolEntry } from './types'
+import imageEditor from './items/imageEditor/definition'
+import backgroundRemover from './items/backgroundRemover/definition'
+import videoEditor from './items/videoEditor/definition'
 
 export function defineWorkspaceTools(items: WorkspaceTool[]) {
   const ids = new Set<string>()
@@ -9,7 +12,11 @@ export function defineWorkspaceTools(items: WorkspaceTool[]) {
   return items
 }
 
-export const workspaceTools = defineWorkspaceTools([])
+export const workspaceTools = defineWorkspaceTools([imageEditor, backgroundRemover, videoEditor])
+
+export const plannedWorkspaceTools: PlannedWorkspaceTool[] = []
+
+export const workspaceToolCards: WorkspaceToolEntry[] = [...workspaceTools, ...plannedWorkspaceTools]
 
 export function getWorkspaceTool(id: string) {
   return workspaceTools.find((tool) => tool.id === id)

@@ -6,6 +6,7 @@ import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from 
 import { ConversationView } from '../../conversationView'
 import { getAgentAssistantCopyContent, getAgentConversationMessages, type AgentConversationMessagePayload } from '../../../integrations/conversation/agentMessageBlocks'
 import { sub2ImageMessageRendererRegistry } from '../../../integrations/conversation/conversationMessageRenderers'
+import { createAgentSkillMention } from '../../../Skills'
 import { TooltipButton as AgentActionButton } from '../../../components/ui/TooltipButton'
 import { TrashIcon, DownloadIcon, EditIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, SidebarLeftIcon, FavoriteIcon, CloseIcon, CopyIcon, RefreshIcon, ArrowDownIcon } from '../../../components/ui/icons'
 import ChatImageThumb from './ChatImageThumb'
@@ -514,7 +515,7 @@ export default function AgentWorkspace() {
     const state = useStore.getState()
     if (seq !== editDraftSeqRef.current || state.appMode !== 'agent' || state.activeAgentConversationId !== conversationId) return
     applyComposerDraft({
-      prompt: content,
+      prompt: round.skill ? `${createAgentSkillMention(round.skill)} ${content}` : content,
       inputImages,
       maskDraft: maskTargetImageId && maskDataUrl
         ? { targetImageId: maskTargetImageId, maskDataUrl, updatedAt: Date.now() }
@@ -767,6 +768,12 @@ export default function AgentWorkspace() {
                               maskImageId={imgId === (round.maskTargetImageId ?? round.inputImageIds[0]) ? round.maskImageId : null}
                             />
                           ))}
+                      </div>
+                    )}
+
+                    {message.role === 'user' && round?.skill && (
+                      <div className="mb-3">
+                        <span className="inline-flex rounded-md bg-teal-100 px-2 py-1 text-xs font-medium text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">@{round.skill.name}</span>
                       </div>
                     )}
 

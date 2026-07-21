@@ -1,11 +1,12 @@
 import type { PromptProject } from '../features/promptStudio'
-import type { AgentConversation, PromptCache, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
+import type { AgentConversation, PromptCache, StoredImage, StoredImageThumbnail, StoredVideo, TaskRecord } from '../types'
 
 const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 5
+const DB_VERSION = 6
 const STORE_TASKS = 'tasks'
 const STORE_IMAGES = 'images'
 const STORE_THUMBNAILS = 'thumbnails'
+const STORE_VIDEOS = 'videos'
 const STORE_AGENT_CONVERSATIONS = 'agentConversations'
 const STORE_PROMPT_CACHE = 'promptCache'
 const STORE_PROMPT_PROJECTS = 'promptProjects'
@@ -58,6 +59,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_THUMBNAILS)) {
         db.createObjectStore(STORE_THUMBNAILS, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_VIDEOS)) {
+        db.createObjectStore(STORE_VIDEOS, { keyPath: 'id' })
       }
       if (!db.objectStoreNames.contains(STORE_AGENT_CONVERSATIONS)) {
         db.createObjectStore(STORE_AGENT_CONVERSATIONS, { keyPath: 'id' })
@@ -344,6 +348,28 @@ export function clearImages(): Promise<undefined> {
     tx.objectStore(STORE_IMAGES).clear()
     return tx.objectStore(STORE_THUMBNAILS).clear()
   })
+}
+
+// ===== Videos =====
+
+export function getVideo(id: string): Promise<StoredVideo | undefined> {
+  return dbTransaction(STORE_VIDEOS, 'readonly', (s) => s.get(id))
+}
+
+export function getAllVideos(): Promise<StoredVideo[]> {
+  return dbTransaction(STORE_VIDEOS, 'readonly', (s) => s.getAll())
+}
+
+export function putVideo(video: StoredVideo): Promise<IDBValidKey> {
+  return dbTransaction(STORE_VIDEOS, 'readwrite', (s) => s.put(video))
+}
+
+export function deleteVideo(id: string): Promise<undefined> {
+  return dbTransaction(STORE_VIDEOS, 'readwrite', (s) => s.delete(id))
+}
+
+export function clearVideos(): Promise<undefined> {
+  return dbTransaction(STORE_VIDEOS, 'readwrite', (s) => s.clear())
 }
 
 // ===== Image hashing & dedup =====

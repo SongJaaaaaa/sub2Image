@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createPromptProject, imageDomain } from '../features/promptStudio'
-import type { AppSettings, StoredImage, StoredImageThumbnail, TaskParams, TaskRecord } from '../types'
+import type { AppSettings, StoredImage, StoredImageThumbnail, StoredVideo, TaskParams, TaskRecord } from '../types'
 import { buildExportZip, readExportZip, readExportZipFileAsDataUrl } from './exportZip'
 
 describe('exportZip', () => {
@@ -12,6 +12,7 @@ describe('exportZip', () => {
       params: {} as TaskParams,
       inputImageIds: ['img-1'],
       outputImages: ['img-2'],
+      outputVideoIds: ['video-1'],
       streamPartialImageIds: ['img-3'],
       status: 'done',
       error: null,
@@ -39,6 +40,16 @@ describe('exportZip', () => {
       height: 24,
       thumbnailVersion: 2,
     }
+    const video: StoredVideo = {
+      id: 'video-1',
+      blob: new Blob(['video']),
+      name: 'result.mp4',
+      mimeType: 'video/mp4',
+      duration: 8,
+      width: 1280,
+      height: 720,
+      createdAt: 1700000000000,
+    }
 
     const { manifest, bytes } = buildExportZip({
       options: { exportConfig: true, exportTasks: true },
@@ -46,6 +57,7 @@ describe('exportZip', () => {
       settings: {} as AppSettings,
       tasks: [task],
       images,
+      videos: [{ record: video, bytes: new Uint8Array([1, 2, 3]) }],
       thumbnailsByImageId: new Map([[thumbnail.id, thumbnail]]),
       favoriteCollections: [],
       defaultFavoriteCollectionId: null,
@@ -76,6 +88,14 @@ describe('exportZip', () => {
     expect(readExportZipFileAsDataUrl(parsed.files, 'images/task-task-1.png')).toBe(images[1].dataUrl)
     expect(readExportZipFileAsDataUrl(parsed.files, 'images/task-task-1-partial.png')).toBe(images[2].dataUrl)
     expect(readExportZipFileAsDataUrl(parsed.files, 'thumbnails/task-task-1-input.jpeg')).toBe(thumbnail.thumbnailDataUrl)
+    expect(parsed.manifest.videoFiles?.['video-1']).toMatchObject({
+      path: 'videos/result-video-1.mp4',
+      name: 'result.mp4',
+      duration: 8,
+      width: 1280,
+      height: 720,
+    })
+    expect(Array.from(parsed.files['videos/result-video-1.mp4'])).toEqual([1, 2, 3])
   })
 
   it('exports prompt projects and images referenced only by a project', () => {

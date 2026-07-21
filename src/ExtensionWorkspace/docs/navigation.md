@@ -2,10 +2,10 @@
 
 ## 路径规则
 
-- `/app/extensions` 默认展示 Tools。
-- `/app/extensions/tools` 展示 Tool 列表。
+- `/app/extensions` 默认展示“工具”。
+- `/app/extensions/tools` 展示 Tool 列表，界面标签为“工具”。
 - `/app/extensions/tools/:toolId` 展示 Tool 宿主。
-- `/app/extensions/skills` 展示 Skill 列表。
+- `/app/extensions/skills` 展示 Skill 列表，界面标签为“技能”。
 - `/app/extensions/skills/:skillId` 展示 Skill 详情。
 - 其他 `/app/extensions/*` 路径展示工作区内的未找到状态。
 

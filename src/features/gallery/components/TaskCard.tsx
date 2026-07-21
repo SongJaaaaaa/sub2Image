@@ -512,6 +512,11 @@ export default function TaskCard({
                   loading="lazy"
                   alt=""
                 />
+                {task.outputVideoIds?.length ? (
+                  <span className="absolute left-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white backdrop-blur-sm" aria-label="视频">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                  </span>
+                ) : null}
               </div>
               {canCycleThumbs && (
                 <>
@@ -662,7 +667,7 @@ export default function TaskCard({
                 onEditOutputs()
               }}
               className="p-1.5 rounded-md text-white/80 hover:text-green-300 hover:bg-white/10 transition disabled:opacity-30"
-              disabled={!task.outputImages?.length}
+              disabled={!task.outputImages?.length || Boolean(task.outputVideoIds?.length)}
             >
               <svg
                 className="w-4 h-4"

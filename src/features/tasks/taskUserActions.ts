@@ -9,6 +9,7 @@ import { createTransparentOutputMeta, getTransparentRequestParams } from '../../
 import { ensureImageCached } from '../imageLibrary'
 import { useStore } from '../../state/appStore'
 import { deleteUnreferencedImageIds } from './taskOutputStorage'
+import { addTaskVideoReferences, deleteUnreferencedVideoIds } from '../videoLibrary'
 import { putTask } from './taskPersistence'
 import { createSettingsForApiProfile, getTaskApiProfile, getTaskApiProfileName } from './taskProfiles'
 import { taskHasOutputErrors, taskMatchesFilterStatus } from './taskSelectors'
@@ -146,11 +147,14 @@ export async function removeMultipleTasks(taskIds: string[], scrubDeletedTasks: 
   const deletedTasks = tasks.filter((task) => ids.has(task.id))
   const remaining = await scrubDeletedTasks(deletedTasks, tasks.filter((task) => !ids.has(task.id)))
   const deletedImageIds = new Set<string>()
+  const deletedVideoIds = new Set<string>()
   for (const task of deletedTasks) addTaskImageReferences(deletedImageIds, task)
+  for (const task of deletedTasks) addTaskVideoReferences(deletedVideoIds, task)
 
   setTasks(remaining)
   for (const id of taskIds) await deleteTask(id)
   await deleteUnreferencedImageIds(deletedImageIds)
+  await deleteUnreferencedVideoIds(deletedVideoIds)
 
   const nextSelection = selectedTaskIds.filter((id) => !ids.has(id))
   if (nextSelection.length !== selectedTaskIds.length) useStore.getState().setSelectedTaskIds(nextSelection)
@@ -180,10 +184,13 @@ export async function clearFailedTasks(taskIds: string[] | undefined, removeTask
 export async function removeTask(task: TaskRecord, scrubDeletedTasks: ScrubDeletedTasks) {
   const { tasks, setTasks, showToast } = useStore.getState()
   const imageIds = new Set<string>()
+  const videoIds = new Set<string>()
   addTaskImageReferences(imageIds, task)
+  addTaskVideoReferences(videoIds, task)
   const remaining = await scrubDeletedTasks([task], tasks.filter((item) => item.id !== task.id))
   setTasks(remaining)
   await deleteTask(task.id)
   await deleteUnreferencedImageIds(imageIds)
+  await deleteUnreferencedVideoIds(videoIds)
   showToast('任务已删除', 'success')
 }

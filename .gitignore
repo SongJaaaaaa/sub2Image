@@ -6,3 +6,4 @@ dev-proxy.config.json
 .codegraph/
 .playwright-cli/
 output/
+public/models/background-removal/

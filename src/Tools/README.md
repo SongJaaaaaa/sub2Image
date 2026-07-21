@@ -11,11 +11,15 @@
 - Tool 列表。
 - 支持动态 import 的 Tool 宿主。
 
-当前已注册 Tool：无。下一阶段将实现 Filerobot 图片编辑器。
+当前已注册 Tool：
+
+- `image-editor`：基于 Filerobot 的单图编辑器，支持上传、本地图片库选择和新资源保存。
+- `background-remover`：本地 AI 自动抠图，支持完整精度模型、边缘优化、背景替换、PNG 下载和继续编辑。
+- `video-editor`：基于 `@xzdarcy/react-timeline-editor` 和 `ffmpeg.wasm` 的本地视频剪辑器，支持单轨裁剪、分割、排序、原声与背景音乐处理及 MP4 导出。
 
 ## 非目标
 
-- 不实现 Generation Skill。
+- 不实现 Agent Skill。
 - 不导入原画廊、Agent 或 Composer 页面。
 - 不把具体 Tool 状态放进全局 Store。
 - 不提前建设通用插件市场或事件总线。

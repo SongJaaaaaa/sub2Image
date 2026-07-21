@@ -1,0 +1,44 @@
+.checkerboard {
+  background-color: #f4f4f5;
+  background-image: linear-gradient(45deg, #e4e4e7 25%, transparent 25%), linear-gradient(-45deg, #e4e4e7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e4e4e7 75%), linear-gradient(-45deg, transparent 75%, #e4e4e7 75%);
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  background-size: 24px 24px;
+}
+
+.background-swatch {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(212 212 216);
+  border-radius: 0.5rem;
+  color: rgb(63 63 70);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.background-swatch:hover {
+  border-color: rgb(161 161 170);
+}
+
+.background-swatch-active {
+  border-color: rgb(236 72 153);
+  box-shadow: 0 0 0 2px rgb(236 72 153 / 0.2);
+}
+
+.dark .background-swatch {
+  border-color: rgb(255 255 255 / 0.2);
+  color: rgb(228 228 231);
+}
+
+.dark .background-swatch-active {
+  border-color: rgb(244 114 182);
+}
+
+@media (prefers-color-scheme: dark) {
+  .checkerboard {
+    background-color: #27272a;
+    background-image: linear-gradient(45deg, #3f3f46 25%, transparent 25%), linear-gradient(-45deg, #3f3f46 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #3f3f46 75%), linear-gradient(-45deg, transparent 75%, #3f3f46 75%);
+  }
+}

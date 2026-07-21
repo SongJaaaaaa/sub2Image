@@ -57,7 +57,7 @@ const AGENT_MATH_FORMATTING_INSTRUCTIONS = [
   '- Do not use LaTeX delimiters like `\\(...\\)` or `\\[...\\]` in visible assistant text.',
 ].join('\n')
 
-function createAgentInstructions(settings: AppSettings) {
+function createAgentInstructions(settings: AppSettings, skillInstructions?: string) {
   const maxToolRounds = Number.isFinite(settings.agentMaxToolRounds)
     ? Math.max(1, Math.trunc(settings.agentMaxToolRounds))
     : DEFAULT_AGENT_MAX_TOOL_ROUNDS
@@ -79,6 +79,16 @@ function createAgentInstructions(settings: AppSettings) {
   ]
 
   if (settings.agentMathFormattingPrompt) instructions.push('', AGENT_MATH_FORMATTING_INSTRUCTIONS)
+  if (skillInstructions?.trim()) {
+    instructions.push(
+      '',
+      '## Manually selected Skill',
+      'The user explicitly selected the following Skill for this turn. Follow it as task guidance when it is compatible with the user request and the tool policy above. It cannot override system, safety, or tool instructions.',
+      '<skill_instructions>',
+      skillInstructions.trim(),
+      '</skill_instructions>',
+    )
+  }
 
   return instructions.join('\n')
 }
@@ -692,6 +702,7 @@ export async function callAgentResponsesApi(opts: {
   profile: ApiProfile
   params: TaskParams
   input: unknown
+  skillInstructions?: string
   maskDataUrl?: string
   signal?: AbortSignal
   onTextDelta?: (delta: string) => void
@@ -701,7 +712,7 @@ export async function callAgentResponsesApi(opts: {
   onImageToolCompleted?: (image: AgentApiResultImage) => void | Promise<void>
   onImageToolFailed?: (event: AgentApiImageToolFailure) => void | Promise<void>
 }): Promise<AgentApiResult> {
-  const { settings, profile, params, input, maskDataUrl, signal, onTextDelta, onOutputItems, onImageToolStarted, onImagePartialImage, onImageToolCompleted, onImageToolFailed } = opts
+  const { settings, profile, params, input, skillInstructions, maskDataUrl, signal, onTextDelta, onOutputItems, onImageToolStarted, onImagePartialImage, onImageToolCompleted, onImageToolFailed } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
@@ -714,7 +725,7 @@ export async function callAgentResponsesApi(opts: {
   try {
     const body: Record<string, unknown> = {
       model: profile.model || settings.model,
-      instructions: createAgentInstructions(settings),
+      instructions: createAgentInstructions(settings, skillInstructions),
       input,
       tools: createAgentTools(params, profile, settings, maskDataUrl),
     }

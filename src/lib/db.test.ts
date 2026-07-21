@@ -12,12 +12,15 @@ import {
   getImage,
   getPromptProject,
   getPromptProjectByConversationId,
+  getVideo,
   putPromptProject,
+  putVideo,
 } from './db'
 
 const DB_NAME = 'gpt-image-playground'
 const OLD_STORES = ['tasks', 'images', 'thumbnails', 'agentConversations', 'promptCache']
 const STORE_PROMPT_PROJECTS = 'promptProjects'
+const STORE_VIDEOS = 'videos'
 
 function promptProject(id: string, conversationId: string | undefined, updatedAt: number): PromptProject {
   return {
@@ -58,7 +61,7 @@ function openVersion4Database() {
 
 function openCurrentDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 5)
+    const req = indexedDB.open(DB_NAME, 6)
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
   })
@@ -84,7 +87,7 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-describe('IndexedDB v5', () => {
+describe('IndexedDB v6', () => {
   it('upgrades v4 without losing existing stores or records', async () => {
     const db = await openVersion4Database()
     const tx = db.transaction(['tasks', 'images', 'agentConversations'], 'readwrite')
@@ -101,12 +104,30 @@ describe('IndexedDB v5', () => {
 
     await closeDatabase()
     const upgraded = await openCurrentDatabase()
-    expect(upgraded.version).toBe(5)
-    expect(Array.from(upgraded.objectStoreNames)).toEqual(expect.arrayContaining([...OLD_STORES, STORE_PROMPT_PROJECTS]))
+    expect(upgraded.version).toBe(6)
+    expect(Array.from(upgraded.objectStoreNames)).toEqual(expect.arrayContaining([...OLD_STORES, STORE_PROMPT_PROJECTS, STORE_VIDEOS]))
     const projectTx = upgraded.transaction(STORE_PROMPT_PROJECTS, 'readonly')
     expect(projectTx.objectStore(STORE_PROMPT_PROJECTS).indexNames.contains('conversationId')).toBe(true)
     await waitForTransaction(projectTx)
     upgraded.close()
+  })
+
+  it('stores video blobs', async () => {
+    const video = {
+      id: 'video-1',
+      blob: new Blob(['video'], { type: 'video/mp4' }),
+      name: 'result.mp4',
+      mimeType: 'video/mp4',
+      duration: 3,
+      width: 1280,
+      height: 720,
+      createdAt: 10,
+    }
+
+    await putVideo(video)
+    const stored = await getVideo(video.id)
+    expect(stored).toMatchObject({ ...video, blob: expect.any(Blob) })
+    expect(await stored!.blob.text()).toBe('video')
   })
 
   it('supports project CRUD and returns the latest project for a conversation', async () => {

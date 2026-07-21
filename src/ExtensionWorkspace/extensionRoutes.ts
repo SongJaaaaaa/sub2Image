@@ -36,13 +36,14 @@ export function getExtensionPath(section?: ExtensionSection, itemId?: string) {
 }
 
 function navigate(path: string) {
-  if (window.location.pathname === path) return
+  if (`${window.location.pathname}${window.location.search}` === path) return
   window.history.pushState(null, '', path)
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
-export function navigateToExtensionWorkspace(section?: ExtensionSection, itemId?: string) {
-  navigate(getExtensionPath(section, itemId))
+export function navigateToExtensionWorkspace(section?: ExtensionSection, itemId?: string, params?: Record<string, string>) {
+  const search = params ? new URLSearchParams(params).toString() : ''
+  navigate(`${getExtensionPath(section, itemId)}${search ? `?${search}` : ''}`)
 }
 
 export function leaveExtensionWorkspace() {

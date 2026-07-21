@@ -28,6 +28,13 @@ function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
+function normalizeAgentSkillRef(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined
+  const skill = value as { id?: unknown; name?: unknown; version?: unknown }
+  if (typeof skill.id !== 'string' || typeof skill.name !== 'string' || typeof skill.version !== 'number') return undefined
+  return { id: skill.id, name: skill.name, version: skill.version }
+}
+
 function normalizeAgentRound(value: unknown, fallbackIndex: number): AgentRound | null {
   if (!value || typeof value !== 'object') return null
   const round = value as Partial<AgentRound>
@@ -51,6 +58,7 @@ function normalizeAgentRound(value: unknown, fallbackIndex: number): AgentRound 
     maskTargetImageId: typeof round.maskTargetImageId === 'string' ? round.maskTargetImageId : null,
     maskImageId: typeof round.maskImageId === 'string' ? round.maskImageId : null,
     outputTaskIds: normalizeStringArray(round.outputTaskIds),
+    ...(normalizeAgentSkillRef(round.skill) ? { skill: normalizeAgentSkillRef(round.skill) } : {}),
     ...(typeof round.responseId === 'string' ? { responseId: round.responseId } : {}),
     ...(Array.isArray(round.responseOutput) ? { responseOutput: round.responseOutput } : {}),
     status,
@@ -78,6 +86,7 @@ function normalizeAgentMessage(value: unknown): AgentMessage | null {
     maskTargetImageId: typeof message.maskTargetImageId === 'string' ? message.maskTargetImageId : null,
     maskImageId: typeof message.maskImageId === 'string' ? message.maskImageId : null,
     ...(Array.isArray(message.outputTaskIds) ? { outputTaskIds: normalizeStringArray(message.outputTaskIds) } : {}),
+    ...(normalizeAgentSkillRef(message.skill) ? { skill: normalizeAgentSkillRef(message.skill) } : {}),
     createdAt: typeof message.createdAt === 'number' ? message.createdAt : Date.now(),
   }
 }

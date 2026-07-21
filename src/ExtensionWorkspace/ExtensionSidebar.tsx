@@ -2,8 +2,8 @@ import { ChevronLeftIcon, CodeIcon, TuneIcon } from '../components/ui/icons'
 import type { ExtensionSection } from './extensionRoutes'
 
 const sections = [
-  { id: 'tools', label: 'Tools', icon: CodeIcon },
-  { id: 'skills', label: 'Skills', icon: TuneIcon },
+  { id: 'tools', label: '工具', icon: CodeIcon },
+  { id: 'skills', label: '技能', icon: TuneIcon },
 ] as const
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
 
 export default function ExtensionSidebar({ activeSection, onSelect, onExit }: Props) {
   return (
-    <aside className="border-b border-border bg-sidebar dark:border-white/[0.08] dark:bg-gray-950 md:sticky md:top-0 md:flex md:h-svh md:w-60 md:shrink-0 md:flex-col md:border-b-0 md:border-r">
+    <aside className="border-b border-border bg-sidebar dark:border-white/[0.08] dark:bg-gray-950 md:sticky md:top-0 md:flex md:h-svh md:w-[210px] md:shrink-0 md:flex-col md:border-b-0 md:border-r">
       <div className="flex h-16 items-center px-4 md:h-auto md:px-5 md:pb-5 md:pt-6">
         <div>
           <div className="text-base font-bold text-gray-900 dark:text-gray-100">JWS Image</div>

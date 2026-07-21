@@ -23,6 +23,7 @@ import {
   syncActiveInputDraft,
 } from '../../state/inputDrafts'
 import { composerDraftMatches, loadComposerDraft } from '../../integrations/conversation/composerDraft'
+import { extractAgentSkillMention } from '../../Skills'
 import {
   cacheImage,
   removeCachedImage,
@@ -79,7 +80,8 @@ export async function submitAgentMessage(options: { signal?: AbortSignal; draft?
   const activeProfile = getAgentTextApiProfile(normalizedSettings)!
   const imageProfile = getAgentImageApiProfile(normalizedSettings)!
 
-  const trimmedPrompt = prompt.trim()
+  const selected = extractAgentSkillMention(prompt)
+  const trimmedPrompt = selected.text
   if (!trimmedPrompt) {
     showToast('请输入消息', 'error')
     return
@@ -167,6 +169,7 @@ export async function submitAgentMessage(options: { signal?: AbortSignal; draft?
     maskTargetImageId,
     maskImageId,
     outputTaskIds: [],
+    ...(selected.skill ? { skill: selected.skill } : {}),
     status: 'running',
     error: null,
     createdAt: now,
@@ -180,6 +183,7 @@ export async function submitAgentMessage(options: { signal?: AbortSignal; draft?
     inputImageIds,
     maskTargetImageId,
     maskImageId,
+    ...(selected.skill ? { skill: selected.skill } : {}),
     createdAt: now,
   }
 
@@ -257,7 +261,7 @@ export async function submitAgentDirectImage(options: { signal?: AbortSignal; dr
     return
   }
 
-  const trimmedPrompt = prompt.trim()
+  const trimmedPrompt = extractAgentSkillMention(prompt).text
   if (!trimmedPrompt) {
     showToast('请输入提示词', 'error')
     return
@@ -501,6 +505,7 @@ export async function regenerateAgentAssistantMessage(conversationId: string, ro
     maskTargetImageId: sourceRound.maskTargetImageId ?? sourceUserMessage.maskTargetImageId ?? null,
     maskImageId: sourceRound.maskImageId ?? sourceUserMessage.maskImageId ?? null,
     outputTaskIds: [],
+    ...(sourceRound.skill ? { skill: sourceRound.skill } : {}),
     status: 'running',
     error: null,
     createdAt: now,
@@ -514,6 +519,7 @@ export async function regenerateAgentAssistantMessage(conversationId: string, ro
     inputImageIds,
     maskTargetImageId: sourceRound.maskTargetImageId ?? sourceUserMessage.maskTargetImageId ?? null,
     maskImageId: sourceRound.maskImageId ?? sourceUserMessage.maskImageId ?? null,
+    ...(sourceRound.skill ? { skill: sourceRound.skill } : {}),
     createdAt: now,
   }
 

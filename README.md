@@ -124,6 +124,7 @@ curl -H 'Authorization: Bearer <用户 API Key>' http://127.0.0.1:8080/sub2api-v
 完整的新服务器部署流程请查看：
 
 - [新服务器接入 Sub2API 部署指南](docs/sub2api-deployment.md)
+- [抠图模型自托管部署](抠图模型部署.md)
 
 ## 使用流程
 

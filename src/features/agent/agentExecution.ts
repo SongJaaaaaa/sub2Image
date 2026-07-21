@@ -25,6 +25,7 @@ import { genId } from '../../lib/id'
 import { IMAGE_FETCH_CORS_HINT } from '../../integrations/imageApi'
 import { normalizeParamsForSettings } from '../../lib/paramCompatibility'
 import { replaceImageMentionsForApi } from '../../lib/promptImageMentions'
+import { getAgentSkillInstructions } from '../../Skills'
 import { useStore } from '../../state/appStore'
 import { cacheImage, ensureImageCached } from '../imageLibrary'
 import { updateTaskInStore } from '../tasks/taskActions'
@@ -88,6 +89,8 @@ export async function executeAgentRound(
     const round = conversation.rounds.find((item) => item.id === roundId)
     const userMessage = round ? conversation.messages.find((message) => message.id === round.userMessageId) : null
     if (!round || !userMessage) return
+    const skillInstructions = getAgentSkillInstructions(round.skill)
+    if (round.skill && !skillInstructions) console.warn(`Agent Skill 不可用或版本不匹配：${round.skill.id}@${round.skill.version}`)
     const maskDataUrl = round.maskImageId ? await ensureImageCached(round.maskImageId) : undefined
     if (round.maskImageId && !maskDataUrl) throw new Error('遮罩图片已不存在')
 
@@ -598,6 +601,7 @@ export async function executeAgentRound(
         profile: activeProfile,
         params,
         input: apiInputForTurn,
+        skillInstructions: skillInstructions ?? undefined,
         maskDataUrl,
         signal: controller.signal,
         onTextDelta: shouldStreamAssistantMessage

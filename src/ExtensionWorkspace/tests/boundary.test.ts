@@ -14,6 +14,12 @@ const toolSources = import.meta.glob('../../Tools/**/*.{ts,tsx}', {
   query: '?raw',
 }) as Record<string, string>
 
+const toolItemSources = import.meta.glob('../../Tools/items/**/*.{ts,tsx}', {
+  eager: true,
+  import: 'default',
+  query: '?raw',
+}) as Record<string, string>
+
 const skillSources = import.meta.glob('../../Skills/**/*.{ts,tsx}', {
   eager: true,
   import: 'default',
@@ -47,10 +53,11 @@ describe('extension module boundaries', () => {
 
   it('keeps Tools and Skills independent from each other and business internals', () => {
     const tools = productionSource(toolSources)
+    const toolItems = productionSource(toolItemSources)
     const skills = productionSource(skillSources)
     expect(tools).not.toMatch(/from ['"][^'"]*Skills/)
     expect(skills).not.toMatch(/from ['"][^'"]*Tools/)
-    expect(tools).not.toMatch(/from ['"][^'"]*(?:store|features)\//)
+    expect(toolItems).not.toMatch(/from ['"][^'"]*(?:store|features)\//)
     expect(skills).not.toMatch(/from ['"][^'"]*(?:store|features)\//)
   })
 

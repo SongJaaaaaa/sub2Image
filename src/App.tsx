@@ -54,7 +54,14 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  if (isExtensionPath(path)) return <ExtensionWorkspace />
+  if (isExtensionPath(path)) {
+    return (
+      <>
+        <ExtensionWorkspace />
+        <Toast />
+      </>
+    )
+  }
 
   if (path !== '/app' && path !== '/app/') {
     return (

@@ -10,6 +10,7 @@ services:
       ENABLE_API_PROXY: 'true'
       LOCK_API_PROXY: 'true'
       SHOW_DEFAULT_CONFIG_ONLY: 'false'
+      BACKGROUND_REMOVAL_PUBLIC_PATH: ${BACKGROUND_REMOVAL_PUBLIC_PATH:-}
     ports:
       - '127.0.0.1:${APP_PORT:-8080}:80'
     restart: unless-stopped

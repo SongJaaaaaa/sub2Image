@@ -1,15 +1,15 @@
-export type GenerationSkillSupport = 'text-to-image' | 'image-to-image'
+import type { AgentSkillRef } from '../types'
 
-export type GenerationSkill = {
+export type AgentSkill = {
   id: string
   name: string
   description: string
   version: number
+  author: string
+  source: string
+  license: string
+  order: number
   instructions: string
-  supports: GenerationSkillSupport[]
-  defaults?: {
-    size?: string
-    quality?: string
-    count?: number
-  }
 }
+
+export type { AgentSkillRef }

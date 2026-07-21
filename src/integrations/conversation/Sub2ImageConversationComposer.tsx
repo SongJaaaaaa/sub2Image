@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
-import { getActiveAgentRounds, loadComposerDraft, submitAgentDirectImage, useStore } from '../../store'
+import { applyComposerDraft, getActiveAgentRounds, loadComposerDraft, submitAgentDirectImage, submitAgentMessage, useStore } from '../../store'
+import { agentSkills, extractAgentSkillMention, getAgentSkillMention, insertAgentSkillMention, type AgentSkill } from '../../Skills'
 import { formatImageRatio } from '../../lib/size'
 import { collectAgentRoundOutputImageSlots } from '../../lib/agentImageReferences'
 import { getAtImageQuery, getPromptMentionParts, getSelectedImageMentionLabel, imageMentionMatches, insertImageMentionAtVisibleRange, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, restoreImageMentionMarkers, stripImageMentionMarkers } from '../../lib/promptImageMentions'
@@ -28,6 +29,7 @@ import Sub2ImagePromptAgentCard from './Sub2ImagePromptAgentCard'
 type AtOption =
   | { key: string; label: string; type: 'input'; imageIndex: number }
   | { key: string; label: string; type: 'agent-output'; insertText: string }
+  | { key: string; label: string; description: string; type: 'skill'; skill: AgentSkill }
 
 const PROMPT_CONVERSATION_ID = 'gallery'
 
@@ -133,6 +135,8 @@ export default function Sub2ImageConversationComposer() {
   const toolId = appMode === 'agent' ? SUB2_CHAT_TOOL_ID : SUB2_IMAGE_TOOL_ID
   const conversationId = appMode === 'agent' ? activeConversationId ?? 'active-agent' : PROMPT_CONVERSATION_ID
   const scope = useMemo(() => ({ conversationId, toolId }), [conversationId, toolId])
+  const selectedSkill = getAgentSkillMention(prompt)
+  const agentSelected = promptAgentSelected || Boolean(selectedSkill)
 
   const updateClearance = useCallback(() => {
     const dock = dockRef.current
@@ -254,13 +258,13 @@ export default function Sub2ImageConversationComposer() {
   }, [appMode, promptBundle, promptOpen])
 
   const submitInput = useMemo(() => ({
-    text: prompt,
+    text: extractAgentSkillMention(prompt).text,
     attachments: inputImages.map((image, index) => ({ id: image.id, type: 'image', name: `参考图${index + 1}` })),
     params: { ...params },
-  }), [inputImages, params, prompt])
+  }), [appMode, inputImages, params, prompt])
   const rawComposerState = runtime.getToolComposerState({ ...scope, input: submitInput })
   // 工作台模式未选中 Agent 时走"直接生成图片"，不受 Agent 文本模型配置限制
-  const composerState = appMode === 'agent' && !promptAgentSelected
+  const composerState = appMode === 'agent' && !agentSelected
     ? { ...rawComposerState, validationError: null, placeholder: '描述你想生成的图片...' }
     : rawComposerState
   const promptProject = promptBundle?.store.getSnapshot(PROMPT_CONVERSATION_ID).project
@@ -290,9 +294,25 @@ export default function Sub2ImageConversationComposer() {
       })
     ))
   }, [activeConversation, tasks])
+  const skillOptions = !selectedSkill
+    ? agentSkills.map((skill) => ({
+        key: `skill:${skill.id}`,
+        label: `@${skill.name}`,
+        description: skill.description,
+        type: 'skill' as const,
+        skill,
+      }))
+    : []
   const atQuery = isCursorInSelectedImageMention(prompt, cursor)
     ? null
-    : getAtImageQuery(stripImageMentionMarkers(prompt), cursor, { length: inputImages.length + agentOptions.length })
+    : getAtImageQuery(stripImageMentionMarkers(prompt), cursor, { length: inputImages.length + agentOptions.length + skillOptions.length })
+  const filteredSkillOptions = atQuery
+    ? skillOptions.filter((option) => {
+        const query = atQuery.query.trim().toLocaleLowerCase()
+        const searchText = `${option.label} ${option.skill.id} ${option.description}`.toLocaleLowerCase()
+        return !query || searchText.includes(query)
+      })
+    : []
   const atOptions: AtOption[] = atQuery
     ? [
         ...inputImages.flatMap((image, imageIndex) => imageMentionMatches(atQuery.query, imageIndex)
@@ -303,17 +323,21 @@ export default function Sub2ImageConversationComposer() {
           const label = option.label.toLocaleLowerCase()
           return !query || label.includes(query) || label.replace(/^@/, '').includes(query)
         }),
+        ...filteredSkillOptions,
       ]
     : []
-  const showAtMenu = !atDismissed && atOptions.length > 0
+  const showAtMenu = !atDismissed && Boolean(atQuery) && (atOptions.length > 0 || skillOptions.length > 0)
 
   const selectAtOption = (option: AtOption) => {
     if (!atQuery) return
     const next = option.type === 'input'
       ? insertImageMentionAtVisibleRange(prompt, atQuery.start, cursor, option.imageIndex)
-      : insertTextMentionAtVisibleRange(prompt, atQuery.start, cursor, option.insertText)
+      : option.type === 'skill'
+        ? insertAgentSkillMention(prompt, atQuery.start, cursor, option.skill)
+        : insertTextMentionAtVisibleRange(prompt, atQuery.start, cursor, option.insertText)
     promptDraftEditedRef.current = true
     setPrompt(next.prompt)
+    if (option.type === 'skill') setPromptAgentSelected(true)
     setAtDismissed(true)
     setAtIndex(0)
     window.requestAnimationFrame(() => editorRef.current?.focus(next.cursor))
@@ -356,7 +380,7 @@ export default function Sub2ImageConversationComposer() {
       await runtime.submit({
         ...requestScope,
         input: {
-          text: draft.prompt,
+          text: appMode === 'agent' ? extractAgentSkillMention(draft.prompt).text : draft.prompt,
           attachments: draft.inputImages.map((image, index) => ({ id: image.id, type: 'image', name: `参考图${index + 1}` })),
           params: { ...draft.params },
           payload: { draft, editingRoundId: state.agentEditingRoundId },
@@ -377,6 +401,25 @@ export default function Sub2ImageConversationComposer() {
     refreshRuntime()
     try {
       await submitAgentDirectImage({ draft, conversationId: targetConversationId })
+    } catch (err) {
+      if (!(err instanceof Error && err.name === 'AbortError')) showToast(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      refreshRuntime()
+    }
+  }
+
+  const submitSkillFromGallery = async () => {
+    const draft = loadComposerDraft()
+    const state = useStore.getState()
+    state.setAppMode('agent')
+    applyComposerDraft(draft)
+    useStore.setState({ galleryInputDraft: null })
+    const nextState = useStore.getState()
+    const targetConversationId = nextState.activeAgentConversationId ?? nextState.createAgentConversation()
+    setPromptAgentSelected(true)
+    refreshRuntime()
+    try {
+      await submitAgentMessage({ draft, conversationId: targetConversationId })
     } catch (err) {
       if (!(err instanceof Error && err.name === 'AbortError')) showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {
@@ -521,14 +564,13 @@ export default function Sub2ImageConversationComposer() {
               )}
             </section>
           ) : (
-            <ConversationComposer
-              ownerId={NEXT_COMPOSER_OWNER}
-              className={promptAgentSelected ? 'cc-composer--agent cc-composer--agent-ready' : undefined}
-              value={prompt}
-              editorParts={editorParts}
-              editorRef={editorRef}
-              editorOverlay={showAtMenu ? (
-                <div className="z-40 mt-1 max-h-44 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-xl dark:border-white/[0.1] dark:bg-gray-900">
+            <div className="relative">
+              {showAtMenu && (
+                <div data-skill-picker className="absolute bottom-full left-0 right-0 z-50 mb-3 max-h-[min(28rem,calc(100dvh-10rem))] overflow-y-auto rounded-2xl border border-gray-200/90 bg-white/95 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl dark:border-white/[0.12] dark:bg-gray-900/95">
+                  <div className="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <span>技能</span>
+                    <span className="text-xs font-normal">{filteredSkillOptions.length}</span>
+                  </div>
                   {atOptions.map((option, index) => (
                     <button
                       key={option.key}
@@ -537,107 +579,122 @@ export default function Sub2ImageConversationComposer() {
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => selectAtOption(option)}
                       onMouseEnter={() => setAtIndex(index)}
-                      className={`block w-full rounded-md px-2 py-1.5 text-left text-xs ${index === atIndex ? 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.06]'}`}
+                      className={`flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${index === atIndex ? 'bg-gray-100 text-gray-950 dark:bg-white/[0.08] dark:text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/[0.05]'}`}
                     >
-                      {option.label}
+                      <span className="shrink-0 font-medium">{option.label}</span>
+                      {option.type === 'skill' && <span className="min-w-0 flex-1 truncate text-gray-400 dark:text-gray-500">{option.description}</span>}
                     </button>
                   ))}
+                  {atOptions.length === 0 && (
+                    <div className="px-3 py-5 text-center text-sm text-gray-500 dark:text-gray-400">没有匹配的 Skill</div>
+                  )}
                 </div>
-              ) : null}
-              placeholder={composerState.placeholder}
-              editorAriaLabel={appMode === 'agent' ? 'Agent 对话输入' : '图片提示词输入'}
-              clearAriaLabel="清空输入"
-              attachAriaLabel="添加图片"
-              submitAriaLabel={appMode === 'agent'
-                ? '发送 Agent 消息'
-                : promptAgentSelected ? '发送到图片提示词 Agent' : '生成图片'}
-              stopAriaLabel="停止"
-              enterSubmit={settings.enterSubmit}
-              canSubmit={promptAgentSelected ? promptAgentCanSubmit : composerState.canSubmit}
-              submitEnabled={(promptAgentSelected ? promptAgentCanSubmit : composerState.canSubmit) || Boolean(composerState.validationError)}
-              running={composerState.running}
-              attachments={(
-                <ConversationAttachments
-                  items={attachments}
-                  onPreview={(_id, index) => setPreviewIndex(index)}
-                  onRemove={(_id, index) => {
-                    promptDraftEditedRef.current = true
-                    removeInputImage(index)
-                  }}
-                  onMove={(fromIndex, toIndex) => {
-                    promptDraftEditedRef.current = true
-                    moveInputImage(fromIndex, toIndex)
-                  }}
-                />
               )}
-              toolSlot={(
-                promptAgentSelected ? (
-                  <AiLiquidButton
-                    size="sm"
-                    idleSpeed={0.35}
-                    aria-pressed
-                    className="cc-agent-button !h-8 !min-w-0 !px-4 !text-[13px]"
-                    onClick={() => { void togglePromptAgent() }}
-                  >
-                    Agent
-                  </AiLiquidButton>
-                ) : (
+              <ConversationComposer
+                ownerId={NEXT_COMPOSER_OWNER}
+                className={agentSelected ? 'cc-composer--agent cc-composer--agent-ready' : undefined}
+                value={prompt}
+                editorParts={editorParts}
+                editorRef={editorRef}
+                placeholder={composerState.placeholder}
+                editorAriaLabel={appMode === 'agent' ? 'Agent 对话输入' : '图片提示词输入'}
+                clearAriaLabel="清空输入"
+                attachAriaLabel="添加图片"
+                submitAriaLabel={appMode === 'agent'
+                  ? '发送 Agent 消息'
+                  : agentSelected ? '发送到图片提示词 Agent' : '生成图片'}
+                stopAriaLabel="停止"
+                enterSubmit={settings.enterSubmit}
+                canSubmit={agentSelected ? promptAgentCanSubmit : composerState.canSubmit}
+                submitEnabled={(agentSelected ? promptAgentCanSubmit : composerState.canSubmit) || Boolean(composerState.validationError)}
+                running={composerState.running}
+                attachments={(
+                  <ConversationAttachments
+                    items={attachments}
+                    onPreview={(_id, index) => setPreviewIndex(index)}
+                    onRemove={(_id, index) => {
+                      promptDraftEditedRef.current = true
+                      removeInputImage(index)
+                    }}
+                    onMove={(fromIndex, toIndex) => {
+                      promptDraftEditedRef.current = true
+                      moveInputImage(fromIndex, toIndex)
+                    }}
+                  />
+                )}
+                toolSlot={(
+                  agentSelected ? (
+                    <AiLiquidButton
+                      size="sm"
+                      idleSpeed={0.35}
+                      aria-pressed
+                      className="cc-agent-button !h-8 !min-w-0 !px-4 !text-[13px]"
+                      onClick={() => { void togglePromptAgent() }}
+                    >
+                      Agent
+                    </AiLiquidButton>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-pressed={false}
+                      className="cc-agent-button inline-flex h-8 min-w-0 items-center rounded-full bg-gray-100 px-4 text-[13px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-white/[0.08] dark:text-gray-300 dark:hover:bg-white/[0.14] dark:hover:text-gray-100"
+                      onClick={() => { void togglePromptAgent() }}
+                    >
+                      Agent
+                    </button>
+                  )
+                )}
+                paramsSlot={(
                   <button
                     type="button"
-                    aria-pressed={false}
-                    className="cc-agent-button inline-flex h-8 min-w-0 items-center rounded-full bg-gray-100 px-4 text-[13px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-white/[0.08] dark:text-gray-300 dark:hover:bg-white/[0.14] dark:hover:text-gray-100"
-                    onClick={() => { void togglePromptAgent() }}
+                    data-composer-settings-trigger
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.08] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
+                    title="图片设置"
+                    aria-label="图片设置"
+                    onClick={() => setShowSettings(true)}
                   >
-                    Agent
+                    <TuneIcon />
                   </button>
-                )
-              )}
-              paramsSlot={(
-                <button
-                  type="button"
-                  data-composer-settings-trigger
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.08] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
-                  title="图片设置"
-                  aria-label="图片设置"
-                  onClick={() => setShowSettings(true)}
-                >
-                  <TuneIcon />
-                </button>
-              )}
-              onChange={(value) => {
-                promptDraftEditedRef.current = true
-                setPrompt(value)
-                setAtIndex(0)
-                setAtDismissed(false)
-              }}
-              onCursorChange={setCursor}
-              onEditorKeyCommand={handleEditorKeyCommand}
-              onSubmit={() => {
-                if (appMode === 'gallery' && promptAgentSelected) {
-                  void openPromptAgent()
-                  return
-                }
-                if (appMode === 'agent' && !promptAgentSelected) {
-                  void submitDirect()
-                  return
-                }
-                void submit()
-              }}
-              onStop={() => {
-                runtime.stop(scope)
-                refreshRuntime()
-              }}
-              onAttach={inputImages.length < MAX_INPUT_IMAGES ? () => fileInputRef.current?.click() : undefined}
-              onPasteFiles={(files) => {
-                promptDraftEditedRef.current = true
-                void addInputImageFiles(files)
-              }}
-              onDropData={(data) => {
-                promptDraftEditedRef.current = true
-                void addInputDropData(data)
-              }}
-              canHandleDrop={() => isComposerFocused(NEXT_COMPOSER_OWNER)}
-            />
+                )}
+                onChange={(value) => {
+                  promptDraftEditedRef.current = true
+                  setPrompt(value)
+                  setAtIndex(0)
+                  setAtDismissed(false)
+                }}
+                onCursorChange={setCursor}
+                onEditorKeyCommand={handleEditorKeyCommand}
+                onSubmit={() => {
+                  if (appMode === 'gallery' && selectedSkill) {
+                    void submitSkillFromGallery()
+                    return
+                  }
+                  if (appMode === 'gallery' && agentSelected) {
+                    void openPromptAgent()
+                    return
+                  }
+                  if (appMode === 'agent' && !agentSelected) {
+                    void submitDirect()
+                    return
+                  }
+                  void submit()
+                }}
+                onStop={() => {
+                  runtime.stop(scope)
+                  refreshRuntime()
+                }}
+                onAttach={inputImages.length < MAX_INPUT_IMAGES ? () => fileInputRef.current?.click() : undefined}
+                onPasteFiles={(files) => {
+                  promptDraftEditedRef.current = true
+                  void addInputImageFiles(files)
+                }}
+                onDropData={(data) => {
+                  promptDraftEditedRef.current = true
+                  void addInputDropData(data)
+                }}
+                canHandleDrop={() => isComposerFocused(NEXT_COMPOSER_OWNER)}
+              />
+            </div>
           )}
           <input ref={fileInputRef} data-new-composer-file-input type="file" accept="image/*" multiple className="hidden" onChange={handleFileInput} />
           <input ref={replaceInputRef} data-new-composer-replace-input type="file" accept="image/*" className="hidden" onChange={handleReplaceInput} />

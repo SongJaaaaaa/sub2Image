@@ -11,6 +11,7 @@ import { dismissAllTooltips } from '../../../lib/tooltipDismiss'
 import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../../../lib/downloadImages'
 import { isAgentTaskPromptPending } from '../../../lib/taskPromptDisplay'
 import { replaceImageMentionsForApi } from '../../../lib/promptImageMentions'
+import { getVideo } from '../../../lib/db'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from '../../../components/ui/icons'
 
 import ViewportTooltip from '../../../components/ui/ViewportTooltip'
@@ -38,6 +39,7 @@ export default function DetailModal() {
   const [showRawUrlsModal, setShowRawUrlsModal] = useState(false)
   const [showRawResponseModal, setShowRawResponseModal] = useState(false)
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
+  const [videoPreview, setVideoPreview] = useState<{ url: string, name: string, width: number, height: number } | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const rawUrlsModalRef = useRef<HTMLDivElement>(null)
   const rawResponseModalRef = useRef<HTMLDivElement>(null)
@@ -103,6 +105,26 @@ export default function DetailModal() {
   useEffect(() => {
     setImageIndex(0)
   }, [detailTaskId])
+
+  useEffect(() => {
+    const videoId = task?.outputVideoIds?.[0]
+    if (!videoId) {
+      setVideoPreview(null)
+      return
+    }
+    setVideoPreview(null)
+    let cancelled = false
+    let url = ''
+    getVideo(videoId).then((video) => {
+      if (!video || cancelled) return
+      url = URL.createObjectURL(video.blob)
+      setVideoPreview({ url, name: video.name, width: video.width, height: video.height })
+    }).catch((err) => console.error('读取画廊视频失败', err))
+    return () => {
+      cancelled = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [task?.outputVideoIds])
 
   useEffect(() => {
     if (task?.status !== 'running' && !(task?.status === 'error' && (task.falRecoverable || task.customRecoverable))) return
@@ -235,6 +257,7 @@ export default function DetailModal() {
   const showReferenceSection = allInputImageIds.length > 0 || isAgentEditTool
 
   const outputLen = outputSlots.length
+  const isVideoTask = Boolean(task.outputVideoIds?.length)
   const currentImageRatio = currentOutputImageId ? imageRatios[currentOutputImageId] : ''
   const currentImageSize = currentOutputImageId ? imageSizes[currentOutputImageId] : ''
   const baseActualParams = currentOutputImageId
@@ -461,7 +484,16 @@ export default function DetailModal() {
         <div className="md:w-1/2 w-full h-64 md:h-auto bg-gray-100 dark:bg-black/20 relative flex items-center justify-center flex-shrink-0 min-h-[16rem]">
           {task.status === 'done' && outputLen > 0 && (currentOutputImageId || task.outputImages.length > 0) && (
             <div className="absolute right-3 top-[15px] z-20 flex items-center gap-1.5">
-              {currentOutputImageId && (
+              {videoPreview ? (
+                <a
+                  href={videoPreview.url}
+                  download={videoPreview.name}
+                  className="flex items-center justify-center gap-1 rounded bg-black/50 px-2 py-1 text-xs text-white backdrop-blur-sm transition hover:bg-black/70"
+                >
+                  <DownloadIcon className="h-4 w-4" />
+                  MP4
+                </a>
+              ) : currentOutputImageId && (
                 <div className="relative group flex">
                   <button
                     type="button"
@@ -502,7 +534,16 @@ export default function DetailModal() {
               )}
             </div>
           )}
-          {task.status === 'done' && outputLen > 0 && currentOutputPreviewSrc && (
+          {task.status === 'done' && videoPreview && (
+            <>
+              <video src={videoPreview.url} controls playsInline className="max-h-full max-w-full bg-black" />
+              <div data-selectable-text className="absolute left-4 top-[15px] flex items-center gap-1.5">
+                <span className="rounded bg-black/50 px-2 py-0.5 font-mono text-xs text-white backdrop-blur-sm">视频</span>
+                <span className="rounded bg-black/50 px-2 py-0.5 text-xs font-medium text-white/90 backdrop-blur-sm">{videoPreview.width}×{videoPreview.height}</span>
+              </div>
+            </>
+          )}
+          {task.status === 'done' && !videoPreview && outputLen > 0 && currentOutputPreviewSrc && (
             <>
               <img
                 src={currentOutputPreviewSrc}
@@ -979,7 +1020,9 @@ export default function DetailModal() {
                 <span className="text-gray-400 dark:text-gray-500">格式</span>
                 <br />
                 <div className="mt-0.5 overflow-x-auto hide-scrollbar whitespace-nowrap mask-edge-r pr-2">
-                  <DetailParamValue task={task} paramKey="output_format" className="font-medium" actualParams={currentActualParams} />
+                  {isVideoTask
+                    ? <span className="font-medium text-gray-700 dark:text-gray-300">mp4</span>
+                    : <DetailParamValue task={task} paramKey="output_format" className="font-medium" actualParams={currentActualParams} />}
                 </div>
               </div>
               {isPngOutput ? (
@@ -1042,7 +1085,7 @@ export default function DetailModal() {
             </button>
             <button
               onClick={handleEdit}
-              disabled={!outputLen}
+              disabled={!outputLen || isVideoTask}
               className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition text-sm font-medium whitespace-nowrap"
             >
               <EditIcon className="w-4 h-4 flex-shrink-0" />
