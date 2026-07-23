@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PromptBrief, PromptDomainDefinition } from '../types'
 import { imageAmbiguities, imageDomain, imageFields } from '../domains/image'
 import { sharedAmbiguities, sharedFields } from '../domains/shared'
+import { videoAmbiguities, videoDomain, videoFields } from '../domains/video'
 
 const fields = new Map(imageDomain.fields.map((field) => [field.id, field]))
 
@@ -116,5 +117,29 @@ describe('image prompt domain', () => {
     expect(artifact).toContain('画面文字')
     expect(artifact).toContain('Logo')
     expect(artifact).toContain('电商主图')
+  })
+})
+
+describe('video prompt domain', () => {
+  it('uses independent video fields and output settings', () => {
+    const ids = videoDomain.fields.map((field) => field.id)
+
+    expect(videoDomain.label).toBe('视频提示词')
+    expect(videoDomain.fields).toEqual(videoFields)
+    expect(videoDomain.ambiguities).toEqual([...sharedAmbiguities, ...videoAmbiguities])
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).toEqual(expect.arrayContaining([
+      'video.opening',
+      'video.subjectMotion',
+      'video.cameraMotion',
+      'video.timeline',
+      'video.ending',
+      'output.duration',
+      'output.aspectRatio',
+      'output.resolution',
+      'output.n',
+    ]))
+    expect(ids).not.toContain('output.size')
+    expect(ids).not.toContain('output.quality')
   })
 })

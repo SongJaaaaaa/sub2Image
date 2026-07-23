@@ -107,6 +107,8 @@ export interface AppState {
   setFilterStatus: (status: AppState['filterStatus']) => void
   filterFavorite: boolean
   setFilterFavorite: (f: boolean) => void
+  filterCloud: boolean
+  setFilterCloud: (f: boolean) => void
 
   // 多选
   selectedTaskIds: string[]

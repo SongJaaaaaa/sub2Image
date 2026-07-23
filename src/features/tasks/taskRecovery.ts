@@ -21,6 +21,7 @@ const customRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 type ContinueRecoveredAgentRound = (taskId: string) => void | Promise<void>
 
 function isOpenAITask(task: TaskRecord) {
+  if (task.kind === 'video') return false
   return (task.apiProvider ?? 'openai') !== 'fal'
 }
 

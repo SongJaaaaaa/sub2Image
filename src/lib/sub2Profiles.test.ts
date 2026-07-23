@@ -35,6 +35,21 @@ describe('Sub2API profiles', () => {
     expect(next.profiles[0].apiKey).toBe('sk-user')
   })
 
+  it('keeps a separate video Key and model configuration', () => {
+    const settings = syncSub2Settings(
+      DEFAULT_SETTINGS,
+      [config('a', 'image', 1), config('b', 'text', 2), config('c', 'video', 3)],
+      new Map([[1, 'image-key'], [2, 'text-key'], [3, 'video-key']]),
+    )
+
+    expect(settings.agentVideoProfileId).toBe('sub2api-video-c')
+    expect(settings.profiles.find((item) => item.id === settings.agentVideoProfileId)).toMatchObject({
+      apiKey: 'video-key',
+      model: 'gpt-5.5',
+      baseUrl: '/sub2api-v1',
+    })
+  })
+
   it('repairs legacy URLs for profiles bound to system configs', () => {
     const settings = syncSub2Settings(
       DEFAULT_SETTINGS,

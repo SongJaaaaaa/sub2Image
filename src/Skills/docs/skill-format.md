@@ -1,6 +1,6 @@
 # Skill 格式
 
-每个内置 Skill 是 `builtins/` 下的一个 Markdown 文件。注册表使用 `import.meta.glob` 自动读取，新文件不需要 `definition.ts` 或手动注册。
+每个内置 Skill 是 `builtins/` 下的一个 Markdown 文件。注册表使用 `import.meta.glob` 自动读取，新文件不需要 `definition.ts` 或手动注册。用户导入及从云端恢复的 `.md` 使用相同格式，并校验 256 KB 大小上限、UTF-8、字段长度和 HTTP/HTTPS 来源。云端保存的是原始 Markdown、文件名、ID 和版本，恢复后仍走同一注册表校验。
 
 ```md
 ---

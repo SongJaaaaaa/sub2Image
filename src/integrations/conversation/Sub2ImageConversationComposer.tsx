@@ -14,17 +14,19 @@ import {
 } from '../../features/conversationComposer'
 import type { PromptProject, PromptStudioToolBundle } from '../../features/promptStudio'
 import GallerySelectionActionBar from '../../features/gallery/components/GallerySelectionActionBar'
-import { TuneIcon } from '../../components/ui/icons'
+import { ImageIcon, VideoIcon } from '../../components/ui/icons'
 import { AiLiquidButton } from '../../components/aiLiquidButton'
 import { clearActiveComposerOwner, isComposerFocused, NEXT_COMPOSER_OWNER, setActiveComposerOwner } from './composerFocus'
-import { conversationTools, SUB2_CHAT_TOOL_ID, SUB2_IMAGE_TOOL_ID } from './conversationTools'
+import { conversationTools, SUB2_CHAT_TOOL_ID, SUB2_IMAGE_TOOL_ID, SUB2_VIDEO_TOOL_ID } from './conversationTools'
 import { registerSub2ImageMessageRenderers } from './conversationMessageRenderers'
 import { addInputDropData, addInputImageFiles, MAX_INPUT_IMAGES, replaceInputImageFile } from './inputFiles'
 import { loadSub2ImagePromptStudio } from './sub2ImagePromptTool'
-import type { TaskParams } from '../../types'
+import { loadSub2VideoPromptStudio } from './sub2VideoPromptTool'
+import type { TaskParams, VideoParams } from '../../types'
 import Sub2ImageAttachmentPreview from './Sub2ImageAttachmentPreview'
 import Sub2ImageComposerSettings from './Sub2ImageComposerSettings'
 import Sub2ImagePromptAgentCard from './Sub2ImagePromptAgentCard'
+import Sub2VideoComposerSettings from './Sub2VideoComposerSettings'
 
 type AtOption =
   | { key: string; label: string; type: 'input'; imageIndex: number }
@@ -32,6 +34,7 @@ type AtOption =
   | { key: string; label: string; description: string; type: 'skill'; skill: AgentSkill }
 
 const PROMPT_CONVERSATION_ID = 'gallery'
+const VIDEO_PROMPT_CONVERSATION_ID = 'gallery-video'
 
 function getPromptOutputSettings(params: Partial<TaskParams> = {}) {
   const sizeMatch = params.size?.match(/^\s*(\d+)\s*[xX×]\s*(\d+)\s*$/)
@@ -44,6 +47,15 @@ function getPromptOutputSettings(params: Partial<TaskParams> = {}) {
     n: params.n ?? null,
     transparent_output: params.transparent_output ?? null,
     aspectRatio: sizeMatch ? formatImageRatio(Number(sizeMatch[1]), Number(sizeMatch[2])) : null,
+  }
+}
+
+function getVideoPromptOutputSettings(params: VideoParams) {
+  return {
+    duration: params.duration,
+    aspectRatio: params.aspectRatio,
+    resolution: params.resolution,
+    n: params.n,
   }
 }
 
@@ -78,6 +90,7 @@ function matchesPromptProjectInput(
   project: PromptProject,
   draft: ReturnType<typeof loadComposerDraft>,
   allowEmptyDraftResume: boolean,
+  outputSettings: Record<string, string | number | boolean | null>,
 ) {
   const sourceText = draft.prompt.trim() || (draft.inputImages.length ? '请分析参考图片并确认创作需求' : '')
   if (!draft.prompt.trim() && !draft.inputImages.length) return allowEmptyDraftResume
@@ -85,7 +98,7 @@ function matchesPromptProjectInput(
   const storedSettings = Object.fromEntries(Object.entries(project.source.metadata ?? {})
     .filter(([key]) => key.startsWith('output.'))
     .map(([key, value]) => [key.slice('output.'.length), value]))
-  if (outputSettingsKey(storedSettings) !== outputSettingsKey(getPromptOutputSettings(draft.params))) return false
+  if (outputSettingsKey(storedSettings) !== outputSettingsKey(outputSettings)) return false
 
   if ((project.source.text ?? '').trim() !== sourceText) return false
 
@@ -122,6 +135,7 @@ export default function Sub2ImageConversationComposer() {
   const [promptBundle, setPromptBundle] = useState<PromptStudioToolBundle | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const [promptAgentSelected, setPromptAgentSelected] = useState(false)
+  const [generationMode, setGenerationMode] = useState<'image' | 'video'>('image')
   const [promptStarting, setPromptStarting] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showAgentWelcome, setShowAgentWelcome] = useState(false)
@@ -132,11 +146,25 @@ export default function Sub2ImageConversationComposer() {
     tools: conversationTools,
     onToolLoaded: (_toolId, module) => registerSub2ImageMessageRenderers(module.messageRenderers),
   }), [])
-  const toolId = appMode === 'agent' ? SUB2_CHAT_TOOL_ID : SUB2_IMAGE_TOOL_ID
-  const conversationId = appMode === 'agent' ? activeConversationId ?? 'active-agent' : PROMPT_CONVERSATION_ID
+  const isVideo = appMode === 'gallery' && generationMode === 'video'
+  const promptConversationId = isVideo ? VIDEO_PROMPT_CONVERSATION_ID : PROMPT_CONVERSATION_ID
+  const promptOutputSettings = isVideo
+    ? getVideoPromptOutputSettings(settings.videoParams)
+    : getPromptOutputSettings(params)
+  const toolId = appMode === 'agent' ? SUB2_CHAT_TOOL_ID : isVideo ? SUB2_VIDEO_TOOL_ID : SUB2_IMAGE_TOOL_ID
+  const conversationId = appMode === 'agent' ? activeConversationId ?? 'active-agent' : promptConversationId
   const scope = useMemo(() => ({ conversationId, toolId }), [conversationId, toolId])
   const selectedSkill = getAgentSkillMention(prompt)
   const agentSelected = promptAgentSelected || Boolean(selectedSkill)
+
+  const changeGenerationMode = (mode: 'image' | 'video') => {
+    if (promptOpen && promptBundle) promptBundle.store.pause(promptConversationId)
+    setGenerationMode(mode)
+    setPromptAgentSelected(false)
+    setPromptOpen(false)
+    setPromptBundle(null)
+    setShowAgentWelcome(false)
+  }
 
   const updateClearance = useCallback(() => {
     const dock = dockRef.current
@@ -236,26 +264,26 @@ export default function Sub2ImageConversationComposer() {
   useEffect(() => {
     if (!promptOpen || !promptBundle) return
     const applyReady = () => {
-      const snapshot = promptBundle.store.getSnapshot(PROMPT_CONVERSATION_ID)
+      const snapshot = promptBundle.store.getSnapshot(promptConversationId)
       if (!snapshot.project || snapshot.project.id === ignoredReadyProjectRef.current) return
       if (snapshot.project.phase !== 'ready' || !snapshot.editor) return
-      setParams(getPromptOutputParams(snapshot.editor.params, snapshot.project.source.metadata))
+      if (!isVideo) setParams(getPromptOutputParams(snapshot.editor.params, snapshot.project.source.metadata))
       setPrompt(restoreImageMentionMarkers(snapshot.editor.prompt, useStore.getState().inputImages.length))
       ignoredReadyProjectRef.current = null
       setPromptOpen(false)
       setPromptAgentSelected(false)
-      showToast('完整提示词已写入输入框', 'success')
+      showToast(`完整${isVideo ? '视频' : '图片'}提示词已写入输入框`, 'success')
     }
     applyReady()
-    return promptBundle.store.subscribe(PROMPT_CONVERSATION_ID, applyReady)
-  }, [promptBundle, promptOpen, setParams, setPrompt, showToast])
+    return promptBundle.store.subscribe(promptConversationId, applyReady)
+  }, [isVideo, promptBundle, promptConversationId, promptOpen, setParams, setPrompt, showToast])
 
   useEffect(() => {
     if (appMode !== 'agent') return
     // 工作台模式下关闭画廊的提示词问答卡，但保留 Agent 按钮的选中状态
-    if (promptOpen && promptBundle) promptBundle.store.pause(PROMPT_CONVERSATION_ID)
+    if (promptOpen && promptBundle) promptBundle.store.pause(promptConversationId)
     if (promptOpen) setPromptOpen(false)
-  }, [appMode, promptBundle, promptOpen])
+  }, [appMode, promptBundle, promptConversationId, promptOpen])
 
   const submitInput = useMemo(() => ({
     text: extractAgentSkillMention(prompt).text,
@@ -267,7 +295,7 @@ export default function Sub2ImageConversationComposer() {
   const composerState = appMode === 'agent' && !agentSelected
     ? { ...rawComposerState, validationError: null, placeholder: '描述你想生成的图片...' }
     : rawComposerState
-  const promptProject = promptBundle?.store.getSnapshot(PROMPT_CONVERSATION_ID).project
+  const promptProject = promptBundle?.store.getSnapshot(promptConversationId).project
   const promptAgentCanSubmit = composerState.canSubmit || Boolean(promptProject && promptProject.phase !== 'ready')
   const activeConversation = appMode === 'agent'
     ? conversations.find((item) => item.id === activeConversationId) ?? null
@@ -372,7 +400,7 @@ export default function Sub2ImageConversationComposer() {
     const draft = loadComposerDraft()
     const state = useStore.getState()
     const requestScope = {
-      conversationId: appMode === 'agent' ? state.activeAgentConversationId ?? state.createAgentConversation() : PROMPT_CONVERSATION_ID,
+      conversationId: appMode === 'agent' ? state.activeAgentConversationId ?? state.createAgentConversation() : promptConversationId,
       toolId,
     }
     refreshRuntime()
@@ -383,7 +411,7 @@ export default function Sub2ImageConversationComposer() {
           text: appMode === 'agent' ? extractAgentSkillMention(draft.prompt).text : draft.prompt,
           attachments: draft.inputImages.map((image, index) => ({ id: image.id, type: 'image', name: `参考图${index + 1}` })),
           params: { ...draft.params },
-          payload: { draft, editingRoundId: state.agentEditingRoundId },
+          payload: { draft, editingRoundId: state.agentEditingRoundId, videoParams: state.settings.videoParams },
         },
       })
     } catch (err) {
@@ -431,12 +459,12 @@ export default function Sub2ImageConversationComposer() {
     if (promptStarting) return
     setPromptStarting(true)
     try {
-      const bundle = promptBundle ?? await loadSub2ImagePromptStudio()
+      const bundle = promptBundle ?? await (isVideo ? loadSub2VideoPromptStudio() : loadSub2ImagePromptStudio())
       setPromptBundle(bundle)
-      await bundle.store.load(PROMPT_CONVERSATION_ID)
-      const snapshot = bundle.store.getSnapshot(PROMPT_CONVERSATION_ID)
+      await bundle.store.load(promptConversationId)
+      const snapshot = bundle.store.getSnapshot(promptConversationId)
       const draft = loadComposerDraft()
-      if (snapshot.project && snapshot.project.phase !== 'ready' && matchesPromptProjectInput(snapshot.project, draft, !promptDraftEditedRef.current)) {
+      if (snapshot.project && snapshot.project.phase !== 'ready' && matchesPromptProjectInput(snapshot.project, draft, !promptDraftEditedRef.current, promptOutputSettings)) {
         const current = useStore.getState()
         if (!current.inputImages.length && snapshot.project.source.assets?.length) {
           const images = await Promise.all(snapshot.project.source.assets.map(async (asset) => ({
@@ -445,7 +473,7 @@ export default function Sub2ImageConversationComposer() {
           })))
           current.setInputImages(images.flatMap((image) => image.dataUrl ? [{ id: image.id, dataUrl: image.dataUrl }] : []))
         } else {
-          bundle.store.syncAttachments(PROMPT_CONVERSATION_ID, current.inputImages.map((image, index) => ({
+          bundle.store.syncAttachments(promptConversationId, current.inputImages.map((image, index) => ({
             id: image.id,
             name: `参考图${index + 1}`,
           })))
@@ -453,7 +481,7 @@ export default function Sub2ImageConversationComposer() {
         ignoredReadyProjectRef.current = null
         promptDraftEditedRef.current = false
         setPrompt('')
-        bundle.store.resume(PROMPT_CONVERSATION_ID)
+        bundle.store.resume(promptConversationId)
         setPromptOpen(true)
         setPromptStarting(false)
         return
@@ -462,10 +490,10 @@ export default function Sub2ImageConversationComposer() {
       promptDraftEditedRef.current = false
       setPrompt('')
       setPromptOpen(true)
-      const pending = bundle.store.start(PROMPT_CONVERSATION_ID, {
+      const pending = bundle.store.start(promptConversationId, {
         text: draft.prompt,
         attachments: draft.inputImages.map((image, index) => ({ id: image.id, name: `参考图${index + 1}` })),
-        outputSettings: getPromptOutputSettings(draft.params),
+        outputSettings: promptOutputSettings,
       })
       await Promise.resolve()
       setPromptStarting(false)
@@ -491,8 +519,8 @@ export default function Sub2ImageConversationComposer() {
     // 工作台模式选中 Agent 走对话分析流程，无需预载画廊的提示词问答工具
     if (appMode === 'agent') return
     try {
-      const bundle = promptBundle ?? await loadSub2ImagePromptStudio()
-      await bundle.store.load(PROMPT_CONVERSATION_ID)
+      const bundle = promptBundle ?? await (isVideo ? loadSub2VideoPromptStudio() : loadSub2ImagePromptStudio())
+      await bundle.store.load(promptConversationId)
       setPromptBundle(bundle)
     } catch (err) {
       setPromptAgentSelected(false)
@@ -543,7 +571,7 @@ export default function Sub2ImageConversationComposer() {
               onAnimationEnd={() => setShowAgentWelcome(false)}
             >
               <p className="cc-agent-welcome-title">欢迎使用 Agent 模式！</p>
-              <p>在此模式下，Agent 会像智能助手一样，主动探索创意、多次迭代帮你生成和优化图片。</p>
+              <p>在此模式下，Agent 会像智能助手一样，主动探索创意、多次迭代帮你生成和优化{isVideo ? '视频' : '图片'}。</p>
               <p>请描述你想要的内容，我来帮您创作！</p>
             </div>
           )}
@@ -551,8 +579,9 @@ export default function Sub2ImageConversationComposer() {
             <section className="cc-composer cc-composer--agent">
               {promptBundle && !promptStarting ? (
                 <Sub2ImagePromptAgentCard
-                  conversationId={PROMPT_CONVERSATION_ID}
+                  conversationId={promptConversationId}
                   bundle={promptBundle}
+                  kind={isVideo ? 'video' : 'image'}
                   onClose={() => {
                     setPromptOpen(false)
                     setPromptAgentSelected(false)
@@ -560,7 +589,7 @@ export default function Sub2ImageConversationComposer() {
                   onOpenSettings={() => setShowSettings(true)}
                 />
               ) : (
-                <div className="flex min-h-32 items-center justify-center text-sm text-gray-500" role="status">正在启动图片提示词 Agent</div>
+                <div className="flex min-h-32 items-center justify-center text-sm text-gray-500" role="status">正在启动{isVideo ? '视频' : '图片'}提示词 Agent</div>
               )}
             </section>
           ) : (
@@ -597,12 +626,12 @@ export default function Sub2ImageConversationComposer() {
                 editorParts={editorParts}
                 editorRef={editorRef}
                 placeholder={composerState.placeholder}
-                editorAriaLabel={appMode === 'agent' ? 'Agent 对话输入' : '图片提示词输入'}
+                editorAriaLabel={appMode === 'agent' ? 'Agent 对话输入' : isVideo ? '视频提示词输入' : '图片提示词输入'}
                 clearAriaLabel="清空输入"
                 attachAriaLabel="添加图片"
                 submitAriaLabel={appMode === 'agent'
                   ? '发送 Agent 消息'
-                  : agentSelected ? '发送到图片提示词 Agent' : '生成图片'}
+                  : agentSelected ? `发送到${isVideo ? '视频' : '图片'}提示词 Agent` : isVideo ? '生成视频' : '生成图片'}
                 stopAriaLabel="停止"
                 enterSubmit={settings.enterSubmit}
                 canSubmit={agentSelected ? promptAgentCanSubmit : composerState.canSubmit}
@@ -622,8 +651,28 @@ export default function Sub2ImageConversationComposer() {
                     }}
                   />
                 )}
-                toolSlot={(
+                toolSlot={appMode === 'gallery' ? (
                   agentSelected ? (
+                      <AiLiquidButton
+                        size="sm"
+                        idleSpeed={0.35}
+                        aria-pressed
+                        className="cc-agent-button !h-8 !min-w-0 !px-4 !text-[13px]"
+                        onClick={() => { void togglePromptAgent() }}
+                      >
+                        Agent
+                      </AiLiquidButton>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-pressed={false}
+                        className="cc-agent-button inline-flex h-8 min-w-0 items-center rounded-full bg-gray-100 px-4 text-[13px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-white/[0.08] dark:text-gray-300 dark:hover:bg-white/[0.14] dark:hover:text-gray-100"
+                        onClick={() => { void togglePromptAgent() }}
+                      >
+                        Agent
+                      </button>
+                    )
+                ) : agentSelected ? (
                     <AiLiquidButton
                       size="sm"
                       idleSpeed={0.35}
@@ -642,18 +691,18 @@ export default function Sub2ImageConversationComposer() {
                     >
                       Agent
                     </button>
-                  )
-                )}
+                  )}
                 paramsSlot={(
                   <button
                     type="button"
                     data-composer-settings-trigger
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.08] dark:hover:text-gray-200 [&_svg]:h-[18px] [&_svg]:w-[18px]"
-                    title="图片设置"
-                    aria-label="图片设置"
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.08] dark:hover:text-gray-100 [&_svg]:h-4 [&_svg]:w-4"
+                    title={isVideo ? '视频设置' : '图片设置'}
+                    aria-label="生成设置"
                     onClick={() => setShowSettings(true)}
                   >
-                    <TuneIcon />
+                    {isVideo ? <VideoIcon data-generation-icon="video" /> : <ImageIcon data-generation-icon="image" />}
+                    <span>{isVideo ? `Video · ${settings.videoParams.duration}s ×${settings.videoParams.n}` : `Image · ${params.n}x`}</span>
                   </button>
                 )}
                 onChange={(value) => {
@@ -673,6 +722,10 @@ export default function Sub2ImageConversationComposer() {
                     void openPromptAgent()
                     return
                   }
+                  if (isVideo) {
+                    void submit()
+                    return
+                  }
                   if (appMode === 'agent' && !agentSelected) {
                     void submitDirect()
                     return
@@ -683,7 +736,7 @@ export default function Sub2ImageConversationComposer() {
                   runtime.stop(scope)
                   refreshRuntime()
                 }}
-                onAttach={inputImages.length < MAX_INPUT_IMAGES ? () => fileInputRef.current?.click() : undefined}
+                onAttach={inputImages.length < (isVideo ? 1 : MAX_INPUT_IMAGES) ? () => fileInputRef.current?.click() : undefined}
                 onPasteFiles={(files) => {
                   promptDraftEditedRef.current = true
                   void addInputImageFiles(files)
@@ -696,20 +749,33 @@ export default function Sub2ImageConversationComposer() {
               />
             </div>
           )}
-          <input ref={fileInputRef} data-new-composer-file-input type="file" accept="image/*" multiple className="hidden" onChange={handleFileInput} />
+          <input ref={fileInputRef} data-new-composer-file-input type="file" accept="image/*" multiple={!isVideo} className="hidden" onChange={handleFileInput} />
           <input ref={replaceInputRef} data-new-composer-replace-input type="file" accept="image/*" className="hidden" onChange={handleReplaceInput} />
         </div>
       )}
-      {showSettings && (
-        <Sub2ImageComposerSettings
-          onClose={() => setShowSettings(false)}
-          onSaved={() => {
-            if (!promptOpen) promptDraftEditedRef.current = true
-            if (!promptBundle) return
-            promptBundle.store.syncOutputSettings(PROMPT_CONVERSATION_ID, getPromptOutputSettings(useStore.getState().params))
-          }}
-        />
-      )}
+      {showSettings && (isVideo ? (
+          <Sub2VideoComposerSettings
+            mode={generationMode}
+            onModeChange={changeGenerationMode}
+            params={settings.videoParams}
+            onChange={(videoParams) => {
+              useStore.getState().setSettings({ videoParams })
+              promptBundle?.store.syncOutputSettings(VIDEO_PROMPT_CONVERSATION_ID, getVideoPromptOutputSettings(videoParams))
+            }}
+            onClose={() => setShowSettings(false)}
+          />
+        ) : (
+          <Sub2ImageComposerSettings
+            mode={appMode === 'gallery' ? generationMode : undefined}
+            onModeChange={appMode === 'gallery' ? changeGenerationMode : undefined}
+            onClose={() => setShowSettings(false)}
+            onSaved={() => {
+              if (!promptOpen) promptDraftEditedRef.current = true
+              if (!promptBundle) return
+              promptBundle.store.syncOutputSettings(PROMPT_CONVERSATION_ID, getPromptOutputSettings(useStore.getState().params))
+            }}
+          />
+        ))}
       {preview && previewIndex != null && (
         <Sub2ImageAttachmentPreview
           src={preview.dataUrl}

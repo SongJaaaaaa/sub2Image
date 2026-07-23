@@ -1,0 +1,32 @@
+export type CloudConfig = typeof config
+
+export const config = {
+  sub2ApiUrl: 'https://api.sjiaa.cc.cd',
+  authMePath: '/api/v1/auth/me',
+  authTimeout: 5000,
+  cleanupInterval: 60 * 1000,
+  uploadTtl: 24 * 60 * 60 * 1000,
+  uploadClaimTtl: 2 * 60 * 60 * 1000,
+  port: 8081,
+  dataDir: '/data/cloud',
+  mediaJobsDir: '/data/media-jobs',
+  speechWorkerUrl: 'http://speech-worker:8090',
+  mediaJobTtl: 24 * 60 * 60 * 1000,
+  voiceCacheTtl: 6 * 60 * 60 * 1000,
+  maxTtsChars: 5000,
+  maxVideoDuration: 2 * 60 * 60,
+  maxImageSize: 50 * 1024 * 1024,
+  maxVideoSize: 600 * 1024 * 1024,
+  maxAssetMetadataSize: 16 * 1024,
+  maxTaskSize: 2 * 1024 * 1024,
+  maxTaskAssets: 100,
+  maxSkillSize: 256 * 1024,
+  maxMetadataSize: 20 * 1024 * 1024,
+  maxTaskCount: 500,
+  maxSkillCount: 100,
+  maxUploadCount: 100,
+  maxAssetCount: 5000,
+  quotaBytes: 10 * 1024 * 1024 * 1024,
+  allowedImageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'],
+  allowedVideoTypes: ['video/mp4', 'video/webm', 'video/quicktime']
+}

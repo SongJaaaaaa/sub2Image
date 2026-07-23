@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import { ALL_FAVORITES_COLLECTION_ID, getTaskFavoriteCollectionIds, useStore, reuseConfig, editOutputs, removeTask, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../../../store'
+import { useCloudRuntimeState } from '../../cloud'
 import TaskCard from './TaskCard'
 
 export default function TaskGrid() {
@@ -7,6 +8,8 @@ export default function TaskGrid() {
   const searchQuery = useStore((s) => s.searchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
   const filterFavorite = useStore((s) => s.filterFavorite)
+  const filterCloud = useStore((s) => s.filterCloud)
+  const cloud = useCloudRuntimeState()
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
   const setDetailTaskId = useStore((s) => s.setDetailTaskId)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
@@ -39,9 +42,10 @@ export default function TaskGrid() {
         if (activeFavoriteCollectionId && activeFavoriteCollectionId !== ALL_FAVORITES_COLLECTION_ID && !getTaskFavoriteCollectionIds(t).includes(activeFavoriteCollectionId)) return false
       }
       if (!taskMatchesFilterStatus(t, filterStatus)) return false
+      if (filterCloud && !['saved', 'removing'].includes(cloud.tasks[t.id]?.status ?? '')) return false
       return taskMatchesSearchQuery(t, q)
     })
-  }, [tasks, searchQuery, filterStatus, filterFavorite, activeFavoriteCollectionId])
+  }, [tasks, searchQuery, filterStatus, filterFavorite, filterCloud, activeFavoriteCollectionId, cloud.tasks])
 
   const handleDelete = (task: typeof tasks[0]) => {
     setConfirmDialog({
@@ -255,7 +259,7 @@ export default function TaskGrid() {
   if (!filteredTasks.length) {
     return (
       <div className="flex min-h-[calc(100vh-var(--app-header-height,4rem)-var(--composer-stack-clearance,10rem)-2rem)] flex-col items-center justify-center py-20 text-center text-gray-400 dark:text-gray-500">
-        {searchQuery || filterFavorite ? (
+        {searchQuery || filterFavorite || filterCloud ? (
           <p className="text-sm">没有找到匹配的任务</p>
         ) : (
           <>

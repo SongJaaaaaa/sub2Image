@@ -47,6 +47,20 @@ export type ImageOverlay = {
   opacity: number
 }
 
+export type SubtitleCue = {
+  id: string
+  start: number
+  end: number
+  text: string
+}
+
+export type SubtitleStyle = {
+  fontSize: number
+  color: string
+  backgroundOpacity: number
+  position: 'top' | 'middle' | 'bottom'
+}
+
 export type ImportStatus = {
   label: string
   progress: number
@@ -59,6 +73,8 @@ export type ExportProject = {
   sources: VideoSource[]
   clips: VideoClip[]
   overlays: ImageOverlay[]
+  subtitles: SubtitleCue[]
+  subtitleStyle: SubtitleStyle
   background: BackgroundAudio | null
   originalVolume: number
   muted: boolean

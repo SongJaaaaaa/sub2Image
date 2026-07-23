@@ -25,12 +25,20 @@ import JwsConnectModal from './components/JwsConnectModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { ExtensionWorkspace, isExtensionPath } from './ExtensionWorkspace'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
+import {
+  autoSaveSkillToCloud,
+  initCloudRuntime,
+  removeSkillFromCloud,
+  saveSkillWithCloudState,
+  useCloudRuntimeState,
+} from './features/cloud'
 
 let customProviderConfigUrlImportStarted = false
 
 export default function App() {
   const [path, setPath] = useState(window.location.pathname)
   const theme = useStore((s) => s.settings.theme)
+  const cloud = useCloudRuntimeState()
 
   useLayoutEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -54,10 +62,30 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
+  useEffect(() => {
+    if (!isExtensionPath(path)) return
+    void initCloudRuntime().catch((err) => console.warn('加载云端数据失败：', err))
+  }, [path])
+
   if (isExtensionPath(path)) {
     return (
       <>
-        <ExtensionWorkspace />
+        <ExtensionWorkspace
+          skillCloud={{
+            skills: Object.fromEntries(Object.entries(cloud.skills).map(([id, item]) => [id, item.status])),
+            onImported: (id) => {
+              void autoSaveSkillToCloud(id)
+            },
+            onSave: async (id) => {
+              if (!getSub2Token()) {
+                window.location.assign('/app?connect=jws')
+                return
+              }
+              await saveSkillWithCloudState(id)
+            },
+            onRemove: removeSkillFromCloud,
+          }}
+        />
         <Toast />
       </>
     )
@@ -135,7 +163,9 @@ function Workspace() {
           clearAppliedUrlSettings()
         })
 
-      initStore()
+      void initStore()
+        .then(() => initCloudRuntime())
+        .catch((err) => console.error('初始化应用失败：', err))
       return
     }
 
@@ -158,7 +188,9 @@ function Workspace() {
         })
     }
 
-    initStore()
+    void initStore()
+      .then(() => initCloudRuntime())
+      .catch((err) => console.error('初始化应用失败：', err))
   }, [setSettings])
 
   useEffect(() => {

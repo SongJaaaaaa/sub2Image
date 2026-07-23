@@ -3,6 +3,9 @@
 至少覆盖：
 
 - Markdown frontmatter 解析和必填字段。
+- 用户 `.md` 导入、UTF-8、大小、来源 URL、ID 冲突、本地持久化和删除。
+- 云端 Markdown 恢复、显式覆盖、同 ID 内容冲突的双向选择。
+- 未登录/关闭自动保存时不上传，登录 bootstrap 后恢复缺失的用户 Skill。
 - 六个内置 Skill 的注册顺序和 ID 去重。
 - 结构化 mention 的显示名称、内部 ID、光标映射和正文提取。
 - 一条消息只选择一个 Skill，普通 `@文字` 不会激活。

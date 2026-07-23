@@ -1266,7 +1266,7 @@ const tools = [
 />
 ```
 
-未来接入视频时再注册 `videoDomain` 和 `videoGenerationTool`，当前版本不创建对应业务文件。
+视频接入已注册独立的 `videoDomain` 和视频提示词 Agent；图片与视频使用不同的 Prompt Studio conversation ID，提示词 Tool 仍只负责访谈、产物生成和写回 Composer，不直接调用视频 API。
 
 提示词结果消息中的“应用”调用 ToolContext 把文本写回 Composer 草稿；“生成图片”则写入草稿并切换到图片生成 Tool。提示词 Tool 不直接调用图片或视频 API。
 

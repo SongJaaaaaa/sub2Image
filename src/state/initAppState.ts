@@ -18,6 +18,7 @@ import {
   scheduleFalRecovery,
   showSupportPromptForExistingLocalData,
 } from '../features/tasks'
+import { recoverVideoTask } from '../features/video'
 import { useStore } from './appStore'
 import {
   cleanStaleAgentInputDrafts,
@@ -125,6 +126,22 @@ export async function initAppState(continueRecoveredAgentRound: ContinueRecovere
   useStore.getState().setTasks(tasks)
   showSupportPromptForExistingLocalData(tasks)
   for (const task of tasks) {
+    if (task.kind === 'video' && task.status === 'running') {
+      if (task.videoRemoteId) {
+        recoverVideoTask(task.id)
+      } else {
+        const interrupted = {
+          ...task,
+          status: 'error' as const,
+          error: '页面刷新时视频任务尚未取得远程任务 ID，请重新提交。',
+          finishedAt: Date.now(),
+          elapsed: Date.now() - task.createdAt,
+        }
+        useStore.getState().setTasks(useStore.getState().tasks.map((item) => item.id === task.id ? interrupted : item))
+        await putTask(interrupted)
+      }
+      continue
+    }
     if (
       task.apiProvider === 'fal' &&
       task.falRequestId &&
@@ -256,4 +273,3 @@ export async function initAppState(continueRecoveredAgentRound: ContinueRecovere
     })
   }
 }
-

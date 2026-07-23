@@ -19,7 +19,10 @@ function getPersistableRawResponsePayload(rawResponsePayload?: string) {
 
 export function getPersistableTask(task: TaskRecord): TaskRecord {
   const rawResponsePayload = getPersistableRawResponsePayload(task.rawResponsePayload)
-  return rawResponsePayload === task.rawResponsePayload ? task : { ...task, rawResponsePayload }
+  const kind = task.kind ?? 'image'
+  return rawResponsePayload === task.rawResponsePayload && kind === task.kind
+    ? task
+    : { ...task, kind, rawResponsePayload }
 }
 
 export function putTask(task: TaskRecord): Promise<IDBValidKey> {

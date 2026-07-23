@@ -19,6 +19,7 @@ import {
   type PromptQuestionAnswer,
   type PromptStudioStore,
 } from '../store/createPromptStudioStore'
+import { videoDomain } from '../domains/video'
 
 type StoredProject = PromptProject & {
   promptStudioUi?: {
@@ -152,6 +153,59 @@ describe('prompt studio store', () => {
       moderation: 'low',
       n: 2,
       transparent_output: true,
+    })
+  })
+
+  it('视频输出设置会锁定时长比例清晰度和数量', async () => {
+    const videoArtifact: PromptArtifact = {
+      domain: 'video',
+      title: '城市夜景视频',
+      prompt: '镜头缓慢推进，车辆连续驶过城市夜景',
+      params: { duration: 4, aspectRatio: '16:9', resolution: '480p', n: 1 },
+    }
+    const { store } = createDomainHarness(
+      videoDomain,
+      async () => ({
+        format: 'interview',
+        output: {
+          phase: 'review',
+          message: '视频需求已确认',
+          briefPatch: videoDomain.fields
+            .filter((field) => !field.id.startsWith('output.'))
+            .map((field) => ({
+              field: field.id,
+              value: field.id === 'reference.hasImages' || field.id === 'text.enabled' || field.id === 'logo.enabled'
+                ? false
+                : '已确认',
+              status: 'answered' as const,
+              origin: 'model' as const,
+              locked: false,
+            })),
+          questions: [],
+        },
+        rawResponse: '{}',
+      }),
+      async () => ({ format: 'artifact', output: videoArtifact, rawResponse: '{}' }),
+    )
+
+    await store.start('conversation-video-settings', {
+      text: '生成一段城市夜景视频',
+      attachments: [],
+      outputSettings: { duration: 12, aspectRatio: '9:16', resolution: '720p', n: 4 },
+    })
+
+    const fields = store.getSnapshot('conversation-video-settings').project!.brief.fields
+    expect(fields['output.duration']).toMatchObject({ value: 12, origin: 'source', locked: true })
+    expect(fields['output.aspectRatio']).toMatchObject({ value: '9:16', origin: 'source', locked: true })
+    expect(fields['output.resolution']).toMatchObject({ value: '720p', origin: 'source', locked: true })
+    expect(fields['output.n']).toMatchObject({ value: 4, origin: 'source', locked: true })
+
+    await store.generate('conversation-video-settings')
+    expect(store.getSnapshot('conversation-video-settings').editor?.params).toEqual({
+      duration: 12,
+      aspectRatio: '9:16',
+      resolution: '720p',
+      n: 4,
     })
   })
 
@@ -642,6 +696,10 @@ describe('prompt studio store', () => {
 })
 
 function createHarness(...handlers: Respond[]) {
+  return createDomainHarness(domain, ...handlers)
+}
+
+function createDomainHarness(targetDomain: PromptDomainDefinition, ...handlers: Respond[]) {
   const queue = [...handlers]
   const projects = new Map<string, StoredProject>()
   const put = vi.fn(async (project: PromptProject) => {
@@ -678,7 +736,7 @@ function createHarness(...handlers: Respond[]) {
     textModel: { respond },
     storage,
     assets,
-    domains: [domain],
+    domains: [targetDomain],
     onError,
   })
   stores.push(store)

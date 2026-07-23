@@ -22,6 +22,7 @@ import {
   scrubAgentOutputPayloadsForDeletedTasks,
 } from './features/agent'
 import { applyComposerDraft } from './integrations/conversation/composerDraft'
+import { retryVideoTask } from './features/video'
 import { useStore } from './state/appStore'
 import { initAppState } from './state/initAppState'
 
@@ -55,10 +56,18 @@ export async function deleteFavoriteCollection(collectionId: string, deleteTasks
 }
 
 export async function retryTask(task: TaskRecord) {
+  if (task.kind === 'video') {
+    await retryVideoTask(task)
+    return
+  }
   await retryTaskAction(task, executeTask)
 }
 
 export async function reuseConfig(task: TaskRecord) {
+  if (task.kind === 'video') {
+    useStore.getState().showToast('视频任务请使用“重试任务”重新提交', 'info')
+    return
+  }
   await reuseTaskConfig(task, applyComposerDraft, submitTask)
 }
 

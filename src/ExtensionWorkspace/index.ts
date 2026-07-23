@@ -1,4 +1,5 @@
 export { default as ExtensionWorkspace } from './ExtensionWorkspace'
+export type { ExtensionSkillCloud } from './ExtensionWorkspace'
 export {
   EXTENSION_ROOT_PATH,
   getExtensionPath,

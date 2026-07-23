@@ -20,7 +20,14 @@ describe('Workspace Tool registry', () => {
   })
 
   it('includes ready and planned tools in cards', () => {
-    expect(plannedWorkspaceTools).toEqual([])
-    expect(workspaceToolCards.map((item) => item.id)).toEqual(['image-editor', 'background-remover', 'video-editor'])
+    expect(plannedWorkspaceTools.map((item) => item.id)).toEqual(['video-resizer'])
+    expect(workspaceToolCards.map((item) => item.id)).toEqual([
+      'image-editor',
+      'background-remover',
+      'video-editor',
+      'voice-generator',
+      'subtitle-recognition',
+      'video-resizer',
+    ])
   })
 })

@@ -48,6 +48,7 @@ describe('extension module boundaries', () => {
     const code = productionSource(workspaceSources)
     expect(code).not.toMatch(/from ['"]\.\.\/Tools\//)
     expect(code).not.toMatch(/from ['"]\.\.\/Skills\//)
+    expect(code).not.toMatch(/from ['"][^'"]*(?:features\/cloud|lib\/sub2api|state\/appStore)/)
     expect(code.toLowerCase()).not.toContain('workflows')
   })
 

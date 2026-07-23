@@ -10,6 +10,8 @@ export type AgentSkill = {
   license: string
   order: number
   instructions: string
+  uploaded?: boolean
+  fileName?: string
 }
 
 export type { AgentSkillRef }

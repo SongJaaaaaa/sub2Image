@@ -217,6 +217,7 @@ export function migratePersistedState(persistedState: unknown): unknown {
           agentApiConfigMode: 'hybrid',
           agentTextProfileId: null,
           agentImageProfileId: null,
+          agentVideoProfileId: null,
         }
       })()
   return {

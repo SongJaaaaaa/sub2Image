@@ -52,6 +52,7 @@ export {
   restorePromptVersion,
 } from './core/versions'
 export { imageDomain } from './domains/image'
+export { videoDomain } from './domains/video'
 export { createIndexedDbAssets } from './adapters/indexedDbAssets'
 export { createIndexedDbStorage } from './adapters/indexedDbStorage'
 export { createOpenAiResponsesTextModel } from './adapters/openAiResponsesTextModel'

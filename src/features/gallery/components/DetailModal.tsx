@@ -12,7 +12,13 @@ import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from 
 import { isAgentTaskPromptPending } from '../../../lib/taskPromptDisplay'
 import { replaceImageMentionsForApi } from '../../../lib/promptImageMentions'
 import { getVideo } from '../../../lib/db'
-import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from '../../../components/ui/icons'
+import {
+  ensureCloudAssetCached,
+  removeTaskFromCloud,
+  saveTaskWithCloudState,
+  useCloudTaskState,
+} from '../../cloud'
+import { CloseIcon, CloudIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from '../../../components/ui/icons'
 
 import ViewportTooltip from '../../../components/ui/ViewportTooltip'
 
@@ -28,6 +34,7 @@ export default function DetailModal() {
   const dismissedCodexCliPrompts = useStore((s) => s.dismissedCodexCliPrompts)
   const streamPreviewSrc = useStore((s) => detailTaskId ? s.streamPreviews[detailTaskId] || '' : '')
   const streamPreviewSlots = useStore((s) => detailTaskId ? s.streamPreviewSlots[detailTaskId] : undefined)
+  const cloudState = useCloudTaskState(detailTaskId || '')
 
   const [imageIndex, setImageIndex] = useState(0)
   const [imageSrcs, setImageSrcs] = useState<Record<string, string>>({})
@@ -115,8 +122,8 @@ export default function DetailModal() {
     setVideoPreview(null)
     let cancelled = false
     let url = ''
-    getVideo(videoId).then((video) => {
-      if (!video || cancelled) return
+    getVideo(videoId).then((video) => video ?? ensureCloudAssetCached(videoId)).then((video) => {
+      if (!('blob' in video) || cancelled) return
       url = URL.createObjectURL(video.blob)
       setVideoPreview({ url, name: video.name, width: video.width, height: video.height })
     }).catch((err) => console.error('读取画廊视频失败', err))
@@ -202,34 +209,34 @@ export default function DetailModal() {
   const currentOutputPreviewSrc = currentOutputImageId ? outputPreviewSrcs[currentOutputImageId] || '' : ''
 
   useEffect(() => {
-    const outputImageIds = task?.outputImages ?? []
-    if (outputImageIds.length === 0) {
-      setOutputPreviewSrcs({})
-      return
-    }
+    setOutputPreviewSrcs({})
+  }, [detailTaskId])
+
+  useEffect(() => {
+    if (!currentOutputImageId) return
 
     let cancelled = false
-    const setOutputImage = (imageId: string, dataUrl: string) => {
-      if (!cancelled) setOutputPreviewSrcs((prev) => ({ ...prev, [imageId]: dataUrl }))
+    const setOutputImage = (dataUrl: string) => {
+      if (!cancelled) {
+        setOutputPreviewSrcs((prev) => ({ ...prev, [currentOutputImageId]: dataUrl }))
+      }
     }
 
-    for (const imageId of outputImageIds) {
-      const cached = getCachedImage(imageId)
-      if (cached) {
-        setOutputImage(imageId, cached)
-      } else {
-        ensureImageCached(imageId)
-          .then((dataUrl) => {
-            if (dataUrl) setOutputImage(imageId, dataUrl)
-          })
-          .catch(() => {})
-      }
+    const cached = getCachedImage(currentOutputImageId)
+    if (cached) {
+      setOutputImage(cached)
+    } else {
+      ensureImageCached(currentOutputImageId)
+        .then((dataUrl) => {
+          if (dataUrl) setOutputImage(dataUrl)
+        })
+        .catch(() => {})
     }
 
     return () => {
       cancelled = true
     }
-  }, [task?.outputImages])
+  }, [currentOutputImageId])
 
   useEffect(() => {
     let cancelled = false
@@ -257,7 +264,7 @@ export default function DetailModal() {
   const showReferenceSection = allInputImageIds.length > 0 || isAgentEditTool
 
   const outputLen = outputSlots.length
-  const isVideoTask = Boolean(task.outputVideoIds?.length)
+  const isVideoTask = task.kind === 'video' || Boolean(task.outputVideoIds?.length)
   const currentImageRatio = currentOutputImageId ? imageRatios[currentOutputImageId] : ''
   const currentImageSize = currentOutputImageId ? imageSizes[currentOutputImageId] : ''
   const baseActualParams = currentOutputImageId
@@ -327,7 +334,7 @@ export default function DetailModal() {
     setDetailTaskId(null)
     setConfirmDialog({
       title: '删除任务',
-      message: '确定要删除这个任务吗？关联的图片资源也会被清理（如果没有其他任务引用）。',
+      message: '确定要删除这个任务吗？关联的图片和视频资源也会被清理（如果没有其他任务引用）。',
       action: () => removeTask(task),
     })
   }
@@ -1074,15 +1081,17 @@ export default function DetailModal() {
 
           {/* 操作按钮 */}
           <div className="grid grid-cols-4 sm:flex gap-2 pt-4 border-t border-gray-100 dark:border-white/[0.08]">
-            <button
-              onClick={handleReuse}
-              className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition text-sm font-medium whitespace-nowrap"
-            >
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-              </svg>
-              复用配置
-            </button>
+            {!isVideoTask && (
+              <button
+                onClick={handleReuse}
+                className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition text-sm font-medium whitespace-nowrap"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                复用配置
+              </button>
+            )}
             <button
               onClick={handleEdit}
               disabled={!outputLen || isVideoTask}
@@ -1091,6 +1100,34 @@ export default function DetailModal() {
               <EditIcon className="w-4 h-4 flex-shrink-0" />
               编辑输出
             </button>
+            {task.status === 'done' && (
+              <button
+                disabled={cloudState?.status === 'saving' || cloudState?.status === 'removing'}
+                onClick={() => {
+                  if (cloudState?.status === 'saved') {
+                    setConfirmDialog({
+                      title: '移出云端',
+                      message: '确定将此任务移出云端吗？当前设备的本地任务和文件会保留。',
+                      confirmText: '移出云端',
+                      tone: 'danger',
+                      action: () => {
+                        void removeTaskFromCloud(task.id)
+                          .then(() => showToast('已移出云端，本地副本已保留', 'success'))
+                          .catch((err) => showToast(err instanceof Error ? err.message : '移出云端失败', 'error'))
+                      },
+                    })
+                    return
+                  }
+                  void saveTaskWithCloudState(task)
+                    .then(() => showToast('已保存到云端', 'success'))
+                    .catch((err) => showToast(err instanceof Error ? err.message : '云端保存失败', 'error'))
+                }}
+                className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-600 transition hover:bg-sky-100 disabled:cursor-wait disabled:opacity-60 dark:bg-sky-500/10 dark:text-sky-400 dark:hover:bg-sky-500/20 sm:flex-1"
+              >
+                <CloudIcon className="h-4 w-4 shrink-0" />
+                {cloudState?.status === 'saving' ? '正在保存' : cloudState?.status === 'removing' ? '正在移出' : cloudState?.status === 'saved' ? '移出云端' : cloudState?.status === 'error' ? '重试保存' : '保存到云端'}
+              </button>
+            )}
             <button
               onClick={handleDelete}
               className="col-span-3 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition text-sm font-medium whitespace-nowrap"

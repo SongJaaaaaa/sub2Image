@@ -50,6 +50,7 @@ const SUB2_DEFAULT_SETTINGS = normalizeSettings({
   agentApiConfigMode: 'hybrid',
   agentTextProfileId: null,
   agentImageProfileId: null,
+  agentVideoProfileId: null,
 })
 
 export const useStore = create<AppState>()(
@@ -407,6 +408,8 @@ export const useStore = create<AppState>()(
       setFilterFavorite: (filterFavorite) => set(filterFavorite
         ? { filterFavorite, selectedTaskIds: [], selectedFavoriteCollectionIds: [] }
         : { filterFavorite, activeFavoriteCollectionId: null, selectedTaskIds: [], selectedFavoriteCollectionIds: [] }),
+      filterCloud: false,
+      setFilterCloud: (filterCloud) => set({ filterCloud, selectedTaskIds: [], selectedFavoriteCollectionIds: [] }),
 
       // Selection
       selectedTaskIds: [],

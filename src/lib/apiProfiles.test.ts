@@ -645,6 +645,16 @@ describe('custom providers', () => {
     })
   })
 
+  it('normalizes video settings to supported choices', () => {
+    expect(normalizeSettings({
+      videoParams: { duration: 12, aspectRatio: '9:16', resolution: '480p', n: 4 },
+    }).videoParams).toEqual({ duration: 12, aspectRatio: '9:16', resolution: '480p', n: 4 })
+
+    expect(normalizeSettings({
+      videoParams: { duration: 5, aspectRatio: '1:1', resolution: '720p', n: 9 },
+    }).videoParams).toEqual({ duration: 5, aspectRatio: '16:9', resolution: '720p', n: 4 })
+  })
+
   it('keeps provider order usable when custom providers are added after manual sorting', () => {
     const settings = normalizeSettings({
       providerOrder: ['fal', 'openai'],

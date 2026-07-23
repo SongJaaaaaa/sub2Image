@@ -6,13 +6,14 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, StopIcon } from '../../co
 type Props = {
   conversationId: string
   bundle: PromptStudioToolBundle
+  kind?: 'image' | 'video'
   onClose: () => void
   onOpenSettings?: () => void
 }
 
 const sameValue = (a: PromptScalar, b: PromptScalar) => typeof a === typeof b && a === b
 
-export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClose }: Props) {
+export default function Sub2ImagePromptAgentCard({ conversationId, bundle, kind = 'image', onClose }: Props) {
   const subscribe = useMemo(
     () => (fn: () => void) => bundle.store.subscribe(conversationId, fn),
     [bundle.store, conversationId],
@@ -96,7 +97,7 @@ export default function Sub2ImagePromptAgentCard({ conversationId, bundle, onClo
       <header className="ps-agent-header">
         <span className="ps-agent-orbit" aria-hidden="true">AI</span>
         <div className="ps-agent-title">
-          <strong>图片提示词 Agent</strong>
+          <strong>{kind === 'video' ? '视频' : '图片'}提示词 Agent</strong>
           <span>{snapshot.running ? '正在分析并生成下一步' : snapshot.project?.title || '正在建立项目'}</span>
         </div>
         <div className="ps-agent-actions">

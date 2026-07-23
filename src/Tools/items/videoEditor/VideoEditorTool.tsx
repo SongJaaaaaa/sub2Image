@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type SVGProps } from 'react'
 import type { TimelineState } from '@xzdarcy/react-timeline-editor'
-import { DownloadIcon, ImportIcon, PlusIcon } from '../../../components/ui/icons'
+import { DownloadIcon, ImportIcon, PlusIcon, SubtitleIcon } from '../../../components/ui/icons'
 import { notifyTool } from '../../adapters/notifications'
 import { saveEditedToolVideo } from '../../adapters/videoStorage'
-import type { BackgroundAudio, ExportQuality, ExportRatio, ImageOverlay, ImportStatus as ImportStatusData, VideoClip, VideoSource } from './types'
+import type { BackgroundAudio, ExportQuality, ExportRatio, ImageOverlay, ImportStatus as ImportStatusData, SubtitleCue, SubtitleStyle, VideoClip, VideoSource } from './types'
 import { cancelVideoExport, exportVideo, getExportSize } from './lib/exportVideo'
 import { formatSize, formatTime, getClipAtTime, getClipStarts, getProjectDuration, readMediaInfo, readVideoFrames, readVideoPoster } from './lib/media'
+import { fitSubtitles, parseSubtitle } from './lib/subtitleTrack'
 import { useVideoPlayback } from './hooks/useVideoPlayback'
 import { getBackgroundSourceTime } from './lib/audioTimeline'
 import BackgroundAudioSettings from './components/BackgroundAudioSettings'
 import ImportStatus from './components/ImportStatus'
 import OverlaySettings from './components/OverlaySettings'
+import SubtitleSettings from './components/SubtitleSettings'
 import VideoStage from './components/VideoStage'
 import VideoTimeline from './components/VideoTimeline'
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css'
@@ -18,6 +20,7 @@ import './videoEditor.css'
 
 let id = 0
 const createId = () => `video-${Date.now().toString(36)}-${(id += 1).toString(36)}`
+const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = { fontSize: 42, color: '#ffffff', backgroundOpacity: 0.55, position: 'bottom' }
 
 function PlayIcon(props: SVGProps<SVGSVGElement>) {
   return <svg viewBox="0 0 24 24" fill="currentColor" {...props}><path d="M7 4.8v14.4c0 .8.9 1.3 1.6.8l10.1-7.2a1 1 0 000-1.6L8.6 4C7.9 3.5 7 4 7 4.8z" /></svg>
@@ -43,8 +46,12 @@ export default function VideoEditorTool() {
   const [sources, setSources] = useState<VideoSource[]>([])
   const [clips, setClips] = useState<VideoClip[]>([])
   const [overlays, setOverlays] = useState<ImageOverlay[]>([])
+  const [subtitles, setSubtitles] = useState<SubtitleCue[]>([])
+  const [subtitleName, setSubtitleName] = useState('')
+  const [subtitleStyle, setSubtitleStyle] = useState(DEFAULT_SUBTITLE_STYLE)
   const [selectedId, setSelectedId] = useState('')
   const [selectedOverlayId, setSelectedOverlayId] = useState('')
+  const [selectedSubtitleId, setSelectedSubtitleId] = useState('')
   const [selectedAudio, setSelectedAudio] = useState(false)
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
@@ -60,6 +67,7 @@ export default function VideoEditorTool() {
   const videoInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
+  const subtitleInputRef = useRef<HTMLInputElement>(null)
   const urlsRef = useRef<string[]>([])
   const cancelledRef = useRef(false)
   const syncCursor = useCallback((value: number) => timelineRef.current?.setTime(value), [])
@@ -72,6 +80,7 @@ export default function VideoEditorTool() {
   const starts = useMemo(() => getClipStarts(clips), [clips])
   const selected = clips.find((clip) => clip.id === selectedId)
   const selectedOverlay = overlays.find((overlay) => overlay.id === selectedOverlayId)
+  const selectedSubtitle = subtitles.find((cue) => cue.id === selectedSubtitleId)
   const selectedIdx = clips.findIndex((clip) => clip.id === selectedId)
   const size = getExportSize(ratio, quality)
   const loading = Boolean(importStatus)
@@ -101,6 +110,10 @@ export default function VideoEditorTool() {
       const timelineStart = Math.min(current.timelineStart, Math.max(0, duration - 0.1))
       return { ...current, timelineStart, timelineEnd: duration }
     })
+  }, [duration])
+
+  useEffect(() => {
+    setSubtitles((current) => fitSubtitles(current, duration))
   }, [duration])
 
   const addVideos = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -142,6 +155,7 @@ export default function VideoEditorTool() {
       setClips((current) => [...current, ...newClips])
       setSelectedId(newClips[0].id)
       setSelectedOverlayId('')
+      setSelectedSubtitleId('')
       setSelectedAudio(false)
     } catch (err) {
       console.error('读取视频失败', files.map((file) => ({ name: file.name, type: file.type, size: file.size })), err)
@@ -186,6 +200,7 @@ export default function VideoEditorTool() {
       setOverlays((current) => [...current, ...items])
       setSelectedOverlayId(items[items.length - 1].id)
       setSelectedId('')
+      setSelectedSubtitleId('')
       setSelectedAudio(false)
       seekTo(start)
     } catch (err) {
@@ -222,11 +237,33 @@ export default function VideoEditorTool() {
       setSelectedAudio(true)
       setSelectedId('')
       setSelectedOverlayId('')
+      setSelectedSubtitleId('')
       seekTo(0)
     } catch (err) {
       URL.revokeObjectURL(url)
       console.error('读取背景音乐失败', err)
       notifyTool(`音频读取失败：${err instanceof Error ? err.message : '请更换文件重试'}`, 'error')
+    }
+  }
+
+  const addSubtitles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      const cues = fitSubtitles(parseSubtitle(await file.text()), duration)
+      if (!cues.length) throw new Error('没有读取到有效字幕，或字幕时间超出视频长度')
+      setSubtitles(cues)
+      setSubtitleName(file.name)
+      setSelectedSubtitleId(cues[0].id)
+      setSelectedId('')
+      setSelectedOverlayId('')
+      setSelectedAudio(false)
+      seekTo(cues[0].start)
+      notifyTool(`已导入 ${cues.length} 条字幕`, 'success')
+    } catch (err) {
+      console.error('读取字幕失败', { name: file.name, type: file.type, size: file.size }, err)
+      notifyTool(`字幕导入失败：${err instanceof Error ? err.message : '请检查文件格式'}`, 'error')
     }
   }
 
@@ -249,6 +286,8 @@ export default function VideoEditorTool() {
     ]
     setClips((current) => current.flatMap((clip) => clip.id === item.clip.id ? parts : [clip]))
     setSelectedId(parts[1].id)
+    setSelectedOverlayId('')
+    setSelectedSubtitleId('')
     setSelectedAudio(false)
   }
 
@@ -294,6 +333,21 @@ export default function VideoEditorTool() {
     setOverlays(items)
   }
 
+  const removeSubtitle = () => {
+    if (!selectedSubtitle) return
+    const idx = subtitles.findIndex((cue) => cue.id === selectedSubtitle.id)
+    const items = subtitles.filter((cue) => cue.id !== selectedSubtitle.id)
+    setSubtitles(items)
+    setSelectedSubtitleId(items[idx]?.id || items[idx - 1]?.id || '')
+    if (!items.length) setSubtitleName('')
+  }
+
+  const clearSubtitles = () => {
+    setSubtitles([])
+    setSubtitleName('')
+    setSelectedSubtitleId('')
+  }
+
   const runExport = async (target: 'download' | 'gallery') => {
     if (!clips.length || exporting) return
     cancelledRef.current = false
@@ -301,7 +355,7 @@ export default function VideoEditorTool() {
     setExportTarget(target)
     setProgress(0)
     try {
-      const blob = await exportVideo({ sources, clips, overlays, background, originalVolume: volume, muted, ratio, quality }, setProgress)
+      const blob = await exportVideo({ sources, clips, overlays, subtitles, subtitleStyle, background, originalVolume: volume, muted, ratio, quality }, setProgress)
       const url = URL.createObjectURL(blob)
       const name = `视频剪辑-${Date.now()}.mp4`
       if (target === 'gallery') {
@@ -352,6 +406,7 @@ export default function VideoEditorTool() {
       <input ref={videoInputRef} type="file" accept="video/mp4,video/webm,video/quicktime,.mov" multiple hidden onChange={addVideos} />
       <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={addImages} />
       <input ref={audioInputRef} type="file" accept="audio/*" hidden onChange={addBackground} />
+      <input ref={subtitleInputRef} type="file" accept=".srt,.vtt,application/x-subrip,text/vtt" hidden onChange={addSubtitles} />
       <audio
         ref={audioRef}
         src={background?.url}
@@ -397,6 +452,7 @@ export default function VideoEditorTool() {
           <div className="video-editor-section-title">
             <span>媒体</span>
             <div>
+              <button type="button" title="导入 SRT 或 VTT 字幕" disabled={loading || !duration} onClick={() => subtitleInputRef.current?.click()}><SubtitleIcon className="h-4 w-4" /></button>
               <button type="button" title="添加图片层" disabled={loading || !duration} onClick={() => imageInputRef.current?.click()}><PictureIcon className="h-4 w-4" /></button>
               <button type="button" title="导入视频" disabled={loading} onClick={() => videoInputRef.current?.click()}><PlusIcon className="h-4 w-4" /></button>
             </div>
@@ -408,6 +464,7 @@ export default function VideoEditorTool() {
                 setClips((current) => [...current, clip])
                 setSelectedId(clip.id)
                 setSelectedOverlayId('')
+                setSelectedSubtitleId('')
                 setSelectedAudio(false)
               }}>
                 <span className="video-editor-thumb"><img src={source.frames[0]} alt="" /></span>
@@ -424,6 +481,7 @@ export default function VideoEditorTool() {
               <button key={overlay.id} type="button" className={`video-editor-media-item ${overlay.id === selectedOverlayId ? 'selected' : ''}`} onClick={() => {
                 setSelectedOverlayId(overlay.id)
                 setSelectedId('')
+                setSelectedSubtitleId('')
                 setSelectedAudio(false)
                 seekTo(overlay.start)
               }}>
@@ -436,6 +494,24 @@ export default function VideoEditorTool() {
                 <PictureIcon className="h-4 w-4" />
               </button>
             ))}
+            {subtitles.length > 0 && <div className="video-editor-media-divider">字幕</div>}
+            {subtitles.length > 0 && (
+              <button type="button" className={`video-editor-media-item ${selectedSubtitleId ? 'selected' : ''}`} onClick={() => {
+                setSelectedSubtitleId(subtitles[0].id)
+                setSelectedId('')
+                setSelectedOverlayId('')
+                setSelectedAudio(false)
+                seekTo(subtitles[0].start)
+              }}>
+                <span className="video-editor-subtitle-thumb"><SubtitleIcon /></span>
+                <span className="video-editor-media-copy">
+                  <strong>{subtitleName}</strong>
+                  <small>{subtitles.length} 条字幕</small>
+                  <small>{formatTime(subtitles[0].start)} - {formatTime(subtitles[subtitles.length - 1].end)}</small>
+                </span>
+                <SubtitleIcon className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </aside>
 
@@ -444,10 +520,14 @@ export default function VideoEditorTool() {
             clips={clips}
             sources={sources}
             overlays={overlays}
+            subtitles={subtitles}
+            subtitleStyle={subtitleStyle}
             ratio={ratio}
             selectedOverlayId={selectedOverlayId}
+            selectedSubtitleId={selectedSubtitleId}
             playback={playback}
-            onSelectOverlay={(id) => { setSelectedOverlayId(id); setSelectedId(''); setSelectedAudio(false) }}
+            onSelectOverlay={(id) => { setSelectedOverlayId(id); setSelectedId(''); setSelectedSubtitleId(''); setSelectedAudio(false) }}
+            onSelectSubtitle={(id) => { setSelectedSubtitleId(id); setSelectedId(''); setSelectedOverlayId(''); setSelectedAudio(false) }}
             onChangeOverlay={(overlay) => setOverlays((current) => current.map((item) => item.id === overlay.id ? overlay : item))}
           />
           <div className="video-editor-player">
@@ -470,6 +550,18 @@ export default function VideoEditorTool() {
               onChange={(overlay) => setOverlays((current) => current.map((item) => item.id === overlay.id ? overlay : item))}
               onRemove={removeOverlay}
               onMoveLayer={moveOverlay}
+            />
+          )}
+          {subtitles.length > 0 && (
+            <SubtitleSettings
+              cue={selectedSubtitle}
+              count={subtitles.length}
+              duration={duration}
+              style={subtitleStyle}
+              onChangeCue={(cue) => setSubtitles((current) => current.map((item) => item.id === cue.id ? cue : item))}
+              onChangeStyle={setSubtitleStyle}
+              onRemove={removeSubtitle}
+              onClear={clearSubtitles}
             />
           )}
           <section>
@@ -500,27 +592,32 @@ export default function VideoEditorTool() {
         clips={clips}
         sources={sources}
         overlays={overlays}
+        subtitles={subtitles}
         background={background}
         starts={starts}
         duration={duration}
         selectedId={selectedId}
         selectedOverlayId={selectedOverlayId}
+        selectedSubtitleId={selectedSubtitleId}
         selectedAudio={selectedAudio}
         activeStart={active?.start}
         activeEnd={active?.end}
         time={time}
         onSeek={seekTo}
-        onSelectClip={(id) => { setSelectedId(id); setSelectedOverlayId(''); setSelectedAudio(false) }}
-        onSelectOverlay={(id) => { setSelectedOverlayId(id); setSelectedId(''); setSelectedAudio(false) }}
-        onSelectAudio={() => { setSelectedAudio(true); setSelectedId(''); setSelectedOverlayId('') }}
+        onSelectClip={(id) => { setSelectedId(id); setSelectedOverlayId(''); setSelectedSubtitleId(''); setSelectedAudio(false) }}
+        onSelectOverlay={(id) => { setSelectedOverlayId(id); setSelectedId(''); setSelectedSubtitleId(''); setSelectedAudio(false) }}
+        onSelectSubtitle={(id) => { setSelectedSubtitleId(id); setSelectedId(''); setSelectedOverlayId(''); setSelectedAudio(false) }}
+        onSelectAudio={() => { setSelectedAudio(true); setSelectedId(''); setSelectedOverlayId(''); setSelectedSubtitleId('') }}
         onClipsChange={setClips}
         onOverlaysChange={setOverlays}
+        onSubtitlesChange={setSubtitles}
         onBackgroundChange={setBackground}
         onSplit={splitClip}
-        onRemove={selectedAudio ? removeBackground : selectedOverlay ? removeOverlay : removeClip}
+        onRemove={selectedAudio ? removeBackground : selectedSubtitle ? removeSubtitle : selectedOverlay ? removeOverlay : removeClip}
         onMoveClip={moveClip}
         onAddImage={() => imageInputRef.current?.click()}
         onAddVideo={() => videoInputRef.current?.click()}
+        onAddSubtitle={() => subtitleInputRef.current?.click()}
       />
     </div>
   )

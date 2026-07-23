@@ -23,6 +23,8 @@ const project: ExportProject = {
     { id: 'clip-2', sourceId: source.id, name: source.name, sourceStart: 6, sourceEnd: 8 },
   ],
   overlays: [],
+  subtitles: [],
+  subtitleStyle: { fontSize: 42, color: '#ffffff', backgroundOpacity: 0.55, position: 'bottom' },
   background: null,
   originalVolume: 0.8,
   muted: false,
@@ -101,6 +103,21 @@ describe('video export command', () => {
 
     expect(filter).toContain('rotate=90*PI/180:ow=rotw(iw):oh=roth(ih):c=none')
     expect(filter).toContain("overlay=x=448:y=16:enable='between(t,0,2)'")
+  })
+
+  it('burns rendered subtitle images into their timeline ranges', () => {
+    const subtitle = new File(['image'], 'subtitle-0.png', { type: 'image/png' })
+    const command = createExportCommand({
+      ...project,
+      subtitles: [{ id: 'subtitle-1', start: 0.5, end: 2.4, text: '测试字幕' }],
+    }, [{ name: 'subtitle-0.png', file: subtitle, start: 0.5, end: 2.4, x: 80, y: 600 }])
+    const filter = command.args[command.args.indexOf('-filter_complex') + 1]
+
+    expect(command.files[1]).toMatchObject({ name: 'subtitle-0.png', loop: true })
+    expect(filter).toContain('[1:v]format=rgba[subtitle0]')
+    expect(filter).toContain("overlay=x=80:y=600:enable='between(t,0.5,2.4)'"
+    )
+    expect(command.args).toContain('[vSubtitle0]')
   })
 
   it('loops and delays background music to match its timeline range', () => {

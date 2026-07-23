@@ -4,8 +4,11 @@ import { getOutputImageLimitForSettings } from '../../lib/paramCompatibility'
 import { calculateImageSize, normalizeImageSize, type SizeTier } from '../../lib/size'
 import { useStore } from '../../store'
 import type { TaskParams } from '../../types'
+import Sub2GenerationModeTabs from './Sub2GenerationModeTabs'
 
 type Props = {
+  mode?: 'image' | 'video'
+  onModeChange?: (mode: 'image' | 'video') => void
   onClose: () => void
   onSaved?: () => void
 }
@@ -29,7 +32,7 @@ function getSizePreset(size: string) {
   return null
 }
 
-export default function Sub2ImageComposerSettings({ onClose, onSaved }: Props) {
+export default function Sub2ImageComposerSettings({ mode, onModeChange, onClose, onSaved }: Props) {
   const params = useStore((state) => state.params)
   const settings = useStore((state) => state.settings)
   const setParams = useStore((state) => state.setParams)
@@ -85,6 +88,8 @@ export default function Sub2ImageComposerSettings({ onClose, onSaved }: Props) {
         style={position}
         onClick={(e) => e.stopPropagation()}
       >
+        {mode && onModeChange && <Sub2GenerationModeTabs value={mode} onChange={onModeChange} />}
+
         <div className="cc-settings-ratio-row" role="group" aria-label="图像比例">
           <button
             type="button"

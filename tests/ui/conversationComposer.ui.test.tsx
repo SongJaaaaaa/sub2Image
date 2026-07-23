@@ -212,7 +212,9 @@ describe('Sub2ImageConversationComposer', () => {
 
     await waitFor(() => expect(editor.textContent).toBe('旧输入框更新'))
     expect(screen.getByRole('button', { name: '预览参考图1' })).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: '图片设置' }))
+    await user.click(screen.getByRole('button', { name: '生成设置' }))
+    expect(screen.getByRole('group', { name: '生成类型' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成类型 图片' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: '比例 自动' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '分辨率 1K' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '生成数量 1x' })).toBeTruthy()
@@ -249,7 +251,7 @@ describe('Sub2ImageConversationComposer', () => {
     await waitFor(() => expect(document.documentElement.style.getPropertyValue('--composer-stack-clearance')).not.toBe(''))
     const clearance = document.documentElement.style.getPropertyValue('--composer-stack-clearance')
 
-    await user.click(screen.getByRole('button', { name: '图片设置' }))
+    await user.click(screen.getByRole('button', { name: '生成设置' }))
     expect(document.documentElement.style.getPropertyValue('--composer-stack-clearance')).toBe(clearance)
     // 输入框在设置浮层打开时保持可见
     expect(screen.getByRole('textbox', { name: '图片提示词输入' })).toBeTruthy()
@@ -269,6 +271,52 @@ describe('Sub2ImageConversationComposer', () => {
       transparent_output: true,
     })
     expect(screen.queryByRole('dialog', { name: '图片设置' })).toBeNull()
+  })
+
+  it('switches image and video inside generation settings without changing Agent workspace', async () => {
+    render(<Sub2ImageConversationComposer />)
+    const user = userEvent.setup()
+
+    expect(screen.queryByRole('group', { name: '生成类型' })).toBeNull()
+    expect(useStore.getState().appMode).toBe('gallery')
+    expect(document.querySelector('[data-generation-icon="image"]')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成设置' }).textContent).toContain('Image')
+    await user.click(screen.getByRole('button', { name: '生成设置' }))
+    await user.click(screen.getByRole('button', { name: '生成类型 视频' }))
+
+    expect(screen.getByRole('textbox', { name: '视频提示词输入' })).toBeTruthy()
+    expect(document.querySelector('[data-generation-icon="video"]')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成设置' }).textContent).toContain('Video')
+    expect(screen.getByRole('dialog', { name: '视频设置' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成类型 视频' }).getAttribute('aria-pressed')).toBe('true')
+    expect(useStore.getState().appMode).toBe('gallery')
+    expect(document.querySelector('.cc-agent-button')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /^时长 / })).toHaveLength(6)
+    expect(screen.getAllByRole('button', { name: /^生成数量 / })).toHaveLength(4)
+    expect(screen.getAllByRole('button', { name: /^画面比例 / })).toHaveLength(2)
+    expect(screen.getByRole('button', { name: '画面比例 9:16' }).querySelector('.cc-settings-option-icon')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '画面比例 16:9' }).querySelector('.cc-settings-option-icon')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '时长 12 秒' }))
+    await user.click(screen.getByRole('button', { name: '生成数量 4 个' }))
+    await user.click(screen.getByRole('button', { name: '画面比例 9:16' }))
+    expect(useStore.getState().settings.videoParams).toEqual({
+      duration: 12,
+      aspectRatio: '9:16',
+      resolution: '720p',
+      n: 4,
+    })
+
+    await user.click(document.querySelector<HTMLElement>('.cc-settings-overlay')!)
+    await user.click(document.querySelector<HTMLButtonElement>('.cc-agent-button')!)
+    expect(document.querySelector<HTMLButtonElement>('.cc-agent-button')?.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: '发送到视频提示词 Agent' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '生成设置' }))
+    await user.click(screen.getByRole('button', { name: '生成类型 图片' }))
+    expect(screen.getByRole('textbox', { name: '图片提示词输入' })).toBeTruthy()
+    expect(document.querySelector('[data-generation-icon="image"]')).toBeTruthy()
+    expect(document.querySelector('.cc-agent-button')).toBeTruthy()
   })
 
   it('keeps thumbnails at 40px and opens mask actions through preview', async () => {

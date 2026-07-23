@@ -40,6 +40,22 @@ export function StopIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function PlayIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  )
+}
+
+export function PauseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
+      <path d="M7 5h4v14H7zm6 0h4v14h-4z" />
+    </svg>
+  )
+}
+
 export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -85,6 +101,14 @@ export function ImportIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+    </svg>
+  )
+}
+
+export function CloudIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 18h10a4 4 0 001-7.87A6 6 0 006.2 8.8 4.5 4.5 0 007 18z" />
     </svg>
   )
 }
@@ -217,6 +241,50 @@ export function TuneIcon(props: SVGProps<SVGSVGElement>) {
         strokeWidth={2}
         d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6"
       />
+    </svg>
+  )
+}
+
+export function ImageIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2} />
+      <circle cx="8.5" cy="8.5" r="1.5" strokeWidth={2} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 15-4.5-4.5L7 20" />
+    </svg>
+  )
+}
+
+export function VideoIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <rect x="3" y="5" width="13" height="14" rx="2" strokeWidth={2} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m16 10 5-3v10l-5-3" />
+    </svg>
+  )
+}
+
+export function SubtitleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2" strokeWidth={2} />
+      <path strokeLinecap="round" strokeWidth={2} d="M7 11h4M7 15h7M15 11h2" />
+    </svg>
+  )
+}
+
+export function PortraitIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <rect x="7" y="3" width="10" height="18" rx="1.5" strokeWidth={2} />
+    </svg>
+  )
+}
+
+export function LandscapeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <rect x="3" y="7" width="18" height="10" rx="1.5" strokeWidth={2} />
     </svg>
   )
 }

@@ -17,6 +17,7 @@ import { createSettingsForApiProfile, getReusedTaskApiProfile } from './taskProf
 export type SubmitTaskOptions = {
   allowFullMask?: boolean
   useCurrentApiProfileWhenReusedMissing?: boolean
+  apiProfileId?: string
   signal?: AbortSignal
   draft?: ComposerDraft
 }
@@ -76,7 +77,9 @@ export async function submitTask(
   options.signal?.throwIfAborted()
 
   const normalizedSettings = normalizeSettings(settings)
-  let activeProfile = getActiveApiProfile(settings)
+  let activeProfile = options.apiProfileId
+    ? normalizedSettings.profiles.find((profile) => profile.id === options.apiProfileId) ?? getActiveApiProfile(settings)
+    : getActiveApiProfile(settings)
   let requestSettings = createSettingsForApiProfile(normalizedSettings, activeProfile)
   if (normalizedSettings.reuseTaskApiProfileTemporarily && (reusedTaskApiProfileId || reusedTaskApiProfileMissing)) {
     const reusedProfile = getReusedTaskApiProfile(normalizedSettings, reusedTaskApiProfileId)
@@ -93,6 +96,7 @@ export async function submitTask(
         const submitWithCurrentProfile = () => submitTask({
           allowFullMask: options.allowFullMask,
           useCurrentApiProfileWhenReusedMissing: true,
+          apiProfileId: options.apiProfileId,
           signal: options.signal,
           draft,
         }, executeTask)

@@ -36,14 +36,19 @@ export default function AgentSettingsTab({
     ?? draft.sub2Configs.find((config) => config.kind === 'text')
   const imageConfig = draft.sub2Configs.find((config) => config.profileId === draft.agentImageProfileId)
     ?? draft.sub2Configs.find((config) => config.kind === 'image')
+  const videoConfig = draft.sub2Configs.find((config) => config.profileId === draft.agentVideoProfileId)
+    ?? draft.sub2Configs.find((config) => config.kind === 'video')
   const [keys, setKeys] = useState<Sub2Key[]>([])
   const [textGroupId, setTextGroupId] = useState(textConfig?.groupId ?? 0)
   const [imageGroupId, setImageGroupId] = useState(imageConfig?.groupId ?? 0)
+  const [videoKeyId, setVideoKeyId] = useState(videoConfig?.keyId ?? 0)
   const [textModel, setTextModel] = useState(textConfig?.model ?? '')
   const [imageModel, setImageModel] = useState(imageConfig?.model ?? '')
+  const [videoModel, setVideoModel] = useState(videoConfig?.model ?? '')
   const [textModels, setTextModels] = useState<string[]>([])
   const [imageModels, setImageModels] = useState<string[]>([])
-  const [loading, setLoading] = useState<'keys' | 'text' | 'image' | ''>('')
+  const [videoModels, setVideoModels] = useState<string[]>([])
+  const [loading, setLoading] = useState<'keys' | 'text' | 'image' | 'video' | ''>('')
   const [error, setError] = useState('')
 
   const activeKeys = useMemo(() => keys.filter((item) => item.status === 'active' && item.group_id != null), [keys])
@@ -62,8 +67,8 @@ export default function AgentSettingsTab({
     return [...groups.values()]
   }, [activeKeys])
 
-  const loadModels = async (kind: Sub2Config['kind'], groupId: number, items = activeKeys) => {
-    const savedKeyId = kind === 'text' ? textConfig?.keyId : imageConfig?.keyId
+  const loadModels = async (kind: Sub2Config['kind'], groupId: number, items = activeKeys, selectedKeyId?: number) => {
+    const savedKeyId = selectedKeyId ?? (kind === 'text' ? textConfig?.keyId : kind === 'image' ? imageConfig?.keyId : videoConfig?.keyId)
     const key = items.find((item) => item.id === savedKeyId && Number(item.group_id) === groupId)
       ?? items.find((item) => Number(item.group_id) === groupId)
     if (!key) return
@@ -75,11 +80,14 @@ export default function AgentSettingsTab({
       if (kind === 'text') {
         setTextModels(models)
         if (!models.includes(textModel)) setTextModel('')
-      } else {
+      } else if (kind === 'image') {
         setImageModels(models)
         if (!models.includes(imageModel)) setImageModel('')
+      } else {
+        setVideoModels(models)
+        if (!models.includes(videoModel)) setVideoModel('')
       }
-      if (!models.length) setError(`所选分组没有可用的${kind === 'text' ? '文本' : '图像'}模型`)
+      if (!models.length) setError(`所选分组没有可用的${kind === 'text' ? '文本' : kind === 'image' ? '图像' : '视频'}模型`)
     } catch (err) {
       console.error('[Sub2API] 获取分组模型失败', { kind, groupId, err })
       setError(err instanceof Error ? err.message : String(err))
@@ -95,20 +103,26 @@ export default function AgentSettingsTab({
       const items = (await listSub2Keys()).filter((item) => item.status === 'active' && item.group_id != null)
       const textProfile = draft.profiles.find((profile) => profile.id === textConfig?.profileId)
       const imageProfile = draft.profiles.find((profile) => profile.id === imageConfig?.profileId)
+      const videoProfile = draft.profiles.find((profile) => profile.id === videoConfig?.profileId)
       const textKey = items.find((item) => item.id === textConfig?.keyId)
       const imageKey = items.find((item) => item.id === imageConfig?.keyId)
+      const videoKey = items.find((item) => item.id === videoConfig?.keyId)
       const accountChanged = Boolean(
         (textConfig && textKey?.key !== textProfile?.apiKey)
-        || (imageConfig && imageKey?.key !== imageProfile?.apiKey),
+        || (imageConfig && imageKey?.key !== imageProfile?.apiKey)
+        || (videoConfig && videoKey?.key !== videoProfile?.apiKey),
       )
       setKeys(items)
       if (accountChanged) {
         setTextGroupId(0)
         setImageGroupId(0)
+        setVideoKeyId(0)
         setTextModel('')
         setImageModel('')
+        setVideoModel('')
         setTextModels([])
         setImageModels([])
+        setVideoModels([])
         commitSettings(syncSub2Settings(draft, [], new Map()))
         showToast('账号分组已变化，请重新配置 Agent 模型', 'info')
         return
@@ -116,12 +130,17 @@ export default function AgentSettingsTab({
 
       const nextTextGroupId = items.some((item) => Number(item.group_id) === textGroupId) ? textGroupId : 0
       const nextImageGroupId = items.some((item) => Number(item.group_id) === imageGroupId) ? imageGroupId : 0
+      const nextVideoKeyId = items.some((item) => item.id === videoKeyId) ? videoKeyId : 0
       setTextGroupId(nextTextGroupId)
       setImageGroupId(nextImageGroupId)
+      setVideoKeyId(nextVideoKeyId)
       if (!nextTextGroupId) setTextModel('')
       if (!nextImageGroupId) setImageModel('')
+      if (!nextVideoKeyId) setVideoModel('')
       if (nextTextGroupId) await loadModels('text', nextTextGroupId, items)
       if (nextImageGroupId) await loadModels('image', nextImageGroupId, items)
+      const nextVideoKey = items.find((item) => item.id === nextVideoKeyId)
+      if (nextVideoKey?.group_id != null) await loadModels('video', Number(nextVideoKey.group_id), items, nextVideoKey.id)
     } catch (err) {
       console.error('[Sub2API] 获取用户分组失败', err)
       setError(err instanceof Error ? err.message : String(err))
@@ -139,10 +158,13 @@ export default function AgentSettingsTab({
       ?? activeKeys.find((item) => Number(item.group_id) === textGroupId)
     const imageKey = activeKeys.find((item) => item.id === imageConfig?.keyId && Number(item.group_id) === imageGroupId)
       ?? activeKeys.find((item) => Number(item.group_id) === imageGroupId)
+    const videoKey = activeKeys.find((item) => item.id === videoKeyId)
     if (!textKey || !imageKey || !textModel || !imageModel) return
+    if ((videoKeyId || videoModel) && (!videoKey || !videoModel)) return
 
     const textId = textConfig?.id ?? `agent-text-${Date.now().toString(36)}`
     const imageId = imageConfig?.id ?? `agent-image-${Date.now().toString(36)}`
+    const videoId = videoConfig?.id ?? `agent-video-${Date.now().toString(36)}`
     const nextText: Sub2Config = {
       id: textId,
       name: 'Agent 文本',
@@ -167,9 +189,21 @@ export default function AgentSettingsTab({
       model: imageModel,
       profileId: imageConfig?.profileId ?? `sub2api-image-${imageId}`,
     }
+    const nextVideo: Sub2Config | null = videoKey && videoModel ? {
+      id: videoId,
+      name: 'Agent 视频',
+      kind: 'video',
+      keyId: videoKey.id,
+      keyName: videoKey.name,
+      groupId: Number(videoKey.group_id),
+      groupName: videoKey.group?.name || '',
+      platform: videoKey.group?.platform || '',
+      model: videoModel,
+      profileId: videoConfig?.profileId ?? `sub2api-video-${videoId}`,
+    } : null
     const configs = draft.sub2Configs
-      .filter((config) => config.kind !== 'text' && config.kind !== 'image')
-      .concat(nextText, nextImage)
+      .filter((config) => config.kind !== 'text' && config.kind !== 'image' && config.kind !== 'video')
+      .concat(nextText, nextImage, ...(nextVideo ? [nextVideo] : []))
     commitSettings(syncSub2Settings(draft, configs, keyMap, nextImage.profileId))
     showToast('Agent 模型配置已保存', 'success')
   }
@@ -177,7 +211,7 @@ export default function AgentSettingsTab({
   return (
     <div className="space-y-5">
       <div className="rounded-xl bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-        Agent 固定使用 Sub2API 混合模式，文本与图像模型分别配置。
+        Agent 固定使用 Sub2API 混合模式，文本、图像和视频模型分别配置。
       </div>
 
       {!getSub2Token() ? (
@@ -236,7 +270,7 @@ export default function AgentSettingsTab({
             </div>
           </section>
 
-          <section className="space-y-3">
+          <section className="space-y-3 border-b border-gray-200/70 pb-5 dark:border-white/[0.08]">
             <h3 className="text-sm font-medium text-gray-800 dark:text-gray-100">图像</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="block text-xs text-gray-500">
@@ -274,8 +308,50 @@ export default function AgentSettingsTab({
             </div>
           </section>
 
+          <section className="space-y-3">
+            <h3 className="text-sm font-medium text-gray-800 dark:text-gray-100">视频</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="block text-xs text-gray-500">
+                视频 Key
+                <Select
+                  value={videoKeyId || ''}
+                  disabled={!activeKeys.length || Boolean(loading)}
+                  onChange={(value) => {
+                    const id = Number(value)
+                    setVideoKeyId(id)
+                    setVideoModel('')
+                    setVideoModels([])
+                    const key = activeKeys.find((item) => item.id === id)
+                    if (key?.group_id != null) void loadModels('video', Number(key.group_id), activeKeys, key.id)
+                  }}
+                  options={[
+                    { value: '', label: activeKeys.length ? '不配置视频模型' : '暂无可用 Key' },
+                    ...activeKeys.map((item) => ({
+                      value: item.id,
+                      label: item.group?.name ? `${item.name} · ${item.group.name}` : item.name,
+                    })),
+                  ]}
+                  className="mt-1.5 w-full"
+                />
+              </div>
+              <div className="block text-xs text-gray-500">
+                视频模型
+                <Select
+                  value={videoModel}
+                  disabled={!videoModels.length || Boolean(loading)}
+                  onChange={(value) => setVideoModel(String(value))}
+                  options={[
+                    { value: '', label: loading === 'video' ? '正在读取...' : '请选择视频模型' },
+                    ...videoModels.map((id) => ({ value: id, label: id })),
+                  ]}
+                  className="mt-1.5 w-full"
+                />
+              </div>
+            </div>
+          </section>
+
           {error && <div className="border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{error}</div>}
-          <button type="button" disabled={!textGroupId || !imageGroupId || !textModel || !imageModel || Boolean(loading)} onClick={saveConfigs} className="w-full rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">保存 Agent 模型配置</button>
+          <button type="button" disabled={!textGroupId || !imageGroupId || !textModel || !imageModel || Boolean(videoKeyId) !== Boolean(videoModel) || Boolean(loading)} onClick={saveConfigs} className="w-full rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40">保存 Agent 模型配置</button>
         </>
       )}
 

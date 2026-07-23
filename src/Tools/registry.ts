@@ -2,6 +2,9 @@ import type { PlannedWorkspaceTool, WorkspaceTool, WorkspaceToolEntry } from './
 import imageEditor from './items/imageEditor/definition'
 import backgroundRemover from './items/backgroundRemover/definition'
 import videoEditor from './items/videoEditor/definition'
+import videoResizer from './items/videoResizer/definition'
+import voiceGenerator from './items/voiceGenerator/definition'
+import subtitleRecognition from './items/subtitleRecognition/definition'
 
 export function defineWorkspaceTools(items: WorkspaceTool[]) {
   const ids = new Set<string>()
@@ -12,9 +15,15 @@ export function defineWorkspaceTools(items: WorkspaceTool[]) {
   return items
 }
 
-export const workspaceTools = defineWorkspaceTools([imageEditor, backgroundRemover, videoEditor])
+export const workspaceTools = defineWorkspaceTools([
+  imageEditor,
+  backgroundRemover,
+  videoEditor,
+  voiceGenerator,
+  subtitleRecognition,
+])
 
-export const plannedWorkspaceTools: PlannedWorkspaceTool[] = []
+export const plannedWorkspaceTools: PlannedWorkspaceTool[] = [videoResizer]
 
 export const workspaceToolCards: WorkspaceToolEntry[] = [...workspaceTools, ...plannedWorkspaceTools]
 

@@ -1,4 +1,52 @@
 services:
+  cloud-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: cloud
+      POSTGRES_USER: cloud
+      POSTGRES_PASSWORD: ${CLOUD_DB_PASSWORD:?请设置 CLOUD_DB_PASSWORD}
+    volumes:
+      - cloud-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cloud -d cloud']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  cloud:
+    build:
+      context: ../server
+    environment:
+      DATABASE_URL: postgresql://cloud:${CLOUD_DB_PASSWORD:?请设置 CLOUD_DB_PASSWORD}@cloud-db:5432/cloud
+    volumes:
+      - cloud-files:/data/cloud
+      - media-jobs:/data/media-jobs
+    depends_on:
+      cloud-db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:8081/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  speech-worker:
+    build:
+      context: ../speech-worker
+    volumes:
+      - media-jobs:/data/media-jobs
+      - speech-models:/models
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+    restart: unless-stopped
+
   app:
     build:
       context: ..
@@ -13,4 +61,13 @@ services:
       BACKGROUND_REMOVAL_PUBLIC_PATH: ${BACKGROUND_REMOVAL_PUBLIC_PATH:-}
     ports:
       - '127.0.0.1:${APP_PORT:-8080}:80'
+    depends_on:
+      cloud:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  cloud-db:
+  cloud-files:
+  media-jobs:
+  speech-models:

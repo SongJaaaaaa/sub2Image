@@ -15,7 +15,7 @@ import type {
   ReferenceImageEditAction,
   Sub2Config,
 } from '../types'
-import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_STREAM_PARTIAL_IMAGES, DEFAULT_ZIP_DOWNLOAD_ROUTES, ZIP_DOWNLOAD_ROUTE_VALUES } from '../types'
+import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_STREAM_PARTIAL_IMAGES, DEFAULT_VIDEO_PARAMS, DEFAULT_ZIP_DOWNLOAD_ROUTES, VIDEO_ASPECT_RATIOS, VIDEO_DURATIONS, ZIP_DOWNLOAD_ROUTE_VALUES } from '../types'
 import { shouldUseApiProxy } from './devProxy'
 import { normalizeStreamPartialImages, parseDefaultApiUrl } from './defaultApiUrl'
 import { readRuntimeEnv } from './runtimeEnv'
@@ -106,6 +106,23 @@ function normalizeProviderOrder(value: unknown, customProviders: CustomProviderD
 
 function normalizeAgentApiConfigMode(value: unknown): AgentApiConfigMode {
   return value === 'native' || value === 'hybrid' ? value : 'off'
+}
+
+function normalizeVideoParams(value: unknown) {
+  const record = isRecord(value) ? value : {}
+  const duration = typeof record.duration === 'number' && VIDEO_DURATIONS.includes(record.duration as typeof VIDEO_DURATIONS[number])
+    ? record.duration
+    : DEFAULT_VIDEO_PARAMS.duration
+  const aspectRatio = typeof record.aspectRatio === 'string' && VIDEO_ASPECT_RATIOS.includes(record.aspectRatio as typeof VIDEO_ASPECT_RATIOS[number])
+    ? record.aspectRatio
+    : DEFAULT_VIDEO_PARAMS.aspectRatio
+  const resolution = typeof record.resolution === 'string' && record.resolution.trim()
+    ? record.resolution.trim()
+    : DEFAULT_VIDEO_PARAMS.resolution
+  const n = typeof record.n === 'number' && Number.isFinite(record.n)
+    ? Math.min(4, Math.max(1, Math.round(record.n)))
+    : DEFAULT_VIDEO_PARAMS.n
+  return { duration, aspectRatio, resolution, n }
 }
 
 export function isAgentTextApiProfile(profile: ApiProfile): boolean {
@@ -508,7 +525,7 @@ function validateImportedProfileRecord(input: unknown) {
 function normalizeSub2Configs(value: unknown): Sub2Config[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item): Sub2Config[] => {
-    if (!isRecord(item) || (item.kind !== 'text' && item.kind !== 'image')) return []
+    if (!isRecord(item) || (item.kind !== 'text' && item.kind !== 'image' && item.kind !== 'video')) return []
     const id = typeof item.id === 'string' ? item.id.trim() : ''
     const profileId = typeof item.profileId === 'string' ? item.profileId.trim() : ''
     const keyId = Number(item.keyId)
@@ -517,7 +534,9 @@ function normalizeSub2Configs(value: unknown): Sub2Config[] {
     if (!id || !profileId || !Number.isFinite(keyId) || keyId <= 0 || !model) return []
     return [{
       id,
-      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : item.kind === 'image' ? '生图配置' : '文本配置',
+      name: typeof item.name === 'string' && item.name.trim()
+        ? item.name.trim()
+        : item.kind === 'image' ? '生图配置' : item.kind === 'video' ? '视频配置' : '文本配置',
       kind: item.kind,
       keyId,
       keyName: typeof item.keyName === 'string' ? item.keyName : '',
@@ -568,6 +587,10 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
   const agentImageProfileId = typeof record.agentImageProfileId === 'string' && profiles.some((p) => p.id === record.agentImageProfileId)
     ? record.agentImageProfileId
     : active.id
+  const videoProfileIds = new Set(sub2Configs.filter((config) => config.kind === 'video').map((config) => config.profileId))
+  const agentVideoProfileId = typeof record.agentVideoProfileId === 'string' && videoProfileIds.has(record.agentVideoProfileId)
+    ? record.agentVideoProfileId
+    : null
 
   return {
     baseUrl: active.baseUrl,
@@ -584,6 +607,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     theme: record.theme === 'system' || record.theme === 'dark' || record.theme === 'light' ? record.theme : 'dark',
     clearInputAfterSubmit: typeof record.clearInputAfterSubmit === 'boolean' ? record.clearInputAfterSubmit : false,
     persistInputOnRestart: typeof record.persistInputOnRestart === 'boolean' ? record.persistInputOnRestart : true,
+    cloudAutoSave: typeof record.cloudAutoSave === 'boolean' ? record.cloudAutoSave : false,
     reuseTaskApiProfileTemporarily: typeof record.reuseTaskApiProfileTemporarily === 'boolean' ? record.reuseTaskApiProfileTemporarily : false,
     alwaysShowRetryButton: typeof record.alwaysShowRetryButton === 'boolean' ? record.alwaysShowRetryButton : false,
     allowPromptRewrite: typeof record.allowPromptRewrite === 'boolean' ? record.allowPromptRewrite : false,
@@ -598,6 +622,8 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     agentApiConfigMode,
     agentTextProfileId,
     agentImageProfileId,
+    agentVideoProfileId,
+    videoParams: normalizeVideoParams(record.videoParams),
     sub2OnlyVersion,
     sub2Configs,
     profiles,
@@ -615,6 +641,11 @@ export function getAgentImageApiProfile(settings: Partial<AppSettings> | unknown
   const normalized = normalizeSettings(settings)
   if (normalized.agentApiConfigMode !== 'hybrid') return getAgentTextApiProfile(normalized)
   return normalized.profiles.find((profile) => profile.id === normalized.agentImageProfileId) ?? null
+}
+
+export function getAgentVideoApiProfile(settings: Partial<AppSettings> | unknown): ApiProfile | null {
+  const normalized = normalizeSettings(settings)
+  return normalized.profiles.find((profile) => profile.id === normalized.agentVideoProfileId) ?? null
 }
 
 export function getCustomProviderDefinition(settings: Partial<AppSettings> | unknown, provider: ApiProvider): CustomProviderDefinition | null {
@@ -895,6 +926,7 @@ export const DEFAULT_SETTINGS: AppSettings = normalizeSettings({
   theme: 'dark',
   clearInputAfterSubmit: false,
   persistInputOnRestart: true,
+  cloudAutoSave: false,
   reuseTaskApiProfileTemporarily: false,
   alwaysShowRetryButton: false,
   allowPromptRewrite: false,
@@ -909,6 +941,8 @@ export const DEFAULT_SETTINGS: AppSettings = normalizeSettings({
   agentApiConfigMode: 'off',
   agentTextProfileId: null,
   agentImageProfileId: null,
+  agentVideoProfileId: null,
+  videoParams: DEFAULT_VIDEO_PARAMS,
   sub2OnlyVersion: 0,
   sub2Configs: [],
 })

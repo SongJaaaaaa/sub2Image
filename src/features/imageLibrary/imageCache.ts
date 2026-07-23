@@ -4,13 +4,15 @@ import {
   getImageThumbnail,
   getStoredFreshImageThumbnail,
 } from '../../lib/db'
+import { ensureCloudAssetCached, getRegisteredCloudAsset } from '../cloud/cache'
+import {
+  clearImageThumbnailSubscribers,
+  notifyImageThumbnail,
+  subscribeImageThumbnail,
+  type ImageThumbnail,
+} from './imageThumbnailEvents'
 
-type ImageThumbnail = {
-  dataUrl: string
-  width?: number
-  height?: number
-  thumbnailVersion?: number
-}
+export { subscribeImageThumbnail } from './imageThumbnailEvents'
 
 type ThumbnailPriority = 'visible' | 'background'
 
@@ -22,7 +24,6 @@ const imageCache = new Map<string, string>()
 const thumbnailCache = new Map<string, ImageThumbnail>()
 const thumbnailBackfillIds = new Map<string, ThumbnailPriority>()
 const thumbnailBackfillRunningIds = new Set<string>()
-const thumbnailSubscribers = new Map<string, Set<(thumbnail: ImageThumbnail) => void>>()
 let thumbnailBackfillScheduled = false
 
 export function getCachedImage(id: string): string | undefined {
@@ -53,14 +54,22 @@ export function clearImageRuntimeCache(id: string) {
   thumbnailCache.delete(id)
   thumbnailBackfillIds.delete(id)
   thumbnailBackfillRunningIds.delete(id)
-  thumbnailSubscribers.delete(id)
+  clearImageThumbnailSubscribers(id)
 }
 
 export async function ensureImageCached(id: string): Promise<string | undefined> {
   const cached = getCachedImage(id)
   if (cached) return cached
-  const rec = await getImage(id)
-  if (!rec) return undefined
+  const local = await getImage(id)
+  if (local) {
+    cacheImage(id, local.dataUrl)
+    return local.dataUrl
+  }
+
+  const asset = getRegisteredCloudAsset(id)
+  if (!asset || asset.kind !== 'image' || asset.metadata.sourceId) return undefined
+  const rec = await ensureCloudAssetCached(asset)
+  if (!('dataUrl' in rec)) return undefined
   cacheImage(id, rec.dataUrl)
   return rec.dataUrl
 }
@@ -83,17 +92,6 @@ export async function ensureImageThumbnailCached(id: string): Promise<ImageThumb
   }
   cacheThumbnail(id, thumbnail)
   return thumbnail
-}
-
-export function subscribeImageThumbnail(id: string, callback: (thumbnail: ImageThumbnail) => void) {
-  const current = thumbnailSubscribers.get(id)
-  const subscribers = current ?? new Set<(thumbnail: ImageThumbnail) => void>()
-  if (!current) thumbnailSubscribers.set(id, subscribers)
-  subscribers.add(callback)
-  return () => {
-    subscribers.delete(callback)
-    if (subscribers.size === 0) thumbnailSubscribers.delete(id)
-  }
 }
 
 export function scheduleThumbnailBackfill(ids: Iterable<string>, priority: ThumbnailPriority = 'background') {
@@ -125,10 +123,6 @@ export function cacheThumbnail(id: string, thumbnail: ImageThumbnail) {
     if (oldestKey == null) break
     thumbnailCache.delete(oldestKey)
   }
-}
-
-function notifyImageThumbnail(id: string, thumbnail: ImageThumbnail) {
-  thumbnailSubscribers.get(id)?.forEach((callback) => callback(thumbnail))
 }
 
 function scheduleThumbnailBackfillTick() {

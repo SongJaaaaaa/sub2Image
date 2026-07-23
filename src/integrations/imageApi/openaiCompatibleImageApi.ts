@@ -492,6 +492,8 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const requestHeaders = createRequestHeaders(profile)
   const paths = createOpenAICompatiblePaths()
+  const requestPath = isEdit ? paths.editPath : paths.generationPath
+  const requestUrl = buildApiUrl(profile.baseUrl, requestPath, proxyConfig, useApiProxy)
 
   const request = createRequestAbortScope(opts.signal, profile.timeout * 1000)
 
@@ -598,6 +600,14 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
 
     if (!response.ok) {
       const errorMessage = await getApiErrorMessage(response)
+      console.error('[Image API] 图片请求失败', {
+        url: requestUrl,
+        status: response.status,
+        provider: profile.provider,
+        profileId: profile.id,
+        model: profile.model,
+        message: errorMessage,
+      })
       throw new Error(maybeAppendStreamingHint(errorMessage, response.status, profile.streamImages))
     }
 

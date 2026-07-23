@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getSub2PublicSettings, listSub2Models, loginSub2, loginSub2TwoFactor } from './sub2api'
+import {
+  getSub2PublicSettings,
+  listSub2Models,
+  loginSub2,
+  loginSub2TwoFactor,
+  refreshSub2Token,
+} from './sub2api'
 
 const values = new Map<string, string>()
 
 beforeEach(() => {
   values.clear()
+  vi.stubGlobal('window', new EventTarget())
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => values.set(key, value),
@@ -74,6 +81,24 @@ describe('Sub2API 登录', () => {
       body: JSON.stringify({ temp_token: 'temp-token', totp_code: '123456' }),
     }))
     expect(values.get('image2.sub2api.token')).toBe('access-token')
+  })
+
+  it('账号切换后不写入旧账号的刷新结果', async () => {
+    values.set('image2.sub2api.token', 'access-a')
+    values.set('image2.sub2api.refresh', 'refresh-a')
+    let resolve: (value: Response) => void = () => undefined
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>((done) => {
+      resolve = done
+    })))
+
+    const refreshing = refreshSub2Token()
+    values.set('image2.sub2api.token', 'access-b')
+    values.set('image2.sub2api.refresh', 'refresh-b')
+    resolve(ok({ access_token: 'stale-access-a', refresh_token: 'stale-refresh-a' }))
+
+    await expect(refreshing).rejects.toThrow('登录状态已变化')
+    expect(values.get('image2.sub2api.token')).toBe('access-b')
+    expect(values.get('image2.sub2api.refresh')).toBe('refresh-b')
   })
 })
 

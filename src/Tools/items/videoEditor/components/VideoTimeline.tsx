@@ -1,12 +1,12 @@
 import { memo, type MutableRefObject } from 'react'
 import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor'
-import { ChevronDownIcon, ChevronLeftIcon, PlusIcon, TrashIcon } from '../../../../components/ui/icons'
-import type { BackgroundAudio, ImageOverlay, VideoClip, VideoSource } from '../types'
+import { ChevronDownIcon, ChevronLeftIcon, PlusIcon, SubtitleIcon, TrashIcon } from '../../../../components/ui/icons'
+import type { BackgroundAudio, ImageOverlay, SubtitleCue, VideoClip, VideoSource } from '../types'
 import { formatTime, getClipFrames } from '../lib/media'
 import { getBackgroundLoopCount } from '../lib/audioTimeline'
 
 const AUDIO_ACTION_ID = 'background-audio'
-const effects = { clip: { id: 'clip' }, overlay: { id: 'overlay' }, audio: { id: 'audio' } }
+const effects = { clip: { id: 'clip' }, overlay: { id: 'overlay' }, subtitle: { id: 'subtitle' }, audio: { id: 'audio' } }
 
 function PlayIcon() {
   return <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 4.8v14.4c0 .8.9 1.3 1.6.8l10.1-7.2a1 1 0 000-1.6L8.6 4C7.9 3.5 7 4 7 4.8z" /></svg>
@@ -55,16 +55,28 @@ function TimelineAudio({ background, selected }: { background: BackgroundAudio, 
   )
 }
 
+function TimelineSubtitle({ cue, selected }: { cue: SubtitleCue, selected: boolean }) {
+  return (
+    <div className={`video-editor-subtitle-clip ${selected ? 'selected' : ''}`}>
+      <SubtitleIcon />
+      <span>{cue.text}</span>
+      <small>{(cue.end - cue.start).toFixed(1)}s</small>
+    </div>
+  )
+}
+
 type Props = {
   timelineRef: MutableRefObject<TimelineState | null>
   clips: VideoClip[]
   sources: VideoSource[]
   overlays: ImageOverlay[]
+  subtitles: SubtitleCue[]
   background: BackgroundAudio | null
   starts: Map<string, number>
   duration: number
   selectedId: string
   selectedOverlayId: string
+  selectedSubtitleId: string
   selectedAudio: boolean
   activeStart?: number
   activeEnd?: number
@@ -72,24 +84,31 @@ type Props = {
   onSeek: (value: number) => void
   onSelectClip: (id: string) => void
   onSelectOverlay: (id: string) => void
+  onSelectSubtitle: (id: string) => void
   onSelectAudio: () => void
   onClipsChange: (clips: VideoClip[]) => void
   onOverlaysChange: (overlays: ImageOverlay[]) => void
+  onSubtitlesChange: (subtitles: SubtitleCue[]) => void
   onBackgroundChange: (background: BackgroundAudio) => void
   onSplit: () => void
   onRemove: () => void
   onMoveClip: (offset: number) => void
   onAddImage: () => void
   onAddVideo: () => void
+  onAddSubtitle: () => void
 }
 
-function VideoTimeline({ timelineRef, clips, sources, overlays, background, starts, duration, selectedId, selectedOverlayId, selectedAudio, activeStart, activeEnd, time, onSeek, onSelectClip, onSelectOverlay, onSelectAudio, onClipsChange, onOverlaysChange, onBackgroundChange, onSplit, onRemove, onMoveClip, onAddImage, onAddVideo }: Props) {
+function VideoTimeline({ timelineRef, clips, sources, overlays, subtitles, background, starts, duration, selectedId, selectedOverlayId, selectedSubtitleId, selectedAudio, activeStart, activeEnd, time, onSeek, onSelectClip, onSelectOverlay, onSelectSubtitle, onSelectAudio, onClipsChange, onOverlaysChange, onSubtitlesChange, onBackgroundChange, onSplit, onRemove, onMoveClip, onAddImage, onAddVideo, onAddSubtitle }: Props) {
   const selectedIdx = clips.findIndex((clip) => clip.id === selectedId)
   const editorData = [
     ...[...overlays].reverse().map((overlay) => ({
       id: `overlay-track-${overlay.id}`,
       actions: [{ id: overlay.id, start: overlay.start, end: overlay.end, effectId: 'overlay', selected: overlay.id === selectedOverlayId, flexible: true, movable: true }],
     })),
+    ...(subtitles.length ? [{
+      id: 'subtitle-track',
+      actions: subtitles.map((cue) => ({ id: cue.id, start: cue.start, end: cue.end, effectId: 'subtitle', selected: cue.id === selectedSubtitleId, flexible: true, movable: true })),
+    }] : []),
     {
       id: 'video-track',
       actions: clips.map((clip) => {
@@ -108,16 +127,17 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
       <div className="video-editor-timeline-toolbar">
         <div>
           <button type="button" title="分割片段" disabled={activeStart == null || time <= activeStart + 0.1 || time >= (activeEnd || 0) - 0.1} onClick={onSplit}><ScissorsIcon /></button>
-          <button type="button" title={selectedAudio ? '删除背景音乐' : selectedOverlayId ? '删除图片层' : '删除所选片段'} disabled={!selectedId && !selectedOverlayId && !selectedAudio} onClick={onRemove}><TrashIcon className="h-4 w-4" /></button>
+          <button type="button" title={selectedAudio ? '删除背景音乐' : selectedSubtitleId ? '删除字幕' : selectedOverlayId ? '删除图片层' : '删除所选片段'} disabled={!selectedId && !selectedOverlayId && !selectedSubtitleId && !selectedAudio} onClick={onRemove}><TrashIcon className="h-4 w-4" /></button>
           <button type="button" title="片段前移" disabled={selectedIdx <= 0} onClick={() => onMoveClip(-1)}><ChevronLeftIcon className="h-4 w-4" /></button>
           <button type="button" title="片段后移" disabled={selectedIdx < 0 || selectedIdx >= clips.length - 1} onClick={() => onMoveClip(1)}><ChevronDownIcon className="h-4 w-4 -rotate-90" /></button>
         </div>
-        <span>{clips.length} 个片段 · {overlays.length} 个图片层 · {background ? '1 条音乐 · ' : ''}{duration.toFixed(1)} 秒</span>
+        <span>{clips.length} 个片段 · {overlays.length} 个图片层 · {subtitles.length} 条字幕 · {background ? '1 条音乐 · ' : ''}{duration.toFixed(1)} 秒</span>
       </div>
       <div className="video-editor-track">
         <div className="video-editor-track-labels">
           <div className="video-editor-track-label-spacer" />
           {[...overlays].reverse().map((overlay, idx) => <div key={overlay.id} className="video-editor-track-label"><PictureIcon /><span>图片层 {overlays.length - idx}</span></div>)}
+          {subtitles.length > 0 && <div className="video-editor-track-label"><SubtitleIcon /><span>字幕轨道</span></div>}
           <div className="video-editor-track-label"><PlayIcon /><span>视频轨道</span></div>
           {background && <div className="video-editor-track-label"><VolumeIcon /><span>背景音乐</span></div>}
         </div>
@@ -125,7 +145,7 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
           ref={timelineRef}
           editorData={editorData}
           effects={effects}
-          style={{ width: '100%', height: 50 + (overlays.length + 1 + (background ? 1 : 0)) * 72 }}
+          style={{ width: '100%', height: 50 + (overlays.length + (subtitles.length ? 1 : 0) + 1 + (background ? 1 : 0)) * 72 }}
           rowHeight={72}
           scale={duration > 120 ? 10 : duration > 40 ? 5 : 1}
           scaleWidth={duration > 120 ? 100 : 80}
@@ -144,6 +164,7 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
             }
             const overlay = overlays.find((item) => item.id === params.action.id)
             if (overlay) onSelectOverlay(overlay.id)
+            else if (subtitles.some((item) => item.id === params.action.id)) onSelectSubtitle(params.action.id)
             else onSelectClip(params.action.id)
             onSeek(params.time)
           }}
@@ -164,6 +185,14 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
               onSeek(start)
               return
             }
+            const cue = subtitles.find((item) => item.id === action.id)
+            if (cue) {
+              const length = cue.end - cue.start
+              onSubtitlesChange(subtitles.map((item) => item.id === action.id ? { ...item, start, end: start + length } : item))
+              onSelectSubtitle(action.id)
+              onSeek(start)
+              return
+            }
             const ordered = [...clips].sort((a, b) => (a.id === action.id ? start : starts.get(a.id) || 0) - (b.id === action.id ? start : starts.get(b.id) || 0))
             onClipsChange(ordered)
             onSelectClip(action.id)
@@ -172,6 +201,7 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
             if (action.id === AUDIO_ACTION_ID) return end - start >= 0.1 && start >= 0 && end <= duration
             const overlay = overlays.find((item) => item.id === action.id)
             if (overlay) return end - start >= 0.1 && start >= 0 && end <= duration
+            if (subtitles.some((item) => item.id === action.id)) return end - start >= 0.05 && start >= 0 && end <= duration
             const clip = clips.find((item) => item.id === action.id)
             if (!clip) return false
             const oldStart = starts.get(clip.id) || 0
@@ -195,6 +225,12 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
               onSeek(start)
               return
             }
+            if (subtitles.some((item) => item.id === action.id)) {
+              onSubtitlesChange(subtitles.map((item) => item.id === action.id ? { ...item, start, end } : item))
+              onSelectSubtitle(action.id)
+              onSeek(start)
+              return
+            }
             const clip = clips.find((item) => item.id === action.id)
             if (!clip) return
             const oldStart = starts.get(clip.id) || 0
@@ -209,6 +245,8 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
             if (action.id === AUDIO_ACTION_ID && background) return <TimelineAudio background={background} selected={Boolean(action.selected)} />
             const overlay = overlays.find((item) => item.id === action.id)
             if (overlay) return <TimelineOverlay overlay={overlay} selected={Boolean(action.selected)} />
+            const cue = subtitles.find((item) => item.id === action.id)
+            if (cue) return <TimelineSubtitle cue={cue} selected={Boolean(action.selected)} />
             const clip = clips.find((item) => item.id === action.id)
             if (!clip) return null
             const source = sources.find((item) => item.id === clip.sourceId)!
@@ -216,6 +254,7 @@ function VideoTimeline({ timelineRef, clips, sources, overlays, background, star
           }}
         />
         <div className="video-editor-track-additions">
+          {subtitles.length > 0 && <button type="button" className="video-editor-add-clip video-editor-add-subtitle" onClick={onAddSubtitle}><SubtitleIcon />替换字幕</button>}
           <button type="button" className="video-editor-add-clip" onClick={onAddImage}><PictureIcon />添加图片层</button>
           <button type="button" className="video-editor-add-clip" onClick={onAddVideo}><PlusIcon className="h-4 w-4" />添加片段</button>
           {background && <div className="video-editor-track-additions-spacer" />}

@@ -43,10 +43,16 @@ export default defineConfig(({ command, mode }) => {
   const devProxyConfig = command === 'serve' ? loadDevProxyConfig() : null
   const env = loadEnv(mode, '.', '')
   const sub2Url = (env.SUB2API_URL || 'https://api.sjiaa.cc.cd').replace(/\/+$/, '')
+  const cloudUrl = (env.CLOUD_API_URL || 'http://127.0.0.1:8081').replace(/\/+$/, '')
   const proxy: Record<string, ProxyOptions> = command === 'serve'
     ? {
         '/sub2api-auth': createSub2Proxy(sub2Url, '/sub2api-auth', '/api/v1'),
         '/sub2api-v1': createSub2Proxy(sub2Url, '/sub2api-v1', '/v1'),
+        '/cloud-api': {
+          target: cloudUrl,
+          changeOrigin: true,
+          rewrite: (path) => `/api${path.slice('/cloud-api'.length)}`,
+        },
       }
     : {}
 

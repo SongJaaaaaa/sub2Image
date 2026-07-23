@@ -10,7 +10,18 @@ import {
   type ExtensionSection,
 } from './extensionRoutes'
 
-export default function ExtensionWorkspace() {
+export type ExtensionSkillCloud = {
+  skills: Record<string, 'saving' | 'saved' | 'removing' | 'error' | undefined>
+  onImported: (id: string) => void
+  onSave: (id: string) => Promise<void>
+  onRemove: (id: string) => Promise<void>
+}
+
+type Props = {
+  skillCloud?: ExtensionSkillCloud
+}
+
+export default function ExtensionWorkspace({ skillCloud }: Props) {
   const [pathname, setPathname] = useState(window.location.pathname)
   const route = parseExtensionRoute(pathname) || { type: 'not-found' as const }
   const activeSection: ExtensionSection = route.type === 'not-found' ? 'tools' : route.section
@@ -54,9 +65,21 @@ export default function ExtensionWorkspace() {
               ? <ToolList tools={workspaceToolCards} onSelect={(id) => navigateToExtensionWorkspace('tools', id)} />
               : <ToolHost toolId={route.itemId} onBack={() => navigateToExtensionWorkspace('tools')} />
           ) : route.type === 'list' ? (
-            <SkillList skills={agentSkills} onSelect={(id) => navigateToExtensionWorkspace('skills', id)} />
+            <SkillList
+              skills={agentSkills}
+              onSelect={(id) => navigateToExtensionWorkspace('skills', id)}
+              onImported={(skill) => {
+                skillCloud?.onImported(skill.id)
+              }}
+            />
           ) : (
-            <SkillHost skillId={route.itemId} onBack={() => navigateToExtensionWorkspace('skills')} />
+            <SkillHost
+              skillId={route.itemId}
+              cloudState={skillCloud?.skills[route.itemId]}
+              onBack={() => navigateToExtensionWorkspace('skills')}
+              onSaveCloud={skillCloud?.onSave}
+              onRemoveCloud={skillCloud?.onRemove}
+            />
           )}
         </main>
       </div>

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import {
   ALL_FAVORITES_COLLECTION_ID,
@@ -10,8 +10,10 @@ import {
   useStore,
 } from '../../../store'
 import { downloadImageEntriesAsZip, downloadImageIds, formatExportFileTime, getTaskOutputImageZipEntries } from '../../../lib/downloadImages'
+import { getSub2Token, OPEN_SUB2_CONNECT_EVENT } from '../../../lib/sub2api'
 import { getCollectionTasks } from '../../../components/favorites/favoriteUtils'
 import InputBatchBars from '../../../components/input/inputBatchBars'
+import { saveTasksWithCloudState, useCloudRuntimeState } from '../../cloud'
 
 export default function GallerySelectionActionBar() {
   const selectedTaskIds = useStore((s) => s.selectedTaskIds)
@@ -24,12 +26,15 @@ export default function GallerySelectionActionBar() {
   const favoriteCollections = useStore((s) => s.favoriteCollections)
   const filterStatus = useStore((s) => s.filterStatus)
   const filterFavorite = useStore((s) => s.filterFavorite)
+  const filterCloud = useStore((s) => s.filterCloud)
+  const cloud = useCloudRuntimeState()
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
   const openFavoritePicker = useStore((s) => s.openFavoritePicker)
   const searchQuery = useStore((s) => s.searchQuery)
   const zipDownloadRoutes = useStore((s) => s.settings.zipDownloadRoutes)
   const showToast = useStore((s) => s.showToast)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
+  const [cloudSaveProgress, setCloudSaveProgress] = useState<{ completed: number; total: number } | null>(null)
 
   const filteredTasks = useMemo(() => {
     const sorted = [...tasks].sort((a, b) => b.createdAt - a.createdAt)
@@ -41,9 +46,10 @@ export default function GallerySelectionActionBar() {
         if (activeFavoriteCollectionId && activeFavoriteCollectionId !== ALL_FAVORITES_COLLECTION_ID && !getTaskFavoriteCollectionIds(task).includes(activeFavoriteCollectionId)) return false
       }
       if (!taskMatchesFilterStatus(task, filterStatus)) return false
+      if (filterCloud && !['saved', 'removing'].includes(cloud.tasks[task.id]?.status ?? '')) return false
       return taskMatchesSearchQuery(task, q)
     })
-  }, [activeFavoriteCollectionId, filterFavorite, filterStatus, searchQuery, tasks])
+  }, [activeFavoriteCollectionId, cloud.tasks, filterCloud, filterFavorite, filterStatus, searchQuery, tasks])
 
   const favoriteCollectionCards = useMemo(() => [
     {
@@ -135,6 +141,36 @@ export default function GallerySelectionActionBar() {
     }
     clearSelection()
   }, [clearSelection, selectedTaskIds, showToast, tasks, zipDownloadRoutes])
+
+  const handleSaveToCloud = useCallback(async () => {
+    if (!getSub2Token()) {
+      window.dispatchEvent(new Event(OPEN_SUB2_CONNECT_EVENT))
+      return
+    }
+
+    const selectedTasks = tasks.filter((task) => selectedTaskIds.includes(task.id) && task.status === 'done')
+    if (!selectedTasks.length) {
+      showToast('请选择已完成的任务', 'error')
+      return
+    }
+
+    const completedIds = new Set<string>()
+    setCloudSaveProgress({ completed: 0, total: selectedTasks.length })
+    try {
+      const result = await saveTasksWithCloudState(selectedTasks, (progress) => {
+        if (progress.state === 'done' || progress.state === 'error') completedIds.add(progress.taskId)
+        setCloudSaveProgress({ completed: completedIds.size, total: selectedTasks.length })
+      })
+      if (result.failed.length) {
+        showToast(`云端保存完成：成功 ${result.saved.length} 个，失败 ${result.failed.length} 个`, 'error')
+        return
+      }
+      showToast(`已保存 ${result.saved.length} 个任务到云端`, 'success')
+      clearSelection()
+    } finally {
+      setCloudSaveProgress(null)
+    }
+  }, [clearSelection, selectedTaskIds, showToast, tasks])
 
   const handleDownloadSelectedFavoriteCollections = useCallback(async () => {
     const selectedIds = new Set(selectedFavoriteCollectionIds)
@@ -233,6 +269,8 @@ export default function GallerySelectionActionBar() {
       onSelectAllVisibleTasks={handleSelectAllVisibleTasks}
       onInvertVisibleTasks={handleInvertVisibleTasks}
       onToggleFavorite={() => openFavoritePicker(selectedTaskIds)}
+      onSaveToCloud={handleSaveToCloud}
+      cloudSaveProgress={cloudSaveProgress}
       onDownloadSelected={handleDownloadSelected}
       onDeleteSelected={handleDeleteSelected}
     />

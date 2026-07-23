@@ -1,11 +1,27 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeAgentSkill, restoreAgentSkill } from '../../Skills'
 import ExtensionWorkspace from '../ExtensionWorkspace'
+
+const TEST_SKILL_RAW = `---
+id: workspace-upload-test
+name: 测试上传技能
+description: 验证上传流程
+version: 1
+author: User
+source: https://example.com/skill
+license: MIT
+---
+执行用户提供的测试指令。`
 
 describe('ExtensionWorkspace', () => {
   beforeEach(() => window.history.replaceState(null, '', '/app/extensions'))
-  afterEach(cleanup)
+  afterEach(() => {
+    removeAgentSkill('workspace-upload-test')
+    vi.restoreAllMocks()
+    cleanup()
+  })
 
   it('switches between Tools and Skills with pathname navigation', () => {
     render(<ExtensionWorkspace />)
@@ -30,6 +46,51 @@ describe('ExtensionWorkspace', () => {
     expect(screen.getByRole('heading', { name: '电商产品图' })).toBeTruthy()
     expect(screen.getByRole('link', { name: '查看开源项目' }).getAttribute('href')).toBe('https://github.com/anthropics/skills')
     expect(screen.getByText(/把用户的商品需求转成清晰/)).toBeTruthy()
+  })
+
+  it('imports a Markdown Skill and opens its details', async () => {
+    window.history.replaceState(null, '', '/app/extensions/skills')
+    render(<ExtensionWorkspace />)
+    const bytes = new TextEncoder().encode(TEST_SKILL_RAW)
+    const file = {
+      name: 'test-skill.md',
+      size: bytes.byteLength,
+      arrayBuffer: async () => bytes.buffer,
+    } as File
+
+    fireEvent.change(screen.getByLabelText('选择 Markdown Skill 文件'), { target: { files: [file] } })
+
+    expect(await screen.findByRole('heading', { name: '测试上传技能' })).toBeTruthy()
+    expect(screen.getByText('用户导入')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '删除本地 Skill' })).toBeTruthy()
+  })
+
+  it('移出云端 Skill 前确认并在 removing 状态禁用按钮', () => {
+    restoreAgentSkill(TEST_SKILL_RAW, 'test-skill.md')
+    window.history.replaceState(null, '', '/app/extensions/skills/workspace-upload-test')
+    const onRemove = vi.fn().mockResolvedValue(undefined)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const baseCloud = {
+      onImported: vi.fn(),
+      onSave: vi.fn().mockResolvedValue(undefined),
+      onRemove,
+    }
+    const { rerender } = render(
+      <ExtensionWorkspace skillCloud={{ ...baseCloud, skills: { 'workspace-upload-test': 'saved' } }} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '移出云端' }))
+    expect(confirm).toHaveBeenCalledWith('确定将 Skill「测试上传技能」移出云端吗？当前浏览器中的 Skill 会保留。')
+    expect(onRemove).not.toHaveBeenCalled()
+
+    confirm.mockReturnValue(true)
+    fireEvent.click(screen.getByRole('button', { name: '移出云端' }))
+    expect(onRemove).toHaveBeenCalledWith('workspace-upload-test')
+
+    rerender(
+      <ExtensionWorkspace skillCloud={{ ...baseCloud, skills: { 'workspace-upload-test': 'removing' } }} />,
+    )
+    expect((screen.getByRole('button', { name: '正在移出' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('shows an unknown item state and returns to the list', () => {

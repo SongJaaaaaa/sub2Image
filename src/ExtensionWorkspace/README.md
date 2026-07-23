@@ -19,6 +19,7 @@
 - 桌面侧边栏与移动端横向导航。
 - Tool、Skill 列表和详情宿主。
 - 集中的 pathname 解析与 History API 导航。
+- 通过 App 注入的回调把用户 Skill 云端状态和操作传给 Skills 公共组件。
 
 ## 非目标
 

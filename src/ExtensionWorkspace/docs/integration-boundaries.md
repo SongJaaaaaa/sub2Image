@@ -5,6 +5,7 @@
 - 从 `Tools/index.ts` 导入 Tool 列表和宿主。
 - 从 `Skills/index.ts` 导入 Skill 列表和宿主。
 - 复用通用 UI 图标和基础样式。
+- 接收 App 注入的业务回调，再传给 Tools 或 Skills 公共组件。
 
 禁止：
 

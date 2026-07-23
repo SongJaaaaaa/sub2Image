@@ -1,5 +1,5 @@
 import type { ConversationTool } from '../../features/conversationComposer'
-import { getActiveApiProfile, normalizeSettings, validateApiProfile } from '../../lib/apiProfiles'
+import { getActiveApiProfile, getAgentImageApiProfile, normalizeSettings, validateApiProfile } from '../../lib/apiProfiles'
 import { submitTask, useStore } from '../../store'
 import type { ComposerDraft } from '../../types'
 import { imageGenerationMessageRenderers } from './conversationMessageRenderers'
@@ -9,6 +9,7 @@ export const SUB2_IMAGE_TOOL_ID = 'sub2-image'
 type SubmitImage = (options?: {
   allowFullMask?: boolean
   useCurrentApiProfileWhenReusedMissing?: boolean
+  apiProfileId?: string
   signal?: AbortSignal
   draft?: ComposerDraft
 }) => Promise<void>
@@ -32,11 +33,13 @@ export function createSub2ImageImageTool(opts: Sub2ImageImageToolOptions = {}): 
     getComposerState: (args) => {
       const state = getState()
       const settings = normalizeSettings(state.settings)
-      const settingsProfile = getActiveApiProfile(settings)
+      const settingsProfile = settings.agentApiConfigMode === 'hybrid'
+        ? getAgentImageApiProfile(settings)
+        : getActiveApiProfile(settings)
       const profile = settings.reuseTaskApiProfileTemporarily && state.reusedTaskApiProfileId
         ? settings.profiles.find((item) => item.id === state.reusedTaskApiProfileId) ?? settingsProfile
         : settingsProfile
-      const error = validateApiProfile(profile)
+      const error = profile ? validateApiProfile(profile) : '图像模型 API 配置不存在'
 
       return {
         placeholder: '描述你想生成的图片...',
@@ -53,7 +56,13 @@ export function createSub2ImageImageTool(opts: Sub2ImageImageToolOptions = {}): 
         validate: (input) => input.text.trim() ? null : '请输入提示词',
         submit: async (input, _ctx, signal) => {
           const payload = input.payload as ImageSubmitPayload | undefined
-          await submit({ signal, draft: payload?.draft })
+          const settings = normalizeSettings(getState().settings)
+          const profile = settings.agentApiConfigMode === 'hybrid' ? getAgentImageApiProfile(settings) : null
+          await submit({
+            signal,
+            draft: payload?.draft,
+            ...(profile ? { apiProfileId: profile.id } : {}),
+          })
         },
       }
     },

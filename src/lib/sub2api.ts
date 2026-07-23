@@ -2,9 +2,12 @@ const authBase = '/sub2api-auth'
 const tokenKey = 'image2.sub2api.token'
 const refreshKey = 'image2.sub2api.refresh'
 const expiresKey = 'image2.sub2api.expires'
-const userKey = 'image2.sub2api.user'
 
 export const OPEN_SUB2_CONNECT_EVENT = 'sub2-connect'
+export const SUB2_AUTH_CHANGED_EVENT = 'sub2-auth-changed'
+export const SUB2_AUTH_STORAGE_KEY = 'image2.sub2api.user'
+
+const userKey = SUB2_AUTH_STORAGE_KEY
 
 export interface Sub2User {
   id?: number
@@ -66,6 +69,7 @@ function saveUser(data: AuthResult, email: string) {
   saveAuth(data)
   const user = data.user || { email }
   localStorage.setItem(userKey, JSON.stringify(user))
+  window.dispatchEvent(new Event(SUB2_AUTH_CHANGED_EVENT))
   return user
 }
 
@@ -91,15 +95,19 @@ async function readJson(res: Response) {
   return json && json.code === 0 ? json.data : json
 }
 
-async function refreshSub2Token() {
+export async function refreshSub2Token(signal?: AbortSignal) {
   const refreshToken = localStorage.getItem(refreshKey) || ''
   if (!refreshToken) throw new Error('登录已过期，请重新登录 Sub2API')
   const res = await fetch(`${authBase}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken }),
+    signal,
   })
   const data = await readJson(res) as AuthResult
+  if (signal?.aborted || localStorage.getItem(refreshKey) !== refreshToken) {
+    throw new Error('登录状态已变化，请重试')
+  }
   saveAuth(data)
   return data.access_token || ''
 }
@@ -166,6 +174,7 @@ export function logoutSub2() {
   localStorage.removeItem(refreshKey)
   localStorage.removeItem(expiresKey)
   localStorage.removeItem(userKey)
+  window.dispatchEvent(new Event(SUB2_AUTH_CHANGED_EVENT))
 }
 
 export async function listSub2Keys() {

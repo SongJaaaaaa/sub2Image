@@ -2,73 +2,82 @@
 
 ## 当前状态
 
-- 状态：待确认 API 来源，尚未实现。
-- 目标能力：文生视频、图生视频。
-- 具体模型、端点、认证和参数：待接口文档及真实响应确认。
-- 最后更新：2026-07-22。
+- 状态：文生视频已实现。
+- API 来源：[`iptag/jimeng-api`](https://github.com/iptag/jimeng-api)。
+- 接入方式：Sub2API 使用 Grok 平台、API Key 账号，将请求转发到集梦代理的 `/v1` Base URL。
+- 当前支持：JSON 文生视频。
+- 最后更新：2026-07-23。
 
-## 接入原则
-
-“集梦接口”可能来自官方平台、火山引擎能力或第三方中转服务，不同来源的认证和请求格式可能完全不同。开始实现前必须先确定本项目实际使用的接口来源，不能根据其他平台示例猜测。
-
-厂商签名、Action、Version、Region、任务状态和结果字段全部限制在本目录。业务层只接收公共的 `VideoJob` 和 `VideoPollResult`。
-
-## 计划文件
+## Sub2API 配置
 
 ```text
-jimeng/
-├── README.md
-├── index.ts
-├── client.ts
-├── request.ts
-├── response.ts
-├── types.ts
-├── auth.ts
-└── jimeng.test.ts
+平台：Grok
+账号类型：API Key
+Base URL：https://jimeng-api-us.songjiaaa.ccwu.cc/v1
+API Key：集梦 sessionid
 ```
 
-只有实际接口需要请求签名时才创建 `auth.ts`。
+前端仍请求当前视频 Profile 的 `/videos/generations`。模型名以 `jimeng-video-` 开头时，注册表选择集梦 Provider；Sub2API 平台字段仍保持 Grok，不需要增加 Sub2API 平台类型。
 
-## 接入前必须确认
+## 请求协议
 
-1. 接口提供方和官方文档地址。
-2. Base URL、Action、Version 和 Region。
-3. API Key、Access Key/Secret Key 或 Bearer Token 认证方式。
-4. 文生视频和图生视频的模型 ID。
-5. 提交任务后的远程任务 ID 字段。
-6. 查询端点、等待状态、成功状态和失败状态。
-7. 图片输入方式、数量、格式和大小限制。
-8. 视频 URL 的有效期、跨域行为和下载权限。
-9. 计费、限流、内容审核和错误结构。
+```http
+POST /v1/videos/generations
+Authorization: Bearer <Sub2API Key>
+Content-Type: application/json
+```
 
-如果接口行为不明确，保留必要日志并让用户提供实际请求或响应，不增加投机性兼容判断。
+```json
+{
+  "model": "jimeng-video-3.5-pro",
+  "prompt": "海边日落，镜头缓慢向前推进",
+  "ratio": "16:9",
+  "resolution": "720p",
+  "duration": 5
+}
+```
 
-## 预期转换
+集梦使用 `ratio`，不同于 Grok 的 `aspect_ratio`。一次生成数量仍由业务层拆成多个独立请求，不发送 `n`。
 
-- 厂商任务 ID 转换为 `VideoJob.remoteId`。
-- 厂商处理中状态转换为公共 `pending`。
-- 成功状态和视频地址转换为公共 `done`。
-- 失败状态和错误原因转换为公共 `failed`。
+## 响应协议
 
-具体字段必须以选定接口的文档和真实响应为准。
+`jimeng-api` 在服务端内部完成任务提交和轮询，请求会一直等待到视频完成，然后返回 OpenAI 风格结果：
 
-## 测试要求
+```json
+{
+  "created": 1750000000,
+  "data": [
+    {
+      "url": "https://example.com/video.mp4",
+      "revised_prompt": "海边日落，镜头缓慢向前推进"
+    }
+  ]
+}
+```
 
-开始实现后至少覆盖：
+Provider 直接把 `data[0].url` 转为公共 `VideoOutput`，不创建远程任务，也不调用轮询接口。
 
-- 认证或签名结果。
-- 文生视频、图生视频请求映射。
-- 任务 ID 提取。
-- 等待、成功和失败状态映射。
-- 视频 URL 提取。
-- AbortSignal 传递。
+## 能力
+
+- `jimeng-video-3.5-pro`：`5`、`10`、`12` 秒。
+- `jimeng-video-sora2`：`4`、`8`、`12` 秒。
+- `jimeng-video-veo3` / `veo3.1`：固定 `8` 秒。
+- `jimeng-video-seedance-2.0` / `seedance-2.0-fast`：`4-15` 秒整数。
+- 其他集梦视频模型：`5`、`10` 秒。
+- 产品当前展示比例：`9:16`、`16:9`。
+- `jimeng-video-3.0` 和 `jimeng-video-3.0-fast` 展示 `720p`、`1080p`；其他模型固定展示 `720p`，代理可能忽略该字段。
+
+## 当前限制
+
+- 同步请求尚未返回时刷新页面，前端没有可保存的任务 ID，无法恢复，只能重新提交。
+- `jimeng-api` 支持图片上传，但 multipart 请求经过 Sub2API Grok 视频路由的实际透传行为尚未验证。本次不猜测字段，带图请求会明确提示暂不支持。
+- 集梦代理内部生成最长可能等待较久，Sub2API 和浏览器连接需要保持可用。
 
 ## 更新记录
 
-### 2026-07-22
+### 2026-07-23（首次接入）
 
-- 创建集梦 Provider 文档模板。
-- 随视频集成模块迁移到 `src/videoIntegrations/providers/jimeng/`。
-- 明确实现前必须确认 API 来源和认证协议。
-- 当前没有写入未经验证的请求或响应字段。
-- 尚未开始代码实现或测试。
+- 新增集梦文生视频 Provider、模型识别、请求映射和同步结果解析。
+- 公共 runner 支持 Provider 提交后直接返回视频结果，同时保持 Grok、Gemini 的异步任务流程。
+- 增加模型能力、Bearer 认证、请求端点、响应缺失和同步 runner 测试。
+- 图生视频等待 Sub2API multipart 真实请求验证。

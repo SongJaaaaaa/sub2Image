@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import type { TaskRecord } from '../../types'
 import { useTooltip } from '../../hooks/useTooltip'
+import { CloudIcon } from '../ui/icons'
 import ViewportTooltip from '../ui/ViewportTooltip'
 
 function BatchActionButton({
@@ -9,11 +10,13 @@ function BatchActionButton({
   className,
   onClick,
   children,
+  disabled = false,
 }: {
   tooltip: string
   className: string
   onClick: () => void | Promise<void>
   children: ReactNode
+  disabled?: boolean
 }) {
   const tooltipState = useTooltip()
 
@@ -21,6 +24,7 @@ function BatchActionButton({
     <span className="relative inline-flex" {...tooltipState.handlers}>
       <button
         type="button"
+        disabled={disabled}
         onClick={() => {
           tooltipState.dismiss()
           void onClick()
@@ -51,6 +55,8 @@ export default function InputBatchBars({
   onSelectAllVisibleTasks,
   onInvertVisibleTasks,
   onToggleFavorite,
+  onSaveToCloud,
+  cloudSaveProgress,
   onDownloadSelected,
   onDeleteSelected,
 }: {
@@ -67,6 +73,8 @@ export default function InputBatchBars({
   onSelectAllVisibleTasks: () => void
   onInvertVisibleTasks: () => void
   onToggleFavorite: () => void
+  onSaveToCloud: () => void | Promise<void>
+  cloudSaveProgress: { completed: number; total: number } | null
   onDownloadSelected: () => void | Promise<void>
   onDeleteSelected: () => void
 }) {
@@ -179,6 +187,16 @@ export default function InputBatchBars({
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           )}
+        </BatchActionButton>
+        <div className="w-px h-5 bg-gray-200 dark:bg-white/20 mx-1"></div>
+        <BatchActionButton
+          onClick={onSaveToCloud}
+          disabled={Boolean(cloudSaveProgress)}
+          className="flex items-center gap-1.5 p-2 text-sky-500 transition-colors hover:text-sky-600 disabled:cursor-wait disabled:opacity-70 dark:text-sky-400 dark:hover:text-sky-300"
+          tooltip={cloudSaveProgress ? `正在保存 ${cloudSaveProgress.completed}/${cloudSaveProgress.total}` : '保存到云端'}
+        >
+          <CloudIcon className={`h-5 w-5 ${cloudSaveProgress ? 'animate-pulse' : ''}`} />
+          {cloudSaveProgress && <span className="pr-1 text-xs tabular-nums">{cloudSaveProgress.completed}/{cloudSaveProgress.total}</span>}
         </BatchActionButton>
         <div className="w-px h-5 bg-gray-200 dark:bg-white/20 mx-1"></div>
         <BatchActionButton

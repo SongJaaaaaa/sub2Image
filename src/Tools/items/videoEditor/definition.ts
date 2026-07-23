@@ -7,8 +7,8 @@ const definition: WorkspaceTool = {
   version: 1,
   media: 'video',
   author: '本地视频处理',
-  cover: '/tools/video-editor/cover.webp',
-  icon: '/tools/video-editor/icon.png',
+  cover: 'https://www.gstatic.com/aitestkitchen/website/flow/applets/first-party/preview/f472f46e-d957-4d54-89eb-94dc5a5f0bfd.webp',
+  icon: 'https://www.gstatic.com/aitestkitchen/website/flow/applets/first-party/ada-14.png',
   load: () => import('./VideoEditorTool'),
 }
 

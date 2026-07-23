@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { gsap } from 'gsap'
+import { createScope, createTimeline, stagger } from 'animejs'
 
 interface LandingPageProps {
   onEnter: () => void
@@ -76,7 +76,7 @@ const stages = [
     word: '创作',
     tab: '创作',
     cardTitle: '图像与视频生成',
-    cardBody: '文生图、图生图一键出片，视频生成能力即将接入，静态画面将动起来。',
+    cardBody: '文生图、图生图、文生视频和图生视频使用同一个创作入口，让静态画面自然动起来。',
     media: { type: 'video' as const, src: '/videos/flow-create.mp4', poster: '/gallery/g7.jpg' },
   },
   {
@@ -216,27 +216,36 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
     const video = stageVideoRef.current
     if (!video) return
     if (stages[activeStage]?.media.type === 'video') {
-      video.play().catch(() => {})
-    } else {
-      video.pause()
+      void video.play().catch((err) => console.warn('创作视频自动播放失败', err))
+      return
     }
+    video.pause()
   }, [activeStage])
 
   useEffect(() => {
-    if (!heroContentRef.current || !wallRef.current) return
+    const hero = heroContentRef.current
+    const wall = wallRef.current
+    if (!hero || !wall) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
-    const tl = gsap.timeline()
-    tl.fromTo(
-      wallRef.current,
-      { opacity: 0, scale: 1.04 },
-      { opacity: 1, scale: 1, duration: 1.2, ease: 'power2.out' },
-    )
-    tl.fromTo(
-      heroContentRef.current.children,
-      { opacity: 0, y: 24 },
-      { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out', stagger: 0.12 },
-      '-=0.6',
-    )
+    const scope = createScope({ root: pageRef }).add(() => {
+      createTimeline()
+        .add(wall, {
+          opacity: [0, 1],
+          scale: [1.04, 1],
+          duration: 1200,
+          ease: 'out(2)',
+        })
+        .add(hero.children, {
+          opacity: [0, 1],
+          y: [24, 0],
+          duration: 800,
+          ease: 'out(2)',
+          delay: stagger(120),
+        }, '-=600')
+    })
+
+    return () => scope.revert()
   }, [])
 
   /** 依据滚动进度切换能力区阶段（rAF 节流，避免滚动卡顿） */
@@ -288,20 +297,22 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
     }
   }, [])
 
-  /** 点击 Tab：立即切换阶段并滚动到对应位置 */
+  /** 点击 Tab：平滑滚动到对应阶段，由滚动进度同步选中状态 */
   const scrollToStage = (idx: number) => {
     const page = pageRef.current
     const track = capsTrackRef.current
     if (!page || !track) return
-    activeStageRef.current = idx
-    setActiveStage(idx)
     const total = track.offsetHeight - page.clientHeight
     const top = track.offsetTop + (total * (idx + 0.5)) / stages.length
-    page.scrollTo({ top })
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    if (stages[idx]?.media.type === 'video') {
+      void stageVideoRef.current?.play().catch((err) => console.warn('创作视频自动播放失败', err))
+    }
+    page.scrollTo({ top, behavior })
   }
 
   return (
-    <main ref={pageRef} className="h-svh snap-y snap-mandatory overflow-y-auto overscroll-y-contain bg-black text-white">
+    <main ref={pageRef} className="h-svh snap-y snap-proximity overflow-y-auto overscroll-y-contain bg-black text-white motion-safe:scroll-smooth">
       <h1 className="sr-only">我的贾维斯 / JWS Image</h1>
 
       {/* 顶部导航 */}
@@ -337,7 +348,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </header>
 
       {/* Hero：图片瀑布墙 + 叠加内容 */}
-      <section className="relative flex min-h-svh snap-start snap-always flex-col overflow-hidden pt-16">
+      <section className="relative flex min-h-svh snap-start flex-col overflow-hidden pt-16">
         {/* 瀑布墙背景 */}
         <div ref={wallRef} className="absolute inset-0 top-16" aria-hidden="true">
           <div className="flex h-full flex-col gap-2 p-2">
@@ -433,7 +444,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </section>
 
       {/* 能力区：滚动固定切换（复刻 Flow Capabilities） */}
-      <section ref={capsTrackRef} className="relative h-[450vh] snap-start snap-always" aria-label="模型能力">
+      <section ref={capsTrackRef} className="relative h-[450vh] snap-start" aria-label="模型能力">
         <div className="sticky top-0 flex h-svh flex-col overflow-hidden [background:radial-gradient(120%_100%_at_50%_115%,#1a4a8a_0%,#0c2a55_38%,#050d1c_70%,#000_100%)]">
           {/* 区块标题 */}
           <p className="pt-24 text-center text-lg text-zinc-400">模型能力</p>
@@ -478,7 +489,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                       muted
                       loop
                       playsInline
-                      preload="metadata"
+                      preload="auto"
                     />
                   ) : (
                     <div className="grid h-full grid-cols-2 gap-1.5 p-1.5">
@@ -549,7 +560,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       {/* 创作者精选区（复刻 Flow Sessions：文字层在上，下层是 3D 媒体转轮）。布局依赖三列宽屏结构，窄屏隐藏 */}
       <section
         data-snap-page
-        className="relative hidden h-svh snap-start snap-always overflow-hidden [background:radial-gradient(120%_120%_at_30%_80%,#4a3208_0%,#2b1d06_40%,#120b02_75%,#000_100%)] lg:block"
+        className="relative hidden h-svh snap-start overflow-hidden [background:radial-gradient(120%_120%_at_30%_80%,#4a3208_0%,#2b1d06_40%,#120b02_75%,#000_100%)] lg:block"
         aria-label="创作者精选"
       >
         {/* ===== 底层：3D 转轮（卡片围绕圆环，切换时整环旋转） ===== */}
@@ -697,15 +708,15 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
         </div>
       </section>
 
-      {/* 视频生成预告区 */}
-      <section data-snap-page className="relative h-svh snap-start snap-always overflow-hidden bg-black" aria-label="视频生成">
+      {/* 视频生成区 */}
+      <section data-snap-page className="relative h-svh snap-start overflow-hidden bg-black" aria-label="视频生成">
         <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-4 px-4 py-16 text-center">
-          <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">即将上线</p>
+          <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">现已接入</p>
           <h2 className="text-4xl font-medium tracking-tight text-white md:text-6xl">
             <span className="text-balance">视频生成，让画面动起来</span>
           </h2>
           <p className="max-w-2xl text-pretty text-lg leading-relaxed text-zinc-400">
-            视频生成能力即将接入我的贾维斯。从一张图、一段描述出发，生成流畅的动态影像，与图像创作共用同一套工作流。
+            Grok 与 Gemini/Veo 视频生成已接入我的贾维斯。从一张图、一段描述出发，生成流畅的动态影像，与图像创作共用同一套工作流。
           </p>
 
           <div className="relative mt-2 w-full max-w-[min(64rem,70svh)] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
@@ -715,9 +726,9 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
               className="relative aspect-video w-full"
             />
             <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/70 via-transparent to-transparent p-6">
-              <span className="text-left text-sm text-zinc-300">视频生成预览 · 敬请期待</span>
+              <span className="text-left text-sm text-zinc-300">Grok · Gemini/Veo</span>
               <span className="rounded-full border border-white/25 px-3 py-1 text-xs uppercase tracking-widest text-white">
-                Coming Soon
+                Available
               </span>
             </div>
           </div>
@@ -727,13 +738,13 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
             onClick={onEnter}
             className="mt-2 rounded-full bg-white px-8 py-4 text-base font-medium text-black shadow-xl transition-transform hover:scale-[1.03] md:text-lg"
           >
-            先从图像创作开始
+            进入创作工作台
           </button>
         </div>
       </section>
 
       {/* 收尾 CTA 区：液态金属视频背景 + 玻璃卡片（懒加载，进入视口才播放） */}
-      <section data-snap-page className="relative h-svh snap-start snap-always overflow-hidden" aria-label="开始创作">
+      <section data-snap-page className="relative h-svh snap-start overflow-hidden" aria-label="开始创作">
         <LazyVideo
           src="/videos/liquid-metal.mp4"
           poster="/videos/liquid-metal-poster.png"
@@ -762,7 +773,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       </section>
 
       {/* 页脚 */}
-      <footer className="snap-end snap-always border-t border-white/10 bg-black py-10">
+      <footer className="snap-end border-t border-white/10 bg-black py-10">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-4 md:flex-row">
           <div className="flex items-center gap-3">
             <img src="/jws-brand.jpg" alt="JWS Image 标志" className="h-8 w-8 rounded-lg object-cover object-top" />

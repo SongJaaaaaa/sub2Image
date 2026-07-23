@@ -27,6 +27,7 @@ import {
 } from '../../../lib/apiProfiles'
 import { copyTextToClipboard, getClipboardFailureMessage } from '../../../lib/clipboard'
 import { requestBrowserNotificationPermission, type BrowserNotificationPermissionResult } from '../../../lib/browserNotification'
+import { getSub2Token, OPEN_SUB2_CONNECT_EVENT } from '../../../lib/sub2api'
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_STREAM_PARTIAL_IMAGES, type ApiProfile, type AppSettings, type CustomProviderDefinition, type ZipDownloadRoute } from '../../../types'
 import { useCloseOnEscape } from '../../../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../../../hooks/usePreventBackgroundScroll'
@@ -34,13 +35,20 @@ import { DEFAULT_DROPDOWN_MAX_HEIGHT, getDropdownMaxHeight } from '../../../lib/
 import Select from '../../../components/ui/Select'
 import { Checkbox } from '../../../components/ui/Checkbox'
 import ViewportTooltip from '../../../components/ui/ViewportTooltip'
-import { ChevronDownIcon, CloseIcon, CopyIcon, PlusIcon, TrashIcon, ExportIcon, ImportIcon, DragHandleIcon, LinkIcon } from '../../../components/ui/icons'
+import { ChevronDownIcon, CloseIcon, CloudIcon, CopyIcon, PlusIcon, TrashIcon, ExportIcon, ImportIcon, DragHandleIcon, LinkIcon, RefreshIcon } from '../../../components/ui/icons'
 import GeneralSettingsTab from './GeneralSettingsTab'
 import AgentSettingsTab from './AgentSettingsTab'
 import Sub2ApiSettingsTab from './Sub2ApiSettingsTab'
+import { refreshCloudAccount, useCloudRuntimeState } from '../../cloud'
 
 function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function formatCloudSize(bytes: number) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${Math.max(0, Math.round(bytes / 1024))} KB`
 }
 
 const ADD_CUSTOM_PROVIDER_VALUE = '__add_custom_provider__'
@@ -306,6 +314,7 @@ export default function SettingsModal() {
   const setReusedTaskApiProfile = useStore((s) => s.setReusedTaskApiProfile)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
   const showToast = useStore((s) => s.showToast)
+  const cloud = useCloudRuntimeState()
   const importInputRef = useRef<HTMLInputElement>(null)
   const profileMenuRef = useRef<HTMLDivElement>(null)
   const profileMenuTriggerRef = useRef<HTMLButtonElement>(null)
@@ -443,6 +452,11 @@ export default function SettingsModal() {
     setTimeoutInput(String(getActiveApiProfile(nextDraft).timeout))
     setAgentMaxToolRoundsInput(String(nextDraft.agentMaxToolRounds))
   }, [apiProxyAvailable, apiProxyLocked, showSettings, settings, reusedTaskApiProfileId])
+
+  useEffect(() => {
+    if (!showSettings || settings.cloudAutoSave || !draft.cloudAutoSave) return
+    setDraft((current) => current.cloudAutoSave ? { ...current, cloudAutoSave: false } : current)
+  }, [draft.cloudAutoSave, settings.cloudAutoSave, showSettings])
 
   useEffect(() => {
     setTimeoutInput(String(activeProfile.timeout))
@@ -1715,9 +1729,76 @@ export default function SettingsModal() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   <div className="text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">
-                    所有的配置、任务、提示词项目和生成的图片均仅保存在您的浏览器本地（除非您使用的服务商存储了它们）。如果您需要清理浏览器站点数据、重置浏览器或使用其他设备，请先导出备份。
+                    配置和未保存到云端的内容仅保存在当前浏览器。清理站点数据或重置浏览器前，请先导出备份。
                   </div>
                 </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-800 dark:text-gray-100">自动保存新生成内容</h4>
+                      <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">开启后，新完成的图片、视频和新导入的 Skill 会保存到当前 Sub2API 账号。</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={draft.cloudAutoSave}
+                      aria-label="自动保存新生成内容"
+                      onClick={() => {
+                        if (!draft.cloudAutoSave && !getSub2Token()) {
+                          setShowSettings(false)
+                          window.dispatchEvent(new Event(OPEN_SUB2_CONNECT_EVENT))
+                          return
+                        }
+                        commitSettings({ ...draft, cloudAutoSave: !draft.cloudAutoSave })
+                      }}
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${draft.cloudAutoSave ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${draft.cloudAutoSave ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {(cloud.account || getSub2Token()) && (
+                  <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <CloudIcon className="h-4 w-4 shrink-0 text-sky-500" />
+                        <h4 className="truncate text-sm font-bold text-gray-800 dark:text-gray-100">云端容量</h4>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={cloud.syncing}
+                        onClick={() => {
+                          void refreshCloudAccount()
+                            .then(() => showToast('云端容量已刷新', 'success'))
+                            .catch((err) => showToast(err instanceof Error ? err.message : '刷新云端容量失败', 'error'))
+                        }}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+                        aria-label="刷新云端容量"
+                        title="刷新云端容量"
+                      >
+                        <RefreshIcon className={`h-4 w-4 ${cloud.syncing ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                    {cloud.account ? (
+                      <>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.07]">
+                          <div
+                            className="h-full rounded-full bg-sky-500 transition-[width]"
+                            style={{ width: `${Math.min(100, cloud.account.quotaBytes > 0 ? cloud.account.usedBytes / cloud.account.quotaBytes * 100 : 0)}%` }}
+                          />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-4 text-xs text-gray-500 dark:text-gray-400">
+                          <span>已用 {formatCloudSize(cloud.account.usedBytes)}</span>
+                          <span>共 {formatCloudSize(cloud.account.quotaBytes)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">正在读取容量信息...</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] space-y-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-1">

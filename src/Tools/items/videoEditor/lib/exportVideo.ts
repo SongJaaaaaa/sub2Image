@@ -5,6 +5,7 @@ import wasmURL from '@ffmpeg/core/wasm?url'
 import classWorkerURL from '@ffmpeg/ffmpeg/worker?url'
 import type { ExportProject, ExportQuality, ExportRatio } from '../types'
 import { getProjectDuration } from './media'
+import { renderSubtitleFiles, type SubtitleRenderFile } from './subtitleRender'
 
 let ffmpeg: FFmpeg | null = null
 
@@ -16,9 +17,10 @@ export function getExportSize(ratio: ExportRatio, quality: ExportQuality) {
   return { width: long, height: short }
 }
 
-export function createExportCommand(project: ExportProject) {
+export function createExportCommand(project: ExportProject, subtitleFiles: SubtitleRenderFile[] = []) {
   const sources = project.sources.filter((source) => project.clips.some((clip) => clip.sourceId === source.id))
-  const bgIdx = sources.length + project.overlays.length
+  const subtitleIdx = sources.length + project.overlays.length
+  const bgIdx = subtitleIdx + subtitleFiles.length
   const size = getExportSize(project.ratio, project.quality)
   const total = getProjectDuration(project.clips)
   const filters: string[] = []
@@ -59,6 +61,14 @@ export function createExportCommand(project: ExportProject) {
     outputLabel = nextLabel
   })
 
+  subtitleFiles.forEach((subtitle, idx) => {
+    const input = subtitleIdx + idx
+    const nextLabel = `vSubtitle${idx}`
+    filters.push(`[${input}:v]format=rgba[subtitle${idx}]`)
+    filters.push(`[${outputLabel}][subtitle${idx}]overlay=x=${subtitle.x}:y=${subtitle.y}:enable='between(t,${subtitle.start},${subtitle.end})':eof_action=pass[${nextLabel}]`)
+    outputLabel = nextLabel
+  })
+
   if (project.background) {
     const sourceLength = project.background.sourceEnd - project.background.sourceStart
     const timelineLength = project.background.timelineEnd - project.background.timelineStart
@@ -68,8 +78,9 @@ export function createExportCommand(project: ExportProject) {
     filters.push(useOriginal ? '[abase][bg]amix=inputs=2:duration=first:dropout_transition=0[aout]' : '[bg]anull[aout]')
   }
 
-  const files: Array<{ name: string, file: File, loop?: boolean }> = sources.map((source, idx) => ({ name: `video-${idx}.${source.file.name.split('.').pop() || 'mp4'}`, file: source.file }))
+  const files: Array<{ name: string, file: Blob, loop?: boolean }> = sources.map((source, idx) => ({ name: `video-${idx}.${source.file.name.split('.').pop() || 'mp4'}`, file: source.file }))
   project.overlays.forEach((overlay, idx) => files.push({ name: `overlay-${idx}.${overlay.file.name.split('.').pop() || 'png'}`, file: overlay.file, loop: true }))
+  subtitleFiles.forEach((subtitle) => files.push({ name: subtitle.name, file: subtitle.file, loop: true }))
   if (project.background) files.push({ name: `background.${project.background.file.name.split('.').pop() || 'mp3'}`, file: project.background.file })
   const args = files.flatMap((file) => file.loop ? ['-loop', '1', '-i', file.name] : ['-i', file.name])
   args.push('-filter_complex', filters.join(';'), '-map', `[${outputLabel}]`)
@@ -79,21 +90,23 @@ export function createExportCommand(project: ExportProject) {
 }
 
 export async function exportVideo(project: ExportProject, onProgress: (value: number) => void) {
-  const command = createExportCommand(project)
   ffmpeg ||= new FFmpeg()
   const worker = ffmpeg
   if (!worker.loaded) {
     onProgress(0.02)
     await worker.load({ coreURL, wasmURL, classWorkerURL })
   }
+  const size = getExportSize(project.ratio, project.quality)
+  const subtitleFiles = await renderSubtitleFiles(project.subtitles, project.subtitleStyle, size, (value) => onProgress(0.02 + value * 0.06))
+  const command = createExportCommand(project, subtitleFiles)
 
-  const progress = ({ progress }: { progress: number }) => onProgress(Math.min(0.99, 0.12 + Math.max(0, progress) * 0.87))
+  const progress = ({ progress }: { progress: number }) => onProgress(Math.min(0.99, 0.15 + Math.max(0, progress) * 0.84))
   worker.on('progress', progress)
   try {
     for (let idx = 0; idx < command.files.length; idx += 1) {
       const item = command.files[idx]
       await worker.writeFile(item.name, await fetchFile(item.file))
-      onProgress(0.04 + ((idx + 1) / command.files.length) * 0.08)
+      onProgress(0.08 + ((idx + 1) / command.files.length) * 0.06)
     }
     const code = await worker.exec(command.args)
     if (code !== 0) throw new Error(`FFmpeg 处理失败，退出码 ${code}`)

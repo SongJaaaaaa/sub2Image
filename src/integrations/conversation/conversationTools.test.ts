@@ -7,6 +7,7 @@ import {
   conversationTools,
   SUB2_CHAT_TOOL_ID,
   SUB2_IMAGE_TOOL_ID,
+  SUB2_VIDEO_TOOL_ID,
 } from './conversationTools'
 import { createSub2ImageChatTool } from './sub2ImageChatTool'
 import { createSub2ImageImageTool } from './sub2ImageImageTool'
@@ -67,8 +68,8 @@ describe('sub2Image conversation Tools', () => {
     expect(registry.get('dummy/result')).toBe(Renderer)
   })
 
-  it('registers only the image and Agent chat Tools', () => {
-    expect(conversationTools.map((tool) => tool.id)).toEqual([SUB2_IMAGE_TOOL_ID, SUB2_CHAT_TOOL_ID])
+  it('registers image, video and Agent chat Tools', () => {
+    expect(conversationTools.map((tool) => tool.id)).toEqual([SUB2_IMAGE_TOOL_ID, SUB2_VIDEO_TOOL_ID, SUB2_CHAT_TOOL_ID])
   })
 
   it('provides Chat state and routes submit and stop through the adapter', async () => {
@@ -157,6 +158,42 @@ describe('sub2Image conversation Tools', () => {
     expect(submit).toHaveBeenCalledWith({ signal: controller.signal, draft })
     expect(module.validate({ ...input, text: '' })).toBe('请输入提示词')
     expect(Object.keys(module.messageRenderers)).toEqual(['image-generation/result'])
+  })
+
+  it('submits gallery images with the configured hybrid image profile', async () => {
+    const submit = vi.fn(async () => undefined)
+    const textProfile = createDefaultOpenAIProfile({ id: 'text-profile', apiKey: 'text-key', apiMode: 'responses' })
+    const imageProfile = createDefaultOpenAIProfile({ id: 'image-profile', apiKey: 'image-key', apiMode: 'images' })
+    const state = {
+      ...useStore.getState(),
+      settings: normalizeSettings({
+        profiles: [textProfile, imageProfile],
+        activeProfileId: textProfile.id,
+        agentApiConfigMode: 'hybrid',
+        agentTextProfileId: textProfile.id,
+        agentImageProfileId: imageProfile.id,
+      }),
+      reusedTaskApiProfileId: null,
+    }
+    const tool = createSub2ImageImageTool({ getState: () => state, submit })
+    const module = await tool.load()
+    const controller = new AbortController()
+
+    await module.submit({ ...input, payload: { draft } }, {
+      conversationId: 'gallery',
+      toolId: tool.id,
+      requestId: 'request-1',
+      appendMessage: vi.fn(),
+      getState: () => undefined,
+      setState: vi.fn(),
+      isCurrent: () => true,
+    }, controller.signal)
+
+    expect(submit).toHaveBeenCalledWith({
+      signal: controller.signal,
+      draft,
+      apiProfileId: imageProfile.id,
+    })
   })
 
   it('keeps configuration errors separate from submit eligibility', () => {

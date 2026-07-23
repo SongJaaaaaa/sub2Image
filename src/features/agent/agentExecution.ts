@@ -27,6 +27,7 @@ import { normalizeParamsForSettings } from '../../lib/paramCompatibility'
 import { replaceImageMentionsForApi } from '../../lib/promptImageMentions'
 import { getAgentSkillInstructions } from '../../Skills'
 import { useStore } from '../../state/appStore'
+import { autoSaveTaskToCloud } from '../cloud'
 import { cacheImage, ensureImageCached } from '../imageLibrary'
 import { updateTaskInStore } from '../tasks/taskActions'
 import {
@@ -174,11 +175,25 @@ export async function executeAgentRound(
       return task.id
     }
 
-    const completeAgentImageTask = async (image: AgentApiResultImage, rawResponsePayload?: string) => {
+    const completeAgentImageTask = async (
+      image: AgentApiResultImage,
+      rawResponsePayload?: string,
+      autoSave = true,
+    ) => {
       const toolCallId = image.toolCallId ?? genId()
       const taskId = await ensureStreamingAgentTask(toolCallId)
       const latestTask = useStore.getState().tasks.find((task) => task.id === taskId)
-      if (latestTask?.status === 'done' && latestTask.outputImages.length > 0) return taskId
+      const promptRefIds = uniqueIds(extractAgentReferenceIds(image.revisedPrompt ?? ''))
+      const promptRefs = await resolveReferenceImages(promptRefIds)
+      const inputImageIds = uniqueIds([...(latestTask?.inputImageIds ?? []), ...promptRefs.imageIds])
+      if (latestTask?.status === 'done' && latestTask.outputImages.length > 0) {
+        if (inputImageIds.length !== latestTask.inputImageIds.length) {
+          await updateTaskInStore(taskId, { inputImageIds }, { autoSave: false })
+        }
+        const updated = useStore.getState().tasks.find((task) => task.id === taskId)
+        if (autoSave && updated) void autoSaveTaskToCloud(updated)
+        return taskId
+      }
 
       const stored = await storeImageWithSize(image.dataUrl, 'generated')
       cacheImage(stored.id, image.dataUrl)
@@ -187,8 +202,9 @@ export async function executeAgentRound(
         ...(!hasActualSizeParam(image.actualParams) ? getImageSizeParam(stored) ?? {} : {}),
         n: 1,
       }
-      updateTaskInStore(taskId, {
+      await updateTaskInStore(taskId, {
         prompt: image.revisedPrompt ?? latestTask?.prompt ?? '',
+        inputImageIds,
         outputImages: [stored.id],
         actualParams,
         actualParamsByImage: { [stored.id]: actualParams },
@@ -199,7 +215,7 @@ export async function executeAgentRound(
         finishedAt: Date.now(),
         elapsed: Date.now() - (latestTask?.createdAt ?? startedAt),
         agentToolAction: image.action,
-      })
+      }, { autoSave })
       useStore.getState().setTaskStreamPreview(taskId)
       return taskId
     }
@@ -536,14 +552,13 @@ export async function executeAgentRound(
               onImageToolCompleted: shouldStreamAssistantMessage
                 ? async (image) => {
                     if (controller.signal.aborted) return
-                    await completeAgentImageTask({ ...image, toolCallId: batchToolCallId })
+                    await completeAgentImageTask({ ...image, toolCallId: batchToolCallId }, undefined, false)
                   }
                 : undefined,
             })
 
         if (controller.signal.aborted) throw createAgentAbortError()
-        // If not streaming and we have an image, complete the pre-created task.
-        if (batchResult.image && !shouldStreamAssistantMessage) {
+        if (batchResult.image) {
           await completeAgentImageTask({ ...batchResult.image, toolCallId: batchToolCallId }, batchResult.rawResponsePayload)
         }
 
@@ -646,7 +661,7 @@ export async function executeAgentRound(
         onImageToolCompleted: shouldStreamAssistantMessage
           ? async (image) => {
               if (controller.signal.aborted) return
-              await completeAgentImageTask(image)
+              await completeAgentImageTask(image, undefined, false)
             }
           : undefined,
         onImageToolFailed: shouldStreamAssistantMessage
@@ -681,20 +696,7 @@ export async function executeAgentRound(
       // Process built-in image_generation_call results (single images)
       for (const image of result.images) {
         if (image.toolCallId && taskIdByToolCallId.has(image.toolCallId)) {
-          const completedTaskId = await completeAgentImageTask(image, result.rawResponsePayload)
-          const promptRefIds = uniqueIds(extractAgentReferenceIds(image.revisedPrompt ?? ''))
-          if (promptRefIds.length > 0) {
-            const promptRefs = await resolveReferenceImages(promptRefIds)
-            if (promptRefs.imageIds.length > 0) {
-              const latestTask = useStore.getState().tasks.find((t) => t.id === completedTaskId)
-              if (latestTask) {
-                const mergedInputIds = uniqueIds([...latestTask.inputImageIds, ...promptRefs.imageIds])
-                if (mergedInputIds.length !== latestTask.inputImageIds.length) {
-                  updateTaskInStore(completedTaskId, { inputImageIds: mergedInputIds })
-                }
-              }
-            }
-          }
+          await completeAgentImageTask(image, result.rawResponsePayload)
           continue
         }
         const promptRefIds = uniqueIds(extractAgentReferenceIds(image.revisedPrompt ?? ''))
@@ -738,6 +740,7 @@ export async function executeAgentRound(
         useStore.getState().setTasks([task, ...useStore.getState().tasks])
         attachTaskToAgentRound(task.id)
         await putTask(task)
+        void autoSaveTaskToCloud(task)
       }
 
       if (result.rawResponsePayload && streamingTaskIds.length > 0) {

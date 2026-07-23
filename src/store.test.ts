@@ -517,6 +517,25 @@ describe('mask draft lifecycle in store actions', () => {
     expect(state.showToast).toHaveBeenCalledWith('任务已提交', 'success')
   })
 
+  it('submits with an explicitly selected image profile', async () => {
+    const activeProfile = createDefaultOpenAIProfile({ id: 'active-profile', apiKey: 'active-key', model: 'text-model' })
+    const imageProfile = createDefaultOpenAIProfile({ id: 'image-profile', apiKey: 'image-key', model: 'image-model' })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [activeProfile, imageProfile],
+        activeProfileId: activeProfile.id,
+      }),
+    })
+
+    await submitTask({ apiProfileId: imageProfile.id })
+
+    expect(useStore.getState().tasks[0]).toMatchObject({
+      apiProfileId: imageProfile.id,
+      apiModel: imageProfile.model,
+    })
+  })
+
   it('submits the captured gallery draft without clearing newer input', async () => {
     const state = useStore.getState()
     const draft = {

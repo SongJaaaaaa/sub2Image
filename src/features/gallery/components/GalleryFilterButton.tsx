@@ -25,9 +25,11 @@ export default function GalleryFilterButton() {
   const setFilterStatus = useStore((s) => s.setFilterStatus)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const setFilterFavorite = useStore((s) => s.setFilterFavorite)
+  const filterCloud = useStore((s) => s.filterCloud)
+  const setFilterCloud = useStore((s) => s.setFilterCloud)
   const clearSelection = useStore((s) => s.clearSelection)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
-  const filterCount = Number(filterStatus !== 'all') + Number(filterFavorite)
+  const filterCount = Number(filterStatus !== 'all') + Number(filterFavorite) + Number(filterCloud)
   const failedCount = useStore((s) => {
     const query = s.searchQuery.trim().toLowerCase()
     return s.tasks.filter((task) => {
@@ -136,7 +138,7 @@ export default function GalleryFilterButton() {
             </section>
 
             <section>
-              <h3 className="mb-3 text-xs font-medium text-gray-400">收藏</h3>
+              <h3 className="mb-3 text-xs font-medium text-gray-400">收藏与云端</h3>
               <button
                 type="button"
                 aria-pressed={filterFavorite}
@@ -147,6 +149,17 @@ export default function GalleryFilterButton() {
                   {filterFavorite && <span className="h-1.5 w-1.5 rounded-[1px] bg-white" />}
                 </span>
                 仅看收藏
+              </button>
+              <button
+                type="button"
+                aria-pressed={filterCloud}
+                onClick={() => setFilterCloud(!filterCloud)}
+                className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm text-gray-700 transition-colors hover:bg-muted dark:text-gray-200 dark:hover:bg-white/[0.06]"
+              >
+                <span className={`flex h-4 w-4 items-center justify-center rounded-sm border ${filterCloud ? 'border-sky-500 bg-sky-500' : 'border-gray-400 dark:border-gray-500'}`}>
+                  {filterCloud && <span className="h-1.5 w-1.5 rounded-[1px] bg-white" />}
+                </span>
+                仅看云端
               </button>
               {filterStatus === 'error' && (
                 <button
@@ -170,6 +183,7 @@ export default function GalleryFilterButton() {
                 onClick={() => {
                   setFilterStatus('all')
                   setFilterFavorite(false)
+                  setFilterCloud(false)
                   clearSelection()
                 }}
               >

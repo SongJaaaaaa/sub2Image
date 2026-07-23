@@ -89,7 +89,7 @@ export interface ApiProfile {
 export interface Sub2Config {
   id: string
   name: string
-  kind: 'text' | 'image'
+  kind: 'text' | 'image' | 'video'
   keyId: number
   keyName: string
   groupId: number
@@ -115,6 +115,7 @@ export interface AppSettings {
   theme: 'system' | 'dark' | 'light'
   clearInputAfterSubmit: boolean
   persistInputOnRestart: boolean
+  cloudAutoSave: boolean
   reuseTaskApiProfileTemporarily: boolean
   alwaysShowRetryButton: boolean
   allowPromptRewrite: boolean
@@ -129,6 +130,8 @@ export interface AppSettings {
   agentApiConfigMode: AgentApiConfigMode
   agentTextProfileId?: string | null
   agentImageProfileId?: string | null
+  agentVideoProfileId?: string | null
+  videoParams: VideoParams
   sub2OnlyVersion: number
   sub2Configs: Sub2Config[]
   profiles: ApiProfile[]
@@ -155,6 +158,23 @@ export const DEFAULT_PARAMS: TaskParams = {
   moderation: 'auto',
   n: 1,
   transparent_output: false,
+}
+
+export interface VideoParams {
+  duration: number
+  aspectRatio: string
+  resolution: string
+  n: number
+}
+
+export const VIDEO_DURATIONS = [4, 5, 6, 8, 10, 12, 15] as const
+export const VIDEO_ASPECT_RATIOS = ['9:16', '16:9'] as const
+
+export const DEFAULT_VIDEO_PARAMS: VideoParams = {
+  duration: 6,
+  aspectRatio: '16:9',
+  resolution: '720p',
+  n: 1,
 }
 
 // ===== 输入图片（UI 层面） =====
@@ -212,6 +232,8 @@ export type TaskStatus = 'running' | 'done' | 'error'
 
 export interface TaskRecord {
   id: string
+  /** 旧任务没有 kind 时视为图片任务 */
+  kind?: 'image' | 'video'
   prompt: string
   params: TaskParams
   /** 生成时使用的 Provider 类型 */
@@ -224,6 +246,20 @@ export interface TaskRecord {
   apiMode?: ApiMode
   /** 生成时使用的模型 ID */
   apiModel?: string
+  /** 视频服务商 */
+  videoProvider?: 'grok' | 'gemini' | 'jimeng'
+  /** 视频生成时使用的配置 ID */
+  videoProfileId?: string
+  /** 视频生成时使用的配置名称 */
+  videoProfileName?: string
+  /** 视频生成时使用的模型 */
+  videoModel?: string
+  /** 视频生成参数 */
+  videoParams?: VideoParams
+  /** 视频远程任务 ID，用于刷新页面后继续查询 */
+  videoRemoteId?: string
+  /** 视频远程任务轮询间隔，用于刷新页面后按原节奏继续查询 */
+  videoPollInterval?: number
   /** fal.ai 队列请求 ID，用于连接断开后的结果恢复 */
   falRequestId?: string
   /** fal.ai 队列 endpoint，用于连接断开后的状态和结果查询 */

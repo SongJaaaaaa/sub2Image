@@ -190,21 +190,26 @@ function withUi(project: PromptProject, changes: Partial<PromptProjectUi>): Stor
   return { ...project, promptStudioUi: ui }
 }
 
-function getOutputSettingsPatch(outputSettings: PromptStudioStartInput['outputSettings']): PromptBriefPatchEntry[] {
+function getOutputSettingsPatch(
+  outputSettings: PromptStudioStartInput['outputSettings'],
+  domain: PromptDomainDefinition,
+): PromptBriefPatchEntry[] {
   if (!outputSettings) return []
-  return [
-    ['aspectRatio', outputSettings.aspectRatio],
-    ['size', outputSettings.size && outputSettings.size !== 'auto' ? outputSettings.size : undefined],
-    ['quality', outputSettings.quality && outputSettings.quality !== 'auto' ? outputSettings.quality : undefined],
-  ].flatMap(([field, value]) => typeof value === 'string' && value.trim()
+  const fields = new Set(domain.fields.map((field) => field.id))
+  return Object.entries(outputSettings).flatMap(([key, value]) => (
+    value !== undefined
+      && value !== null
+      && value !== 'auto'
+      && fields.has(`output.${key}`)
     ? [{
-        field: `output.${field}`,
+        field: `output.${key}`,
         value,
         status: 'answered' as const,
         origin: 'source' as const,
         locked: true,
       }]
-    : [])
+    : []
+  ))
 }
 
 function getLockedOutputFields(brief: PromptProject['brief']) {
@@ -215,7 +220,7 @@ function getLockedOutputFields(brief: PromptProject['brief']) {
 
 function sanitizeInterviewReply(reply: PromptInterviewReply, brief: PromptProject['brief']): PromptInterviewReply {
   const lockedFields = getLockedOutputFields(brief)
-  const outputFields = new Set(['output.aspectRatio', 'output.size', 'output.quality'])
+  const outputFields = new Set(Object.keys(brief.fields).filter((field) => field.startsWith('output.')))
   const blockedFields = new Set([...lockedFields, ...outputFields])
   return {
     ...reply,
@@ -227,7 +232,9 @@ function sanitizeInterviewReply(reply: PromptInterviewReply, brief: PromptProjec
 function applyOutputSettings(artifact: PromptArtifact, project: PromptProject): PromptArtifact {
   const metadata = project.source.metadata ?? {}
   const params = { ...artifact.params }
-  const keys = ['size', 'quality', 'output_format', 'output_compression', 'moderation', 'n', 'transparent_output']
+  const keys = artifact.domain === 'video'
+    ? ['duration', 'aspectRatio', 'resolution', 'n']
+    : ['size', 'quality', 'output_format', 'output_compression', 'moderation', 'n', 'transparent_output']
   keys.forEach((key) => {
     const value = metadata[`output.${key}`]
     if (value === undefined) return
@@ -645,7 +652,7 @@ export function createPromptStudioStore(opts: PromptStudioStoreOptions) {
     const project = createPromptProject({
       id: projectId,
       conversationId,
-      title: text.slice(0, 36) || '未命名图片提示词',
+      title: text.slice(0, 36) || `未命名${opts.domains[0].label}`,
       source: {
         type: 'text',
         text: sourceText,
@@ -667,7 +674,7 @@ export function createPromptStudioStore(opts: PromptStudioStoreOptions) {
       content: sourceText,
       createdAt: Date.now(),
     }
-    const outputPatch = getOutputSettingsPatch(input.outputSettings)
+    const outputPatch = getOutputSettingsPatch(input.outputSettings, opts.domains[0])
     const seeded = outputPatch.length
       ? applyPromptProjectPatch({ ...project, phase: 'interview' }, outputPatch, opts.domains[0]).project
       : project
@@ -766,7 +773,8 @@ export function createPromptStudioStore(opts: PromptStudioStoreOptions) {
       brief: { ...project.brief, fields },
       source: { ...project.source, metadata },
     }
-    const result = applyPromptProjectPatch(base, getOutputSettingsPatch(outputSettings), getDomain(base, opts.domains))
+    const domain = getDomain(base, opts.domains)
+    const result = applyPromptProjectPatch(base, getOutputSettingsPatch(outputSettings, domain), domain)
     const questions = snapshot.questions.filter((question) => !question.field.startsWith('output.'))
     const answers = Object.fromEntries(Object.entries(snapshot.answers).filter(([questionId]) => (
       questions.some((question) => question.id === questionId)

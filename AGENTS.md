@@ -141,6 +141,14 @@ else params = baseParams
 - 复杂 UI 逻辑可以拆成独立组件或 hook，不必强行内联。
 - Tailwind 类名不强制排序，但同类属性（布局、间距、颜色、交互）尽量分组书写，保持可读。
 
+## UI 动画
+
+- 新增或重构复杂 UI 动画时，优先使用 Anime.js v4，并参考官方文档：`https://animejs.com/documentation/`。
+- React 组件内使用 `createScope({ root })` 限定动画范围，在 `useEffect` 清理函数中调用 `scope.revert()`。
+- 只导入实际使用的 API；序列动画使用 `createTimeline`，批量错峰使用 `stagger`，滚动动画优先参考 Anime.js `onScroll`。
+- 简单的悬停、聚焦、颜色和短距离状态过渡继续使用 CSS 或 Tailwind，不必强行改成 JavaScript 动画。
+- 动画不能妨碍点击、输入、滚动和内容阅读，并应遵循 `prefers-reduced-motion`。
+
 ## 错误处理
 
 - 对网络请求和文件 I/O 使用 `try/catch`，用 `console.warn` 或 `console.error` 记录。
@@ -158,6 +166,19 @@ else params = baseParams
 - 避免在多处重复定义相同工具函数（如 `blobToDataUrl`），优先复用 `src/lib/` 中已有导出。
 - 新增较大功能时，优先拆成独立模块（lib 函数 + hook + 组件），而非全部塞进现有大文件。
 - 组件超过 800 行时，考虑按逻辑边界拆成子组件或自定义 hook。
+
+## 云端存储后端
+
+- 云端存储的方案和实施边界以根目录 `CLOUD_STORAGE_PLAN.md` 为准，开始相关工作前必须先阅读并同步更新该文档。
+- 云端存储使用独立后端服务，不能修改 Sub2API，也不能直接读写 Sub2API 数据库。
+- 用户身份通过生产 Sub2API 的 `GET /api/v1/auth/me` 校验；不要复制 JWT 密钥或自行信任前端提交的用户 ID。
+- 第一版文件存储在自有服务器，必须通过存储接口隔离具体实现，后续允许增加阿里云 OSS 驱动。
+- 后端业务代码放在 `server/`，按 auth、uploads、assets、tasks、skills、sync 等职责拆分。模块之间通过明确接口协作，不跨模块直接操作对方的数据表。
+- 每个新增后端业务模块必须同时提供模块目录内的 `README.md`，说明职责、接口、数据结构、依赖、错误处理和删除行为；缺少文档的模块视为未完成。
+- `server/` 必须有独立的 `AGENTS.md`、`README.md` 和架构、API、数据库、部署文档。
+- 后端同样遵循简单直接、可读优先。只为真实复用或边界隔离增加抽象，不为形式上的分层创建空包装。
+- 普通参数使用集中代码默认值，不把 URL、路径、超时、端口、文件大小等全部做成环境变量。环境变量只用于数据库密码、Access Key 等秘密或确实随部署变化的凭据。
+- 密钥、token 和 Authorization Header 不得写入仓库、数据库或日志。
 
 ## 注意事项
 

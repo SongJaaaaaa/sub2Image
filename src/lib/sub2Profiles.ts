@@ -11,6 +11,10 @@ export function isSub2ImageProfile(profile: ApiProfile) {
   return profile.id.startsWith('sub2api-image-')
 }
 
+export function isSub2VideoProfile(profile: ApiProfile) {
+  return profile.id.startsWith('sub2api-video-')
+}
+
 export function createSub2PlaceholderProfile(): ApiProfile {
   return {
     id: SUB2_PLACEHOLDER_PROFILE_ID,
@@ -49,11 +53,13 @@ export function syncSub2Settings(settings: AppSettings, configs: Sub2Config[], k
   const nextProfiles = profiles.length ? profiles : [createSub2PlaceholderProfile()]
   const textIds = configs.filter((item) => item.kind === 'text').map((item) => item.profileId)
   const imageIds = configs.filter((item) => item.kind === 'image').map((item) => item.profileId)
+  const videoIds = configs.filter((item) => item.kind === 'video').map((item) => item.profileId)
   const activeProfileId = preferredActiveId && imageIds.includes(preferredActiveId)
     ? preferredActiveId
     : imageIds.includes(settings.activeProfileId) ? settings.activeProfileId : imageIds[0] ?? nextProfiles[0].id
   const agentTextProfileId = textIds.includes(settings.agentTextProfileId || '') ? settings.agentTextProfileId : textIds[0] ?? null
   const agentImageProfileId = imageIds.includes(settings.agentImageProfileId || '') ? settings.agentImageProfileId : imageIds[0] ?? null
+  const agentVideoProfileId = videoIds.includes(settings.agentVideoProfileId || '') ? settings.agentVideoProfileId : videoIds[0] ?? null
 
   return {
     ...settings,
@@ -64,5 +70,6 @@ export function syncSub2Settings(settings: AppSettings, configs: Sub2Config[], k
     agentApiConfigMode: 'hybrid',
     agentTextProfileId,
     agentImageProfileId,
+    agentVideoProfileId,
   }
 }

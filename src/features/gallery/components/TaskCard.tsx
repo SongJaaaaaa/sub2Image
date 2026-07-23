@@ -2,7 +2,10 @@ import { useEffect, useState, useRef, type ReactNode } from 'react'
 import type { TaskRecord } from '../../../types'
 import { useStore, ensureImageThumbnailCached, subscribeImageThumbnail, retryTask } from '../../../store'
 import { formatImageRatio } from '../../../lib/size'
+import { getVideo } from '../../../lib/db'
+import { CloudIcon } from '../../../components/ui/icons'
 import ViewportTooltip from '../../../components/ui/ViewportTooltip'
+import { saveTaskWithCloudState, useCloudTaskState } from '../../cloud'
 
 interface Props {
   task: TaskRecord
@@ -75,10 +78,15 @@ export default function TaskCard({
   const [swipeActionActive, setSwipeActionActive] = useState(false)
   const [swipeDirection, setSwipeDirection] = useState<-1 | 0 | 1>(0)
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
+  const [videoSrc, setVideoSrc] = useState('')
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const cardHoveredRef = useRef(false)
   const toggleTaskSelection = useStore((s) => s.toggleTaskSelection)
   const settings = useStore((s) => s.settings)
   const openFavoritePicker = useStore((s) => s.openFavoritePicker)
+  const showToast = useStore((s) => s.showToast)
   const streamPreviewSrc = useStore((s) => s.streamPreviews[task.id] || '')
+  const cloudState = useCloudTaskState(task.id)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const swipeResetTimerRef = useRef<number | null>(null)
   const suppressClickUntilRef = useRef(0)
@@ -237,6 +245,40 @@ export default function TaskCard({
     setStreamPreviewLoaded(false)
   }, [streamPreviewSrc, task.id])
 
+  useEffect(() => {
+    let cancelled = false
+    let objectUrl = ''
+    setVideoSrc('')
+    const videoId = task.outputVideoIds?.[0]
+    if (!videoId) return
+
+    getVideo(videoId).then((video) => {
+      if (cancelled || !video) return
+      objectUrl = URL.createObjectURL(video.blob)
+      setVideoSrc(objectUrl)
+    }).catch(() => {})
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [task.outputVideoIds])
+
+  useEffect(() => {
+    if (!videoSrc || !cardHoveredRef.current) return
+    void videoRef.current?.play().catch(() => {})
+  }, [videoSrc])
+
+  const handleCardMouseEnter = () => {
+    cardHoveredRef.current = true
+    void videoRef.current?.play().catch(() => {})
+  }
+
+  const handleCardMouseLeave = () => {
+    cardHoveredRef.current = false
+    videoRef.current?.pause()
+  }
+
   // 定时更新运行中任务的计时
   useEffect(() => {
     if (task.status !== 'running' && !(task.status === 'error' && (task.falRecoverable || task.customRecoverable))) return
@@ -374,6 +416,8 @@ export default function TaskCard({
             ? 'border-blue-500 shadow-md ring-2 ring-blue-500/50'
             : 'border-border hover:border-gray-400/80 dark:border-white/[0.08] dark:hover:border-white/[0.18]'
         }`}
+        onMouseEnter={handleCardMouseEnter}
+        onMouseLeave={handleCardMouseLeave}
         onClick={(e) => {
           if (Date.now() < suppressClickUntilRef.current) {
             e.preventDefault()
@@ -412,6 +456,23 @@ export default function TaskCard({
           <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
+        </div>
+      )}
+      {cloudState && (
+        <div className={`absolute top-2 z-10 ${isSelected ? 'right-9' : 'right-2'}`}>
+          <TaskActionButton
+            tooltip={cloudState.status === 'saving' ? '正在保存到云端' : cloudState.status === 'removing' ? '正在移出云端' : cloudState.status === 'saved' ? '已保存到云端' : '云端保存失败，点击重试'}
+            disabled={cloudState.status !== 'error'}
+            onClick={(e) => {
+              e.stopPropagation()
+              void saveTaskWithCloudState(task)
+                .then(() => showToast('已保存到云端', 'success'))
+                .catch((err) => showToast(err instanceof Error ? err.message : '云端保存失败', 'error'))
+            }}
+            className={`grid h-7 w-7 place-items-center rounded-full border border-white/20 bg-black/55 text-white shadow-sm backdrop-blur-sm ${cloudState.status === 'saving' || cloudState.status === 'removing' ? 'animate-pulse' : cloudState.status === 'error' ? '!text-red-300' : '!text-sky-300'}`}
+          >
+            <CloudIcon className="h-4 w-4" />
+          </TaskActionButton>
         </div>
       )}
       <div
@@ -479,7 +540,7 @@ export default function TaskCard({
               </span>
             </div>
           )}
-          {task.status === 'done' && thumbSrc && (
+          {task.status === 'done' && (thumbSrc || videoSrc) && (
             <div className={`group/deck absolute inset-0 ${justRevealed ? 'task-reveal' : ''}`}>
               {canCycleThumbs && (
                 <>
@@ -503,15 +564,30 @@ export default function TaskCard({
                 </>
               )}
               <div className={`absolute inset-x-0 bottom-0 overflow-hidden ${canCycleThumbs ? 'top-[10px] rounded-t-lg shadow-[0_-2px_8px_rgba(0,0,0,0.25)]' : 'top-0'}`}>
-                <img
-                  key={currentImageId}
-                  src={thumbSrc}
-                  data-image-id={currentImageId}
-                  data-output-image-ids={task.outputImages.join(',')}
-                  className="saveable-image task-deck-img h-full w-full object-cover"
-                  loading="lazy"
-                  alt=""
-                />
+                {videoSrc ? (
+                  <video
+                    ref={videoRef}
+                    src={videoSrc}
+                    poster={thumbSrc || undefined}
+                    className="task-deck-img h-full w-full object-cover"
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                    aria-label="生成视频预览"
+                    onError={() => setVideoSrc('')}
+                  />
+                ) : (
+                  <img
+                    key={currentImageId}
+                    src={thumbSrc}
+                    data-image-id={currentImageId}
+                    data-output-image-ids={task.outputImages.join(',')}
+                    className="saveable-image task-deck-img h-full w-full object-cover"
+                    loading="lazy"
+                    alt=""
+                  />
+                )}
                 {task.outputVideoIds?.length ? (
                   <span className="absolute left-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white backdrop-blur-sm" aria-label="视频">
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
@@ -557,7 +633,7 @@ export default function TaskCard({
               )}
             </div>
           )}
-          {task.status === 'done' && !thumbSrc && (
+          {task.status === 'done' && !thumbSrc && !videoSrc && (
             <svg
               className="w-8 h-8 text-gray-300"
               fill="none"
@@ -638,28 +714,30 @@ export default function TaskCard({
                 />
               </svg>
             </TaskActionButton>
-            <TaskActionButton
-              tooltip="复用配置"
-              onClick={(e) => {
-                e.stopPropagation()
-                onReuse()
-              }}
-              className="p-1.5 rounded-md text-white/80 hover:text-blue-300 hover:bg-white/10 transition"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {task.kind !== 'video' && (
+              <TaskActionButton
+                tooltip="复用配置"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onReuse()
+                }}
+                className="p-1.5 rounded-md text-white/80 hover:text-blue-300 hover:bg-white/10 transition"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-                />
-              </svg>
-            </TaskActionButton>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                  />
+                </svg>
+              </TaskActionButton>
+            )}
             <TaskActionButton
               tooltip="编辑输出"
               onClick={(e) => {

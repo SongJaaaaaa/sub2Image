@@ -2,10 +2,10 @@
 
 ## 当前状态
 
-- 状态：架构设计完成，功能尚未开始实现。
+- 状态：Grok、Gemini/Veo 和集梦文生视频已实现；图生视频按 Provider 能力开放。
 - 首个目标厂商：Grok Imagine Video。
-- 后续目标厂商：Gemini/Veo、集梦，以及其他异步视频生成服务。
-- 最后更新：2026-07-22。
+- 后续目标厂商：其他异步或同步视频生成服务。
+- 最后更新：2026-07-23。
 
 本文件记录视频生成功能的整体架构、模块边界、公共协议、开发顺序和重要决策。每次开发或调整视频功能时，都必须同步更新本文件及对应厂商目录的 `README.md`。
 
@@ -26,7 +26,6 @@
 - 可由用户编写任意映射规则的通用视频 Provider Manifest。
 - 跨厂商自动降级或自动重试到其他付费厂商。
 - 服务端视频对象存储和 CDN 管理。
-- 一次生成多个视频的并发批处理。
 
 ## 3. 目标目录
 
@@ -147,6 +146,7 @@ export interface VideoParams {
   duration: number
   aspectRatio: string
   resolution: string
+  n: number
 }
 
 export interface VideoInput {
@@ -177,6 +177,10 @@ export interface VideoOutput {
   mimeType?: string
 }
 
+export type VideoSubmitResult =
+  | { job: VideoJob }
+  | { output: VideoOutput }
+
 export type VideoPollResult =
   | { status: 'pending', progress?: number }
   | { status: 'done', output: VideoOutput }
@@ -189,8 +193,8 @@ export interface VideoProvider {
     input: VideoInput,
     profile: VideoProfile,
     signal?: AbortSignal,
-  ) => Promise<VideoJob>
-  poll: (
+  ) => Promise<VideoSubmitResult>
+  poll?: (
     job: VideoJob,
     profile: VideoProfile,
     signal?: AbortSignal,
@@ -200,9 +204,13 @@ export interface VideoProvider {
 
 `remoteId` 统一表示厂商远程任务标识。Grok 的 `request_id`、Gemini 的 operation name 和其他厂商的 task ID 不得泄漏到业务层。
 
+同步完成的 Provider 可以在 `submit()` 中直接返回 `output`。当前集梦代理会在服务端内部轮询到完成后返回 `data[0].url`，因此不创建 `remoteId`，也不调用公共 `poll()`。
+
+`n` 是业务层的一次生成数量，不直接映射为 Grok 请求字段。当前选择 `1-4` 时，`videoSubmit` 会创建对应数量的独立单视频任务，每个任务分别提交、保存远程 ID、轮询和重试。
+
 ## 7. Provider 配置
 
-视频配置与现有图片自定义 Provider 分离。计划新增：
+视频配置与现有图片自定义 Provider 分离。当前由 Agent 配置中的视频 Key、模型生成运行时 `VideoProfile`：
 
 ```ts
 export interface VideoProfile {
@@ -215,6 +223,8 @@ export interface VideoProfile {
   timeout: number
 }
 ```
+
+当前视频 Key、模型保存在 `Sub2Config.kind === 'video'`，同步生成对应的 `/sub2api-v1` Profile；视频任务保存该 Profile ID、模型和 Provider 快照。Provider 根据视频 Key 的平台识别，`veo-*` 模型固定识别为 Gemini，旧视频配置默认继续使用 Grok。具体 Provider 只接收运行时 `VideoProfile`，不依赖 Zustand 或 Sub2 配置类型。
 
 如果某个厂商确认需要额外认证字段，再将配置改为以 `provider` 区分的联合类型。不要在没有实际协议需求前加入任意 `Record<string, unknown>`。
 
@@ -232,10 +242,13 @@ export type TaskRecord = ImageTaskRecord | VideoTaskRecord
 - Provider、配置 ID 和模型快照
 - 视频参数和输入图片 ID
 - 远程任务 ID
+- 远程任务轮询间隔
 - 本地视频 ID 和封面图片 ID
 - 状态、错误、创建时间和完成时间
 
 旧任务没有 `kind` 时，在持久化恢复层规范化为 `kind: 'image'`，不得破坏已有 IndexedDB 数据。
+
+一次生成多个视频时，每个本地任务的 `videoParams.n` 固定保存为 `1`。这样单个任务重试只重新生成该任务，不会再次扩散为一组任务。
 
 ## 9. 标准执行流程
 
@@ -248,11 +261,10 @@ videoExecution 读取图片和 VideoProfile
           ↓
 registry 获取 Provider
           ↓
-Provider submit 返回 remoteId
+Provider submit 返回异步 job 或同步 output
           ↓
-任务立即持久化 remoteId
-          ↓
-runner 周期性调用 Provider poll
+异步 job 立即持久化 remoteId 并由 runner 周期性 poll
+同步 output 直接进入保存流程
           ↓
 完成后下载临时视频 URL
           ↓
@@ -273,12 +285,15 @@ runner 周期性调用 Provider poll
 - 时长。
 - 画面比例。
 - 分辨率。
+- 一次生成数量。
 
 不支持的选项不展示。厂商独有参数只有在出现明确业务需求后才增加类型和对应组件，不使用无类型的 `extraParams` 提前兜底。
 
 ## 11. Agent 接入
 
-在现有 `conversationTools` 中注册一个统一的视频工具。工具只调用 `submitVideoTask()`，不直接访问具体 Provider。
+现已在 `conversationTools` 注册统一的视频工具。工具只调用 `submitVideoTask()`，不直接访问具体 Provider；画廊 Composer 的生成设置内可切换“图片 / 视频”，视频参数由 Provider 能力驱动显示。该切换仅属于画廊生成，不改变 Agent 对话工作区状态。
+
+视频模式提供独立的“视频提示词 Agent”，复用 Prompt Studio 的访谈、确认和完整提示词写回流程。图片项目继续使用 conversation ID `gallery`，视频项目使用 `gallery-video`，两种项目的进度和历史不会串线。视频领域会确认开场、主体运动、镜头运动、时间线、结尾、节奏和声音；时长、比例、清晰度和数量由设置锁定，不交给模型修改。
 
 如果后续允许 Agent 自主调用视频生成，只提供一个 `generate_video` 工具。工具输出本地视频任务 ID，由现有消息渲染和任务系统展示进度。
 
@@ -327,23 +342,28 @@ npm test
 
 ### 第一阶段：公共骨架和 Grok
 
-- 建立视频公共类型、注册表和 runner。
-- 建立视频 Profile 和任务类型。
-- 接入 Grok 文生视频与单图生视频。
-- 完成轮询恢复、下载、封面和本地保存。
-- 在通用 Conversation Composer 中增加视频工具。
+- 已建立视频公共类型、注册表和 runner。
+- 已建立视频 Profile、视频任务字段和旧图片任务 `kind` 兼容。
+- 已接入 Grok 文生视频、轮询恢复、临时 URL 下载、封面和本地保存。
+- 已在通用 Conversation Composer 中增加视频工具和参数面板。
+- 已增加独立的视频提示词 Agent 和 `gallery-video` 项目。
+- 已支持一次创建 `1-4` 个独立视频任务。
+- 单图生视频待真实请求确认图片字段后实现，当前遇到输入图会记录日志并提示用户提供接口输出。
 
 ### 第二阶段：Gemini/Veo
 
-- 根据官方 API 和真实响应补充 Gemini Provider 文档。
-- 实现 long-running operation 到统一 `remoteId` 的映射。
-- 验证图片上传方式、视频下载和错误状态。
+- 已根据 Gemini Developer API 官方 REST 协议补充 Gemini Provider 文档。
+- 已实现 `predictLongRunning`、operation name 到统一 `remoteId` 的映射和轮询恢复。
+- 已实现文生视频、单张起始图 `inlineData`、错误状态与视频文件下载。
+- 已覆盖 Sub2API Bearer 认证和 Google 官方 `x-goog-api-key` 认证。
+- 真实 Sub2API 任务响应、计费和最终文件下载仍需使用有效 Veo Key 端到端验证。
 
 ### 第三阶段：集梦
 
-- 确认使用的官方接口或中转服务协议。
-- 根据实际认证方式决定是否增加 `auth.ts`。
-- 实现请求签名、任务查询和结果转换。
+- 已确认使用 `iptag/jimeng-api` 协议，通过 Sub2API Grok 平台 API Key 账号转发。
+- 已实现 JSON 文生视频请求，公共参数转换为 `ratio`、`resolution` 和 `duration`。
+- 已实现同步 `data[0].url` 结果转换，不增加无实际用途的前端轮询。
+- 图片 multipart 经 Sub2API Grok 路由的透传行为待真实请求验证。
 
 ### 第四阶段：扩展能力
 
@@ -361,3 +381,45 @@ npm test
 - 确定每个厂商使用独立目录和细分文件。
 - 确定代码变更必须同步更新模块与厂商文档。
 - 将视频集成根目录调整为 `src/videoIntegrations/`。
+
+### 2026-07-22（Grok 首次接入）
+
+- Agent 配置新增视频 Key、分组和模型选择，视频配置独立保存为 `Sub2Config.kind === 'video'`。
+- 实现 Grok 文生视频提交、`request_id` 持久化、轮询、临时视频下载、封面生成和 IndexedDB 本地保存。
+- 画廊 Composer 新增图片 / 视频切换和视频时长、比例、清晰度设置。
+- 图片 / 视频切换收进统一的生成设置弹层，Agent 对话工作区不受生成模式影响。
+- 完成刷新页面后的远程任务恢复；未取得远程任务 ID 的中断任务会标记为可重新提交。
+- 恢复已有远程任务时只继续轮询，不会再次调用提交接口。
+- 图生视频字段仍未确认，未发送猜测性请求；带图提交会输出 `[Grok Video]` 日志并请求实际接口信息。
+- 已通过 TypeScript 编译及 Grok、轮询、Sub2 配置、Conversation Tool 的定向 Vitest 测试。
+
+### 2026-07-22（视频提示词与批量生成）
+
+- 新增视频 Prompt Studio 领域，访谈覆盖镜头运动、主体运动、时间线、节奏、结尾和声音。
+- 图片与视频提示词项目分别使用 `gallery`、`gallery-video`，切换生成模式不影响 Agent 对话工作区。
+- 视频设置固定提供时长 `4/6/8/10/12/15` 秒、比例 `9:16/16:9` 和生成数量 `1-4`。
+- 批量生成由业务层创建多个独立任务，不向 Grok 请求体添加未确认的 `n` 字段。
+- 已通过生产构建及 Prompt Studio、视频任务、Provider、参数规范化和 Composer UI 定向测试。
+
+### 2026-07-22（Grok 视频内容下载修复）
+
+- 兼容 Grok/Sub2API 完成响应中的相对 `video.url`，例如 `/v1/videos/{request_id}/content`。
+- 相对 API 内容地址会映射到当前 Profile 的 `/sub2api-v1` 代理路径并携带 Bearer Key；绝对视频地址不附带认证头。
+- 已增加相对内容地址转换测试，避免任务已完成但下载阶段被误报失败。
+
+### 2026-07-22（Gemini/Veo 接入）
+
+- 新增 Gemini Provider，按官方 REST 协议提交 `models/{model}:predictLongRunning` 并轮询 operation name。
+- 支持文生视频和单图生视频，起始图转换为 `image.inlineData`；一次生成数量仍由业务层拆为独立任务。
+- Veo 能力根据模型区分时长与分辨率，1080p/4k 自动配合 8 秒时长。
+- 当前视频 Key 的平台或 `veo-*` 模型决定 Provider，任务持久化 Provider 后可在刷新页面后继续正确轮询。
+- Google 文件 URI 在 Sub2API 模式下改写回 `/sub2api-v1` 并携带 Bearer Key；官方 Gemini API 模式使用 `x-goog-api-key`。
+- 已通过生产构建和完整 Vitest（75 个测试文件、562 项测试）；真实付费任务待有效 Veo Key 验证。
+
+### 2026-07-23（集梦文生视频接入）
+
+- 参考 `iptag/jimeng-api`，通过现有 Sub2API Grok 视频路由接入集梦文生视频。
+- 注册表优先根据 `jimeng-video-*` 模型选择集梦 Provider，不改变 Sub2API 平台配置。
+- 公共 Provider 提交结果扩展为异步任务或同步输出；Grok、Gemini 继续使用原有轮询，集梦直接使用 `data[0].url`。
+- 集梦能力按模型限制时长，产品比例继续保持 `9:16`、`16:9`。
+- 图片 multipart 透传未获得真实响应前不实现。
