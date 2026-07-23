@@ -2,10 +2,10 @@ FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --include=dev
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN node node_modules/typescript/bin/tsc -p tsconfig.json
 
 FROM node:22-bookworm-slim
 
