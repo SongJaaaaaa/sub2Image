@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMediaSpeech, createMediaTranscription, listMediaVoices, MediaApiError } from './mediaApi'
+import { createMediaSpeech, createMediaTranscription, getMediaTranscription, listMediaVoices, MediaApiError } from './mediaApi'
 
 const mocks = vi.hoisted(() => ({
   getToken: vi.fn(),
@@ -51,6 +51,17 @@ describe('media API adapter', () => {
     const form = fetcher.mock.calls[1][1].body as FormData
     expect(form.get('language')).toBe('zh')
     expect((form.get('file') as File).name).toBe('sample.mp4')
+  })
+
+  it('查询字幕任务时禁用浏览器缓存', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { id: 'job-1', status: 'running' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetcher)
+
+    await getMediaTranscription('job-1')
+
+    expect(fetcher.mock.calls[0][1].cache).toBe('no-store')
   })
 
   it('把开发代理连接失败转换成明确错误', async () => {

@@ -56,7 +56,10 @@ export function registerMediaRoutes(app: FastifyInstance, media: MediaService, m
 
   app.get<{ Params: { id: string } }>('/api/media/transcriptions/:id', {
     schema: { params: uuidParams }
-  }, async (req) => ({ data: await media.getTranscription(req.accountId, req.params.id) }))
+  }, async (req, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    return { data: await media.getTranscription(req.accountId, req.params.id) }
+  })
 
   app.delete<{ Params: { id: string } }>('/api/media/transcriptions/:id', {
     schema: { params: uuidParams }

@@ -47,7 +47,7 @@ async function mediaFetch(path: string, init: RequestInit = {}, retry = true): P
   if (!token) throw new MediaApiError('请先登录 Sub2API', 401, 'UNAUTHORIZED')
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${token}`)
-  const res = await fetch(`/cloud-api/media${path}`, { ...init, headers }).catch((err) => {
+  const res = await fetch(`/cloud-api/media${path}`, { ...init, headers, cache: 'no-store' }).catch((err) => {
     if ((err as { name?: string }).name === 'AbortError') throw err
     throw new MediaApiError('Cloud Server 未启动或网络不可用', 0, 'NETWORK_ERROR')
   })

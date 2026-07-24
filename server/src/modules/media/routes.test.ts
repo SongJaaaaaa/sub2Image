@@ -229,6 +229,7 @@ describe('media routes', () => {
       url: `/api/media/transcriptions/${id}`,
       headers: { authorization: 'Bearer user-a' }
     })
+    expect(status.headers['cache-control']).toBe('no-store')
     expect(status.json().data.status).toBe('canceled')
     worker.release()
   })
