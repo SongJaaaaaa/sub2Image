@@ -208,6 +208,43 @@
   gap: 2px;
 }
 
+.video-editor-subtitle-import {
+  width: calc(100% - 16px);
+  height: 38px;
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 8px 0;
+  border: 1px solid var(--ve-border);
+  border-radius: 5px;
+  padding: 0 10px;
+  color: var(--ve-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.video-editor-subtitle-import:hover {
+  border-color: var(--ve-accent);
+  background: var(--ve-hover);
+}
+
+.video-editor-subtitle-import:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.video-editor-subtitle-import svg {
+  color: var(--ve-accent);
+}
+
+.video-editor-subtitle-import small {
+  color: var(--ve-subtle);
+  font-size: 9px;
+  font-weight: 600;
+}
+
 .video-editor-section-title button,
 .video-editor-timeline-toolbar button,
 .video-editor-player button {

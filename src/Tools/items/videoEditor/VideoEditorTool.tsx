@@ -406,7 +406,7 @@ export default function VideoEditorTool() {
       <input ref={videoInputRef} type="file" accept="video/mp4,video/webm,video/quicktime,.mov" multiple hidden onChange={addVideos} />
       <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={addImages} />
       <input ref={audioInputRef} type="file" accept="audio/*" hidden onChange={addBackground} />
-      <input ref={subtitleInputRef} type="file" accept=".srt,.vtt,application/x-subrip,text/vtt" hidden onChange={addSubtitles} />
+      <input ref={subtitleInputRef} aria-label="上传 SRT 或 VTT 字幕" type="file" accept=".srt,.vtt" hidden onChange={addSubtitles} />
       <audio
         ref={audioRef}
         src={background?.url}
@@ -452,11 +452,21 @@ export default function VideoEditorTool() {
           <div className="video-editor-section-title">
             <span>媒体</span>
             <div>
-              <button type="button" title="导入 SRT 或 VTT 字幕" disabled={loading || !duration} onClick={() => subtitleInputRef.current?.click()}><SubtitleIcon className="h-4 w-4" /></button>
               <button type="button" title="添加图片层" disabled={loading || !duration} onClick={() => imageInputRef.current?.click()}><PictureIcon className="h-4 w-4" /></button>
               <button type="button" title="导入视频" disabled={loading} onClick={() => videoInputRef.current?.click()}><PlusIcon className="h-4 w-4" /></button>
             </div>
           </div>
+          <button
+            type="button"
+            className="video-editor-subtitle-import"
+            title="选择 SRT 或 VTT 字幕文件"
+            disabled={loading || !duration}
+            onClick={() => subtitleInputRef.current?.click()}
+          >
+            <SubtitleIcon className="h-4 w-4" />
+            <span>{subtitles.length ? '替换字幕' : '导入字幕'}</span>
+            <small>SRT / VTT</small>
+          </button>
           <div className="video-editor-media-list">
             {sources.map((source) => (
               <button key={source.id} type="button" className="video-editor-media-item" onClick={() => {
