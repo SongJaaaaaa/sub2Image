@@ -61,6 +61,7 @@ describe('media API adapter', () => {
 
     await getMediaTranscription('job-1')
 
+    expect(fetcher.mock.calls[0][0]).toMatch(/^\/cloud-api\/media\/transcriptions\/job-1\?t=\d+$/)
     expect(fetcher.mock.calls[0][1].cache).toBe('no-store')
   })
 

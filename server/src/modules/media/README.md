@@ -7,7 +7,7 @@ Media 模块为音色工具和字幕识别提供经过 Sub2API 鉴权的 Cloud S
 - `GET /api/media/voices`：获取 Edge TTS 音色。
 - `POST /api/media/tts`：生成并流式返回 MP3。
 - `POST /api/media/transcriptions`：先检查 Worker 健康状态，再流式上传视频并创建字幕任务。
-- `GET /api/media/transcriptions/:id`：查询当前账号任务，响应使用 `Cache-Control: no-store`，避免轮询复用旧状态。
+- `GET /api/media/transcriptions/:id`：查询当前账号任务，响应使用 `Cache-Control: no-store`；前端轮询同时携带时间参数，避免外层代理复用旧状态。
 - `DELETE /api/media/transcriptions/:id`：取消当前账号任务，目标不存在时幂等成功。
 
 ## 数据

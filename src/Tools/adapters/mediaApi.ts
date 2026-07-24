@@ -137,7 +137,8 @@ export async function createMediaTranscription(file: Blob, name: string, languag
 }
 
 export async function getMediaTranscription(id: string, signal?: AbortSignal) {
-  const data = await readData(await mediaFetch(`/transcriptions/${encodeURIComponent(id)}`, { signal }))
+  const path = `/transcriptions/${encodeURIComponent(id)}?t=${Date.now()}`
+  const data = await readData(await mediaFetch(path, { signal }))
   if (!isJob(data)) throw new MediaApiError('字幕任务格式无效', 200)
   return data
 }
