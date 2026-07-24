@@ -64,6 +64,8 @@ export default function SubtitleRecognitionTool() {
   const urlRef = useRef('')
   const uploadRef = useRef<AbortController | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const active = job?.status === 'queued' || job?.status === 'running'
+  const activeId = active ? job.id : ''
 
   useEffect(() => {
     listToolVideos()
@@ -91,33 +93,38 @@ export default function SubtitleRecognitionTool() {
   }, [])
 
   useEffect(() => {
-    if (!job || (job.status !== 'queued' && job.status !== 'running')) return
-    let active = true
+    if (!activeId) return
+    let polling = true
     let timer = 0
+    const ctrl = new AbortController()
     const poll = async () => {
+      let next: TranscriptionJob | null = null
       try {
-        const next = await getMediaTranscription(job.id)
-        if (!active) return
+        next = await getMediaTranscription(activeId, ctrl.signal)
+        if (!polling) return
         setJob(next)
         if (next.segments) setSegments(next.segments)
+        setError('')
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : '任务状态获取失败')
+        if (!polling || (err as { name?: string }).name === 'AbortError') return
+        setError(err instanceof Error ? err.message : '任务状态获取失败')
       }
-      if (active) timer = window.setTimeout(poll, 2000)
+      if (polling && (!next || next.status === 'queued' || next.status === 'running')) {
+        timer = window.setTimeout(poll, 2000)
+      }
     }
     timer = window.setTimeout(poll, 1000)
     return () => {
-      active = false
+      polling = false
+      ctrl.abort()
       window.clearTimeout(timer)
     }
-  }, [job?.id, job?.status])
+  }, [activeId])
 
   useEffect(() => () => {
     uploadRef.current?.abort()
     if (urlRef.current) URL.revokeObjectURL(urlRef.current)
   }, [])
-
-  const active = job?.status === 'queued' || job?.status === 'running'
 
   const selectSource = (next: VideoSource) => {
     if (uploading || active) return

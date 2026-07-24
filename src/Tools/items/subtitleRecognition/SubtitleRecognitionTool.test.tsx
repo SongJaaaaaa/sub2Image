@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SubtitleRecognitionTool from './SubtitleRecognitionTool'
 
@@ -43,6 +43,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -81,5 +82,35 @@ describe('SubtitleRecognitionTool', () => {
     fireEvent.click(screen.getByRole('button', { name: '复制' }))
 
     await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith('修改后的字幕'))
+  })
+
+  it('任务从排队变为识别中后继续轮询直到完成', async () => {
+    vi.useFakeTimers()
+    mocks.get
+      .mockResolvedValueOnce({ id: 'job-new', status: 'running' })
+      .mockResolvedValueOnce({
+        id: 'job-new',
+        status: 'succeeded',
+        language: 'zh',
+        segments: [{ id: 0, start: 0, end: 1.2, text: '识别完成' }],
+      })
+    render(<SubtitleRecognitionTool />)
+    const file = new File(['video'], 'sample.mp4', { type: 'video/mp4' })
+    fireEvent.change(screen.getByLabelText('上传本地视频'), { target: { files: [file] } })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '开始识别' }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(mocks.get).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+    expect(mocks.get).toHaveBeenCalledTimes(2)
+    expect((screen.getByLabelText('第 1 条字幕') as HTMLTextAreaElement).value).toBe('识别完成')
   })
 })
